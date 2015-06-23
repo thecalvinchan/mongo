@@ -7,6 +7,12 @@ Import([
     'v8suffix',
 ])
 
+env.SConscript(
+    dirs=[
+        'tinyjs'
+    ],
+)
+
 env.Library(
     target='scripting_common',
     source=[
