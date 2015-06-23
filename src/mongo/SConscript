@@ -37,10 +37,11 @@ env.SConscript(
         'rpc',
         's',
         'scripting',
+        'scripting/tinyjs',
         'shell',
         'tools',
         'unittest',
-        'util',
+        'util'
     ],
 )
 
