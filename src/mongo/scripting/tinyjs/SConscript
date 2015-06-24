@@ -1,12 +1,22 @@
 # -*- mode: python -*-
 
-Import("env")
+Import('env')
 
 env.Library(
-    target=[
-        'tinyjs'
-    ],
+    target='ast_parser',
     source=[
-        'tinyjs.cpp'
+        'ast_parser.cpp'
+    ],
+    LIBDEPS=[
     ]
+)
+
+env.CppUnitTest(
+    target='ast_parser_test',
+    source=[
+        'ast_parser_test.cpp',
+    ],
+    LIBDEPS=[
+        'ast_parser'
+    ],
 )
