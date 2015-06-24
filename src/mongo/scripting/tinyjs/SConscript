@@ -1,12 +1,30 @@
 # -*- mode: python -*-
 
-Import("env")
+Import('env')
+
+env.Library(
+    target='ast_parser',
+    source=[
+        'ast_parser.cpp'
+    ],
+    LIBDEPS=[
+)
 
 env.Library(
     target='lexer',
     source=[
         'lexer.cpp', 
     ]
+)
+
+env.CppUnitTest(
+    target='ast_parser_test',
+    source=[
+        'ast_parser_test.cpp',
+    ],
+    LIBDEPS=[
+        'ast_parser'
+    ],
 )
 
 env.CppUnitTest(
