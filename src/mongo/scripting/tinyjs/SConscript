@@ -3,10 +3,18 @@
 Import("env")
 
 env.Library(
-    target=[
-        'tinyjs'
-    ],
+    target='lexer',
     source=[
-        'tinyjs.cpp'
+        'lexer.cpp', 
+    ]
+)
+
+env.CppUnitTest(
+    target='lexer_test',
+    source=[
+        'lexer_test.cpp'
+    ], 
+    LIBDEPS=[
+        'lexer'
     ]
 )
