@@ -8,6 +8,12 @@ env.Library(
         'ast_parser.cpp'
     ],
     LIBDEPS=[
+)
+
+env.Library(
+    target='lexer',
+    source=[
+        'lexer.cpp', 
     ]
 )
 
@@ -19,4 +25,14 @@ env.CppUnitTest(
     LIBDEPS=[
         'ast_parser'
     ],
+)
+
+env.CppUnitTest(
+    target='lexer_test',
+    source=[
+        'lexer_test.cpp'
+    ], 
+    LIBDEPS=[
+        'lexer'
+    ]
 )
