@@ -168,3 +168,14 @@ TEST(LexerTest, openCurly) {
 TEST(LexerTest, closeCurly) {
     testSingleToken("}", closeCurly);
 }
+
+TEST(LexerTest, functionCompareInts) {
+    char *input = charArray("function() {return 1 == 1}");
+    std::vector<token> token_data = lex(input);
+
+    ASSERT(token_data.size() == 7);
+    ASSERT(token_data[0].type == functionDec);
+    ASSERT(token_data[0].value == mongo::StringData("function()"));
+
+    delete[] input;
+}
