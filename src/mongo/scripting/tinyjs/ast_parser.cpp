@@ -12,14 +12,17 @@
 namespace mongo {
 
 ASTParser::ASTParser(std::vector<Token> tokens) {
-    Node *head = parseTokens(tokens.begin(), tokens.end());
+    Node* head = parseTokens(tokens.begin(), tokens.end());
 }
 
-void balanceStacks(Node *newOpNode, std::stack<Node *> *operandStack, std::stack<Node *> *operatorStack) {
-    while (operatorStack->size() > 0 && operatorStack->top().getBinaryOpType() >= newOpNode->getBinaryOpType()) {
-        Node *op = operatorStack->pop();
-        Node *rChild = operandStack->pop();
-        Node *lChild = operandStack->.pop();
+void balanceStacks(Node* newOpNode,
+                   std::stack<Node*>* operandStack,
+                   std::stack<Node*>* operatorStack) {
+    while (operatorStack->size() > 0 &&
+           operatorStack->top().getBinaryOpType() >= newOpNode->getBinaryOpType()) {
+        Node* op = operatorStack->pop();
+        Node* rChild = operandStack->pop();
+        Node* lChild = operandStack->.pop();
         op->setLChild(lChild);
         op->setRChild(rChild);
         operandStack->push(op);
@@ -27,13 +30,15 @@ void balanceStacks(Node *newOpNode, std::stack<Node *> *operandStack, std::stack
     operatorStack->push(newOpNode);
 }
 
-Node * parseTokens(std::vector<Token>::iterator it, std::vector<Token>::iterator end, TokenType stopToken = null) {
-    std::stack<Node *> operands;
-    std::stack<Node *> operators;
+Node* parseTokens(std::vector<Token>::iterator it,
+                  std::vector<Token>::iterator end,
+                  TokenType stopToken = null) {
+    std::stack<Node*> operands;
+    std::stack<Node*> operators;
     for (; *it != stopToken || it != end; it++) {
-        Value *value = new Value(tokens[i].value);
-        Node *node;
-        switch(tokens[i].type) {
+        Value* value = new Value(tokens[i].value);
+        Node* node;
+        switch (tokens[i].type) {
             case integerLiteral: {
                 node = new OperandNode(value, OperandNode::INTEGER_L);
                 operands.push(node);
@@ -66,6 +71,8 @@ Node * parseTokens(std::vector<Token>::iterator it, std::vector<Token>::iterator
             }
             case returnToken: {
                 node = new UnaryOperator(value, UnaryOperator::RETURN);
+                Node* subTreeHead = parseTokens(it++, end);
+
                 break;
             }
             case multiplicativeOp: {
@@ -94,8 +101,8 @@ Node * parseTokens(std::vector<Token>::iterator it, std::vector<Token>::iterator
             }
             case questionMark: {
                 // TODO
-                Node *subTreeHead = parseTokens(it++, end, colon);
-                Node *subTreeHead = parseTokens(it++, end, endStatement);
+                Node* subTreeHead = parseTokens(it++, end, colon);
+                Node* subTreeHead = parseTokens(it++, end, endStatement);
                 break;
             }
             case colon: {
@@ -108,11 +115,11 @@ Node * parseTokens(std::vector<Token>::iterator it, std::vector<Token>::iterator
                 break;
             }
             case openParen: {
-                Node *subTreeHead = parseTokens(it++, end, closeParen);
+                Node* subTreeHead = parseTokens(it++, end, closeParen);
                 operands.push(subTreeHead);
             }
             case openSqBracket: {
-                Node *subTreeHead = parseTokens(it++, end, closeSqBracket);
+                Node* subTreeHead = parseTokens(it++, end, closeSqBracket);
                 node = new BinaryOperator("[ ]", BinaryOperator::OBJ_ACCESSOR);
                 balanceStacks(node, operands, operators);
                 operands.push(subTreeHead);
@@ -128,9 +135,9 @@ Node * parseTokens(std::vector<Token>::iterator it, std::vector<Token>::iterator
         if (operands.size() < 2) {
             break;
         }
-        Node *op = operators.pop();
-        Node *rChild = operands.pop();
-        Node *lChild = operands.pop();
+        Node* op = operators.pop();
+        Node* rChild = operands.pop();
+        Node* lChild = operands.pop();
         op->setLChild(lChild);
         op->setRChild(rChild);
         operands->push(op);
