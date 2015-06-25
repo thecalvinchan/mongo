@@ -17,9 +17,9 @@ ASTParser::ASTParser(std::vector<Token> tokens) {
 
 void balanceStacks(Node *newOpNode, std::stack<Node *> *operandStack, std::stack<Node *> *operatorStack) {
     while (operatorStack->size() > 0 && operatorStack->top().getBinaryOpType() >= newOpNode->getBinaryOpType()) {
-        Node *op = operators.pop();
-        Node *rChild = operands.pop();
-        Node *lChild = operands.pop();
+        Node *op = operatorStack->pop();
+        Node *rChild = operandStack->pop();
+        Node *lChild = operandStack->.pop();
         op->setLChild(lChild);
         op->setRChild(rChild);
         operandStack->push(op);
@@ -125,9 +125,18 @@ Node * parseTokens(std::vector<Token>::iterator it, std::vector<Token>::iterator
         }
     }
     while (operators.size() > 0) {
+        if (operands.size() < 2) {
+            break;
+        }
+        Node *op = operators.pop();
+        Node *rChild = operands.pop();
+        Node *lChild = operands.pop();
+        op->setLChild(lChild);
+        op->setRChild(rChild);
+        operands->push(op);
     }
-    if (it == end && stopToken != null) {
+    if (operators.size() > 0 || (it == end && stopToken != null)) {
         // Malformed Expr
-    } else {
     }
+    return operands.pop();
 }
