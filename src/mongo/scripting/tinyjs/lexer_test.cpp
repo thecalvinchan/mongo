@@ -6,27 +6,38 @@
 #include "lexer.h"
 #include "mongo/unittest/unittest.h"
 
+namespace mongo {
+
+using std::string;
+
 /** Helper function to create a char * from a string */
-char *charArray(std::string s){
-    std::string input (s);
-    char * writable = new char[input.size() + 1];
+char *charArray(string s) {
+    string input(s);
+    char *writable = new char[input.size() + 1];
     std::copy(input.begin(), input.end(), writable);
-    writable[input.size()] = '\0'; // terminating 0
+    writable[input.size()] = '\0';  // terminating 0
     return writable;
 }
 
 // Simple tests for each type of token, where input contains just one token
 
-/** Helper function to perform a test for a single token */
-void testSingleToken(std::string s, tokenType t) {
-
-    char *input = charArray(s);
+/** Helper function to perform a test for a single line */
+void testLine(string inputString, tokenType *types, string *strings, int expectedLength) {
+    char *input = charArray(inputString);
     std::vector<token> token_data = lex(input);
 
-    ASSERT(token_data[0].type == t);
-    ASSERT(token_data[0].value == mongo::StringData(input));
+    for (int i = 0; i < expectedLength; i++) {
+        ASSERT(token_data[i].type == types[i]);
+        ASSERT(token_data[i].value == StringData(strings[i]));
+    }
 
     delete[] input;
+}
+
+void testSingleToken(string inputString, tokenType t) {
+    tokenType types[] = {t};
+    string strings[] = {inputString};
+    testLine(inputString, types, strings, 1);
 }
 
 TEST(LexerTest, thisToken) {
@@ -125,8 +136,8 @@ TEST(LexerTest, logicalOpNot) {
     testSingleToken("!", logicalOp);
 }
 
-TEST(LexerTest, endStatement) {
-    testSingleToken(";", endStatement);
+TEST(LexerTest, semicolon) {
+    testSingleToken(";", semicolon);
 }
 
 TEST(LexerTest, openParen) {
@@ -169,13 +180,54 @@ TEST(LexerTest, closeCurly) {
     testSingleToken("}", closeCurly);
 }
 
-TEST(LexerTest, functionCompareInts) {
-    char *input = charArray("function() {return 1 == 1}");
-    std::vector<token> token_data = lex(input);
+TEST(LexerTest, functionSimpleComparison) {
+    string input = "function() {return 1 == true;}";
 
-    ASSERT(token_data.size() == 7);
-    ASSERT(token_data[0].type == functionDec);
-    ASSERT(token_data[0].value == mongo::StringData("function()"));
+    tokenType types[] = {functionDec,
+                         openCurly,
+                         returnToken,
+                         integerLiteral,
+                         comparisonOp,
+                         booleanLiteral,
+                         semicolon,
+                         closeCurly};
 
-    delete[] input;
+    string strings[] = {"function()", "{", "return", "1", "==", "true", ";", "}"};
+
+    testLine(input, types, strings, 7);
 }
+
+TEST(LexerTest, functionNestedObjArrayComparison) {
+    string input = "function() {return (this.a.b.c.d >= thisArray[0]);}";
+
+    tokenType types[] = {functionDec,   openCurly,      returnToken,    openParen,    thisToken,
+                         period,        identifier,     period,         identifier,   period,
+                         identifier,    period,         identifier,     comparisonOp, identifier,
+                         openSqBracket, integerLiteral, closeSqBracket, closeParen,   semicolon,
+                         closeCurly};
+
+    string strings[] = {"function()", "{", "return", "(", "this", ".", "a",
+                        ".",          "b", ".",      "c", ".",    "d", ">=",
+                        "thisArray",  "[", "0",      "]", ")",    ";", "}"};
+
+    testLine(input, types, strings, 21);
+}
+
+TEST(LexerTest, functionTernaryOp) {
+    string input = "function() {return this.a['foo'] == 3 ? (this.b > 1) : (this.d == 2)}";
+
+    tokenType types[] = {
+        functionDec,   openCurly,      returnToken,    thisToken,    period,         identifier,
+        openSqBracket, stringLiteral,  closeSqBracket, comparisonOp, integerLiteral, questionMark,
+        openParen,     thisToken,      period,         identifier,   comparisonOp,   integerLiteral,
+        closeParen,    colon,          openParen,      thisToken,    period,         identifier,
+        comparisonOp,  integerLiteral, closeParen,     closeCurly};
+
+    string strings[] = {"function()", "{",    "return", "this", ".",  "a", "[", "'foo'", "]", "==",
+                        "3",          "?",    "(",      "this", ".",  "b", ">", "1",     ")", ":",
+                        "(",          "this", ".",      "d",    "==", "2", ")", "}"};
+
+    testLine(input, types, strings, 28);
+}
+
+}  // end namespace

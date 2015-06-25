@@ -8,6 +8,7 @@ env.Library(
         'ast_parser.cpp'
     ],
     LIBDEPS=[
+    ]
 )
 
 env.Library(
