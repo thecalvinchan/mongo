@@ -6,7 +6,6 @@ class UnaryOperator: public OperatorNode {
 public:
     enum UnaryOperatorType {
         RETURN,
-        IDENTIFIER,
     };
     UnaryOperator(Value *val, UnaryOperatorType type);
     virtual ~UnaryOperator();
