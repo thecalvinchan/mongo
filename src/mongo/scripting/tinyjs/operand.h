@@ -14,6 +14,7 @@ public:
         BOOLEAN_L,
         STRING_L,
         OBJECT,
+        IDENTIFIER,
     };
     OperandNode(Value *val, OperandType type);
     ~OperandNode();
