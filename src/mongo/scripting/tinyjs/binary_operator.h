@@ -14,7 +14,7 @@ public:
         ADDITIVE,
         COMPARISON,
         LOGICAL,
-    }
+    };
     BinaryOperator(Value *val, BinaryOperatorType type);
     ~BinaryOperator();
     Node *getLChild() const;

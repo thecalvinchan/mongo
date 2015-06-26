@@ -11,6 +11,10 @@
 
 namespace mongo {
 
+Node* parseTokens(std::vector<Token>::iterator it,
+                  std::vector<Token>::iterator end,
+                  TokenType stopToken = null);
+
 ASTParser::ASTParser(std::vector<Token> tokens) {
     Node* head = parseTokens(tokens.begin(), tokens.end());
 }
@@ -30,7 +34,7 @@ void balanceStacks(Node* newOpNode,
     operatorStack->push(newOpNode);
 }
 
-Node* parseTokens(std::vector<Token>::iterator it,
+Node* parseTokens(std::vector<ASTParser::Token>::iterator it,
                   std::vector<Token>::iterator end,
                   TokenType stopToken = null) {
     std::stack<Node*> operands;
@@ -72,7 +76,8 @@ Node* parseTokens(std::vector<Token>::iterator it,
             case returnToken: {
                 node = new UnaryOperator(value, UnaryOperator::RETURN);
                 Node* subTreeHead = parseTokens(it++, end);
-
+                node->setChild(subTreeHead);
+                operands.push(node);
                 break;
             }
             case multiplicativeOp: {
@@ -101,8 +106,6 @@ Node* parseTokens(std::vector<Token>::iterator it,
             }
             case questionMark: {
                 // TODO
-                Node* subTreeHead = parseTokens(it++, end, colon);
-                Node* subTreeHead = parseTokens(it++, end, endStatement);
                 break;
             }
             case colon: {
