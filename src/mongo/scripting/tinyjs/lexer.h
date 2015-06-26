@@ -30,39 +30,58 @@
 #include <vector>
 #include "mongo/base/string_data.h"
 
+namespace mongo {
+namespace tinyjs {
+
 // Enum to describe different token types found in the Javascript subset
-enum tokenType {
-    thisToken,
-    returnToken,
-    integerLiteral,
-    floatLiteral,
-    booleanLiteral,
-    stringLiteral,
-    identifier,
-    multiplicativeOp,
-    additiveOp,
-    comparisonOp,
-    logicalOp,
-    semicolon,
-    openParen,
-    closeParen,
-    questionMark,
-    colon,
-    period,
-    openSqBracket,
-    closeSqBracket,
-    functionDec,
-    openCurly,
-    closeCurly
+enum class TokenType {
+    kThisIdentifier,
+    kReturnIdentifier,
+    kNullIdentifier,
+    kUndefinedIdentifier,
+    kIntegerLiteral,
+    kFloatLiteral,
+    kBooleanLiteral,
+    kStringLiteral,
+    kIdentifier,
+    kAdd,
+    kSubtract,
+    kMultiply,
+    kDivide,
+    kTripleEquals,
+    kDoubleEquals,
+    kLessThan,
+    kLessThanEquals,
+    kGreaterThan,
+    kGreaterThanEquals,
+    kNotEquals,
+    kDoubleNotEquals,
+    kLogicalAnd,
+    kLogicalOr,
+    kLogicalNot,
+    kSemiColon,
+    kOpenParen,
+    kCloseParen,
+    kQuestionMark,
+    kColon,
+    kPeriod,
+    kOpenSquareBracket,
+    kCloseSquareBracket,
+    kFunctionDec,
+    kOpenCurly,
+    kCloseCurly
 };
 
-// Struct to contain token type and lexeme 
-struct token {
-    tokenType type;
+// Struct to contain token type and lexeme
+struct Token {
+    TokenType type;
     mongo::StringData value;
 };
 
-// This function takes in a line written in a subset of Javascript, lexes it, 
-// and outputs a vector of tokens, where each token contains a tokenType and a lexeme,
+// This function takes in a line written in a subset of Javascript, lexes it,
+// and outputs a vector of tokens, where each token contains a TokenType and a lexeme,
 // in order that the lexemes were found in the input string.
-std::vector<token> lex(char *input);
+std::vector<Token> lex(StringData input);
+
+}  // namespace tinyjs
+}  // namespace mongo

@@ -34,124 +34,192 @@
 #include "mongo/base/string_data.h"
 #include "lexer.h"
 
+namespace mongo {
+namespace tinyjs {
+
 // This Ragel machine lexes a line written in a subset of Javascript.
 %%{
 
     machine lexer;
   
-    thisToken        = 'this';
-    returnToken      = 'return';
-    integerLiteral   = [0-9]+;
-    floatLiteral     = ('+'|'-')?[0-9]*'.'[0-9]+;
-    booleanLiteral   = 'true' | 'false';
-    stringLiteral    = "'"[^\']*"'" 
-                      | '"'[^\"]*'"'; 
-                      #" (comment to fix syntax highlighting)
-    identifier       = [a-zA-Z_][a-zA-Z_0-9]*;
-    additiveOp       = '+' | '-';
-    multiplicativeOp = '*' | '\\';
-    comparisonOp     = '===' | '==' | '<' | '<=' | '>' | '>=' | '!=' | '!==';
-    logicalOp        = '&&' | '||' | '!';
-    semicolon        = ';';
-    openParen        = '\(';
-    closeParen       = '\)';  
-    questionMark     = '?';
-    colon            = ':';
-    period           = '.';
-    openSqBracket    = '[';
-    closeSqBracket   = ']';
-    functionDec      = 'function()';
-    openCurly        = '{';
-    closeCurly       = '}';
+    kThisIdentifier      = 'this';
+    kReturnIdentifier    = 'return';
+    kNullIdentifier      = 'null';
+    kUndefinedIdentifier = 'undefined';
+    kIntegerLiteral      = [0-9]+;
+    kFloatLiteral        = ('+'|'-')?[0-9]*'.'[0-9]+ | 'NaN' | 'Infinity';
+    kBooleanLiteral      = 'true' | 'false';
+    kStringLiteral       = "'"[^\']*"'" 
+                          | '"'[^\"]*'"'; 
+                          #" (comment to fix syntax highlighting)
+    kIdentifier          = [a-zA-Z_][a-zA-Z_0-9]*;
+    kAdd                 = '+';
+    kSubtract            = '-';
+    kMultiply            = '*';
+    kDivide              = '\\';
+    kTripleEquals        = '===';
+    kDoubleEquals        = '==';
+    kLessThan            = '<';
+    kLessThanEquals      = '<=';
+    kGreaterThan         = '>';
+    kGreaterThanEquals   = '>=';
+    kNotEquals           = '!=';
+    kDoubleNotEquals     = '!==';
+    kLogicalAnd          = '&&';
+    kLogicalOr           = '||';
+    kLogicalNot          = "!";
+    kSemiColon           = ';';
+    kOpenParen           = '\(';
+    kCloseParen          = '\)';  
+    kQuestionMark        = '?';
+    kColon               = ':';
+    kPeriod              = '.';
+    kOpenSquareBracket   = '[';
+    kCloseSquareBracket  = ']';
+    kFunctionDec         = 'function()';
+    kOpenCurly           = '{';
+    kCloseCurly          = '}';
   
     main := |*
       
-        thisToken => {
-            emit(thisToken, &tokenData, ts, te);
+        kThisIdentifier => {
+            emit(TokenType::kThisIdentifier, &tokenData, ts, te);
         };
 
-        returnToken => {
-            emit(returnToken, &tokenData, ts, te);
+        kReturnIdentifier => {
+            emit(TokenType::kReturnIdentifier, &tokenData, ts, te);
         };
 
-        integerLiteral => {
-            emit(integerLiteral, &tokenData, ts, te);
+        kNullIdentifier => {
+            emit(TokenType::kNullIdentifier, &tokenData, ts, te);
         };
 
-        floatLiteral => {
-            emit(floatLiteral, &tokenData, ts, te);
+        kUndefinedIdentifier => {
+            emit(TokenType::kUndefinedIdentifier, &tokenData, ts, te);
+        };
+
+        kIntegerLiteral => {
+            emit(TokenType::kIntegerLiteral, &tokenData, ts, te);
+        };
+
+        kFloatLiteral => {
+            emit(TokenType::kFloatLiteral, &tokenData, ts, te);
         };
         
-        booleanLiteral => {
-            emit(booleanLiteral, &tokenData, ts, te);
+        kBooleanLiteral => {
+            emit(TokenType::kBooleanLiteral, &tokenData, ts, te);
         };
 
-        stringLiteral => {
-            emit(stringLiteral, &tokenData, ts, te);
+        kStringLiteral => {
+            emit(TokenType::kStringLiteral, &tokenData, ts, te);
         };
         
-        identifier => {
-            emit(identifier, &tokenData, ts, te);
+        kIdentifier => {
+            emit(TokenType::kIdentifier, &tokenData, ts, te);
         };
 
-        additiveOp => {
-            emit(additiveOp, &tokenData, ts, te);
+        kAdd => {
+            emit(TokenType::kAdd, &tokenData, ts, te);
         };
 
-        multiplicativeOp => {
-            emit(multiplicativeOp, &tokenData, ts, te);
+        kSubtract => {
+            emit(TokenType::kSubtract, &tokenData, ts, te);
         };
 
-        comparisonOp => {
-            emit(comparisonOp, &tokenData, ts, te);
+        kMultiply => {
+            emit(TokenType::kMultiply, &tokenData, ts, te);
         };
 
-        logicalOp => {
-            emit(logicalOp, &tokenData, ts, te);
+        kDivide => {
+            emit(TokenType::kDivide, &tokenData, ts, te);
         };
 
-        semicolon => {
-            emit(semicolon, &tokenData, ts, te);
+        kTripleEquals => {
+            emit(TokenType::kTripleEquals, &tokenData, ts, te);
         };
 
-        openParen => {
-            emit(openParen, &tokenData, ts, te);
+        kDoubleEquals => {
+            emit(TokenType::kDoubleEquals, &tokenData, ts, te);
         };
 
-        closeParen => {
-            emit(closeParen, &tokenData, ts, te);
+        kLessThan => {
+            emit(TokenType::kLessThan, &tokenData, ts, te);
         };
 
-        questionMark => {
-            emit(questionMark, &tokenData, ts, te);
+        kLessThanEquals => {
+            emit(TokenType::kLessThanEquals, &tokenData, ts, te);
         };
 
-        colon => {
-            emit(colon, &tokenData, ts, te);
+        kGreaterThan => {
+            emit(TokenType::kGreaterThan, &tokenData, ts, te);
         };
 
-        period => {
-            emit(period, &tokenData, ts, te);
+        kGreaterThanEquals => {
+            emit(TokenType::kGreaterThanEquals, &tokenData, ts, te);
         };
 
-        openSqBracket => {
-            emit(openSqBracket, &tokenData, ts, te);
+        kNotEquals => {
+            emit(TokenType::kNotEquals, &tokenData, ts, te);
         };
 
-        closeSqBracket => {
-            emit(closeSqBracket, &tokenData, ts, te);
+        kDoubleNotEquals => {
+            emit(TokenType::kDoubleNotEquals, &tokenData, ts, te);
         };
 
-        functionDec => {
-            emit(functionDec, &tokenData, ts, te);
+        kLogicalAnd => {
+            emit(TokenType::kLogicalAnd, &tokenData, ts, te);
         };
 
-        openCurly => {
-            emit(openCurly, &tokenData, ts, te);
+        kLogicalOr => {
+            emit(TokenType::kLogicalOr, &tokenData, ts, te);
         };
 
-        closeCurly => {
-            emit(closeCurly, &tokenData, ts, te);
+        kLogicalNot => {
+            emit(TokenType::kLogicalNot, &tokenData, ts, te);
+        };
+
+        kSemiColon => {
+            emit(TokenType::kSemiColon, &tokenData, ts, te);
+        };
+
+        kOpenParen => {
+            emit(TokenType::kOpenParen, &tokenData, ts, te);
+        };
+
+        kCloseParen => {
+            emit(TokenType::kCloseParen, &tokenData, ts, te);
+        };
+
+        kQuestionMark => {
+            emit(TokenType::kQuestionMark, &tokenData, ts, te);
+        };
+
+        kColon => {
+            emit(TokenType::kColon, &tokenData, ts, te);
+        };
+
+        kPeriod => {
+            emit(TokenType::kPeriod, &tokenData, ts, te);
+        };
+
+        kOpenSquareBracket => {
+            emit(TokenType::kOpenSquareBracket, &tokenData, ts, te);
+        };
+
+        kCloseSquareBracket => {
+            emit(TokenType::kCloseSquareBracket, &tokenData, ts, te);
+        };
+
+        kFunctionDec => {
+            emit(TokenType::kFunctionDec, &tokenData, ts, te);
+        };
+
+        kOpenCurly => {
+            emit(TokenType::kOpenCurly, &tokenData, ts, te);
+        };
+
+        kCloseCurly => {
+            emit(TokenType::kCloseCurly, &tokenData, ts, te);
         };
         
         space;
@@ -162,24 +230,30 @@
 }%%
 
 // This function adds a token containing type and value to the tokenData array.
-void emit(tokenType t, std::vector<token> *tokenData, char *ts, char *te) {
-    token tk;
+void emit(TokenType t, std::vector<Token> *tokenData, char *ts, char *te) {
+    Token tk;
     tk.type = t;
     tk.value = mongo::StringData(ts, (te - ts));
     tokenData->push_back(tk);
 }
 
 // This function uses the Ragel machine above to lex a line written in a subset of Javascript.
-std::vector<token> lex(char *input) {
+std::vector<Token> lex(StringData input) {
     int cs;
-    char *p = input;
+    const char *data = input.rawData();
+    /*if (data[input.size()] != '\0') {
+      return none;
+    }*/
+
+    char *p = new char[input.size()];
+    strcpy(p, data);
 
     char *pe = p + strlen(p);
     int act;
     char *ts;
     char *te;
     char *eof = pe;
-    std::vector<token> tokenData;
+    std::vector<Token> tokenData;
 
     %%{
         write init;
@@ -188,3 +262,6 @@ std::vector<token> lex(char *input) {
 
     return tokenData;
 }
+
+} // namespace tinyjs
+} // namespace mongo
