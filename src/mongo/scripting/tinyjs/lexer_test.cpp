@@ -224,6 +224,10 @@ TEST(LexerTest, kPeriod) {
     testSingleToken(".", TokenType::kPeriod);
 }
 
+TEST(LexerTest, kComma) {
+    testSingleToken(",", TokenType::kComma);
+}
+
 TEST(LexerTest, kOpenSquareBracket) {
     testSingleToken("[", TokenType::kOpenSquareBracket);
 }

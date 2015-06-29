@@ -71,6 +71,7 @@ enum class TokenType {
     kQuestionMark,
     kColon,
     kPeriod,
+    kComma,
     kOpenSquareBracket,
     kCloseSquareBracket,
     kOpenCurlyBrace,

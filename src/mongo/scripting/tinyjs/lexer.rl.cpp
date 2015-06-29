@@ -81,6 +81,7 @@ namespace {
     kQuestionMark        = '?';
     kColon               = ':';
     kPeriod              = '.';
+    kComma               = ',';
     kOpenSquareBracket   = '[';
     kCloseSquareBracket  = ']';
     kOpenCurlyBrace      = '{';
@@ -211,6 +212,10 @@ namespace {
 
         kPeriod => {
         emit(TokenType::kPeriod, &tokenData, ts, te);
+        };
+
+        kComma => {
+        emit(TokenType::kComma, &tokenData, ts, te);
         };
 
         kOpenSquareBracket => {
