@@ -34,7 +34,8 @@ terminals = [
     "kOpenSquareBracket",
     "kCloseSquareBracket",
     "kOpenCurlyBrace",
-    "kCloseCurlyBrace"]
+    "kCloseCurlyBrace", 
+    "kOptional"]
 
 grammar = {
     "kClause": [
@@ -95,7 +96,7 @@ grammar = {
     "kRelationalExpression": [
         ["kBooleanFactor", "kRelationalOperation"]], 
     "kRelationalOperation": [
-        ["kComparisonOp", "kBooleanFactor", "kRelationalOperation"]
+        ["kComparisonOp", "kBooleanFactor", "kRelationalOperation"],
         ["kOptional"]],
     "kBooleanExpression": [ 
         ["kRelationalExpression", "kBooleanOperation"]],
@@ -103,9 +104,21 @@ grammar = {
         ["kLogicalOp", "kRelationalExpression", "kBooleanOperation"],
         ["kOptional"]],
     "kTernaryOp": [ 
-        ["kBooleanExpression", "kQuestionMark", "kBooleanExpression", "kColon", "kBooleanExpression"]]
+        ["kBooleanExpression", "kQuestionMark", "kBooleanExpression", "kColon", "kBooleanExpression"]],
     "kReturnStatement": [
-        ["kReturnKeyword", "kBooleanExpression", "kSemiColon", ]]
+        ["kReturnKeyword", "kBooleanExpression", "kSemiColon", ]], 
+    "kLogicalOp": [
+        ["kLogicalAnd"],
+        ["kLogicalOr"]],
+    "kComparisonOp": [
+        ["kTripleEquals"], 
+        ["kDoubleEquals"], 
+        ["kGreaterThan"], 
+        ["kGreaterThanEquals"], 
+        ["kLessThan"], 
+        ["kLessThanEquals"], 
+        ["kNotEquals"], 
+        ["kDoubleNotEquals"]]
 }
 
 def firstSingle(token):
@@ -114,11 +127,11 @@ def firstSingle(token):
     else:
         res = []
         for rule in grammar[token]:
-                for ruleComponent in rule:
-                    newTokens = first(ruleComponent)
-                    res += newTokens
-                    if ("kOptional" not in newTokens):
-                        break
+            for ruleComponent in rule:
+                newTokens = firstSingle(ruleComponent)
+                res += newTokens
+                if ("kOptional" not in newTokens):
+                    break
         return res
 
 def firstString(tokens):
@@ -126,24 +139,28 @@ def firstString(tokens):
     optionalEverywhere = True
     for token in tokens:
         newTokens = firstSingle(token)
-        res += (newTokens - "kOptional")
-        if ("kOptional" not in newTokens):
+        if ("kOptional" in newTokens):
+            newTokens.remove("kOptional")
+        res += newTokens
+        if ("kOptional" not in firstSingle(token)):
             optionalEverywhere = False
             break
     if optionalEverywhere:
         res.append("kOptional")
+    return res
 
 def follow(token):
     res = []
     if (token == "kClause"):
         res.append("$")
     for key, value in grammar.iteritems():
-        if (value[1] == token):
+        if ((len(value) > 1) and (value[1] == token)):
             if (len(value) > 2):
-                newTokens = first(value[2])
-                newTokens -= "kOptional"
+                newTokens = firstString(value)
+                if ("kOptional" in newTokens):
+                    newTokens.remove("kOptional")
                 res += newTokens
-            if ((len(value) > 1) and ("kOptional" in first(value[0])):  
+            if ((len(value) > 1) and ("kOptional" in firstString(value))):  
                 res += follow(value[0])
     return res
 
@@ -151,13 +168,16 @@ def table():
     table = {}
     for nonterminal in grammar:
         table[nonterminal] = {}
-    for A, alpha in grammar.iteritems():
-        for a in first(A):
-            table[A][a] = {A: alpha} 
-        if ("kOptional" in firstArray(alpha)):
-            for b in follow(A):
-                table[A][b] = {A: alpha}
-            if ("$" in follow(A)):
-                table[A]["$"] = {A: alpha}
+    for A, alphaList in grammar.iteritems():
+        for alpha in alphaList:
+            for a in firstSingle(A):
+                table[A][a] = alpha
+            if ("kOptional" in firstString(alpha)):
+                for b in follow(A):
+                    table[A][b] = {A: alpha}
+                if ("$" in follow(A)):
+                    table[A]["$"] = {A: alpha}
     return table
+
+print(table())
 
