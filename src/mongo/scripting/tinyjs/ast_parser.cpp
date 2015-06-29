@@ -19,134 +19,34 @@ ASTParser::ASTParser(std::vector<Token> tokens) {
     Node* head = parseTokens(tokens.begin(), tokens.end());
 }
 
-void balanceStacks(Node* newOpNode,
-                   std::stack<Node*>* operandStack,
-                   std::stack<Node*>* operatorStack) {
-    while (operatorStack->size() > 0 &&
-           operatorStack->top().getBinaryOpType() >= newOpNode->getBinaryOpType()) {
-        Node* op = operatorStack->pop();
-        Node* rChild = operandStack->pop();
-        Node* lChild = operandStack->.pop();
-        op->setLChild(lChild);
-        op->setRChild(rChild);
-        operandStack->push(op);
+bool checkMatch (std::vector<Token> tokens, NodeType startProduction) {
+    std::vector<Token>::iterator ip tokenPointer = tokens.begin();
+    std::stack<ProductionType> productionStack;
+    productionStack.push_back(CLAUSE);
+    while (!productionStack.empty()) {
+        ProductionType nextProd = productionStack.top();
+        if (nextProd == ip->type) {
+            productionStack.pop();
+            ip++;
+        } else if (nextProd == kOptional) {
+            productionStack.pop();
+        } else if (isTerminal(nextProd)) { 
+            // TODO: throw exception
+        } else {
+            ProductionType productions[] = ProductionTable.at(nextProd).at(ip->type);
+            // throws out_of_range exception if not found
+            // this means no entry in production table
+            // TODO: build tree and node
+            productionStack.pop();
+            for (int i = productions.size()-1; i>=0; i--) {
+                productionStack.push(productions[i]);
+            }
+        }
     }
-    operatorStack->push(newOpNode);
 }
 
-Node* parseTokens(std::vector<ASTParser::Token>::iterator it,
-                  std::vector<Token>::iterator end,
-                  TokenType stopToken = null) {
-    std::stack<Node*> operands;
-    std::stack<Node*> operators;
-    for (; *it != stopToken || it != end; it++) {
-        Value* value = new Value(tokens[i].value);
-        Node* node;
-        switch (tokens[i].type) {
-            case integerLiteral: {
-                node = new OperandNode(value, OperandNode::INTEGER_L);
-                operands.push(node);
-                break;
-            }
-            case floatLiteral: {
-                node = new OperandNode(value, OperandNode::FLOAT_L);
-                operands.push(node);
-                break;
-            }
-            case booleanLiteral: {
-                node = new OperandNode(value, OperandNode::BOOLEAN_L);
-                operands.push(node);
-                break;
-            }
-            case stringLiteral: {
-                node = new OperandNode(value, OperandNode::STRING_L);
-                operands.push(node);
-                break;
-            }
-            case thisToken: {
-                node = new OperandNode(value, OperandNode::OBJECT);
-                operands.push(node);
-                break;
-            }
-            case identifier: {
-                node = new OperandNode(value, OperandNode::IDENTIFIER);
-                operands.push(node);
-                break;
-            }
-            case returnToken: {
-                node = new UnaryOperator(value, UnaryOperator::RETURN);
-                Node* subTreeHead = parseTokens(it++, end);
-                node->setChild(subTreeHead);
-                operands.push(node);
-                break;
-            }
-            case multiplicativeOp: {
-                node = new BinaryOperator(value, BinaryOperator::MULTIPLICATIVE);
-                balanceStacks(node, operands, operators);
-                break;
-            }
-            case additiveOp: {
-                node = new BinaryOperator(value, BinaryOperator::ADDITIVE);
-                balanceStacks(node, operands, operators);
-                break;
-            }
-            case comparisonOp: {
-                node = new BinaryOperator(value, BinaryOperator::COMPARISON);
-                balanceStacks(node, operands, operators);
-                break;
-            }
-            case logicalOp: {
-                node = new BinaryOperator(value, BinaryOperator::LOGICAL);
-                balanceStacks(node, operands, operators);
-                break;
-            }
-            case endStatement: {
-                // TODO
-                break;
-            }
-            case questionMark: {
-                // TODO
-                break;
-            }
-            case colon: {
-                // TODO
-                break;
-            }
-            case period: {
-                node = new BinaryOperator(value, BinaryOperator::OBJ_ACCESSOR);
-                balanceStacks(node, operands, operators);
-                break;
-            }
-            case openParen: {
-                Node* subTreeHead = parseTokens(it++, end, closeParen);
-                operands.push(subTreeHead);
-            }
-            case openSqBracket: {
-                Node* subTreeHead = parseTokens(it++, end, closeSqBracket);
-                node = new BinaryOperator("[ ]", BinaryOperator::OBJ_ACCESSOR);
-                balanceStacks(node, operands, operators);
-                operands.push(subTreeHead);
-            }
-            case closeParen:
-            case closeSqBracket:
-            default:
-                // Malformed Expr
-                break;
-        }
+bool isTerminal(ProductionType production) {
+    if (production < 38) {
+        return true;
     }
-    while (operators.size() > 0) {
-        if (operands.size() < 2) {
-            break;
-        }
-        Node* op = operators.pop();
-        Node* rChild = operands.pop();
-        Node* lChild = operands.pop();
-        op->setLChild(lChild);
-        op->setRChild(rChild);
-        operands->push(op);
-    }
-    if (operators.size() > 0 || (it == end && stopToken != null)) {
-        // Malformed Expr
-    }
-    return operands.pop();
 }
