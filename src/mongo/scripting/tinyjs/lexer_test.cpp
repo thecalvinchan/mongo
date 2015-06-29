@@ -27,39 +27,63 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "lexer.h"
+
 #include <iostream>
-#include <stdio.h>
+#include <cstdio>
 #include <string>
+#include <sstream>
 #include <vector>
+
 #include "mongo/base/string_data.h"
 #include "mongo/unittest/unittest.h"
+#include "mongo/scripting/tinyjs/lexer.h"
 
 namespace mongo {
 namespace tinyjs {
+
 using std::string;
 
-// This function takes in a line written in a subset of Javascript, runs the lexer on it,
-// checks that the lexer output has expectedLength tokens,
-// and compares the types and lexemes in the lexer output to the input arrays "types" and "lexemes"
-void testLine(string inputString, TokenType *types, string *lexemes, size_t expectedLength) {
+/* This function takes in a line written in a subset of Javascript, runs the lexer on it,
+ * checks that the lexer output has expectedLength tokens, and compares
+ * the types and lexemes in the lexer output to the input arrays "types" and "lexemes"
+ */
+void testValidLine(string input, TokenType *types, string *lexemes, std::size_t expectedLength) {
+    std::vector<Token> tokenData = lex(input).getValue();
 
-    std::vector<Token> TokenData = lex(inputString);
+    ASSERT(tokenData.size() == expectedLength);
 
-    ASSERT(TokenData.size() == expectedLength);
-
-    for (int i = 0; i < static_cast<int>(expectedLength); i++) {
-        ASSERT(TokenData[i].type == types[i]);
-        ASSERT(TokenData[i].value == StringData(lexemes[i]));
+    for (std::size_t i = 0; i < expectedLength; i++) {
+        ASSERT(tokenData[i].type == types[i]);
+        ASSERT(tokenData[i].value == StringData(lexemes[i]));
     }
 }
 
-// This function takes a string containing one lexeme and its token type
-// and tests the lexer's output on the input string.
+/* This function takes in a line written in a subset of Javascript, runs the lexer on it,
+ * checks that the lexer output has expectedLength tokens, and compares
+ * the types and lexemes in the lexer output to the input arrays "types" and "lexemes"
+ */
+void testInvalidLine(string input, int errorIndex, char badCharacter) {
+    StatusWith<std::vector<Token>> result = lex(input);
+    ASSERT(!result.isOK());
+
+    std::stringstream errorMessage;
+    errorMessage << "Could not parse input starting with character: " << badCharacter;
+    errorMessage << std::endl;
+    errorMessage << input;
+    errorMessage << std::endl;
+    errorMessage << std::string(errorIndex, ' ');
+    errorMessage << "^" << std::endl;
+
+    ASSERT(result.getStatus().reason() == errorMessage.str());
+}
+
+/* This function takes a string containing one lexeme and its token type
+ * and tests the lexer's output on the input string.
+ */
 void testSingleToken(string inputString, TokenType t) {
     TokenType types[] = {t};
     string lexemes[] = {inputString};
-    testLine(inputString, types, lexemes, 1);
+    testValidLine(inputString, types, lexemes, 1);
 }
 
 // Simple tests for each type of token, where input contains just one token
@@ -68,20 +92,24 @@ TEST(LexerTest, kThisIdentifier) {
     testSingleToken("this", TokenType::kThisIdentifier);
 }
 
-TEST(LexerTest, kReturnIdentifier) {
-    testSingleToken("return", TokenType::kReturnIdentifier);
+TEST(LexerTest, kReturnKeyword) {
+    testSingleToken("return", TokenType::kReturnKeyword);
 }
 
-TEST(LexerTest, kNullIdentifier) {
-    testSingleToken("null", TokenType::kNullIdentifier);
+TEST(LexerTest, kNullLiteral) {
+    testSingleToken("null", TokenType::kNullLiteral);
 }
 
-TEST(LexerTest, kUndefinedIdentifier) {
-    testSingleToken("undefined", TokenType::kUndefinedIdentifier);
+TEST(LexerTest, kUndefinedLiteral) {
+    testSingleToken("undefined", TokenType::kUndefinedLiteral);
 }
 
 TEST(LexerTest, kIntegerLiteral) {
-    testSingleToken("012345", TokenType::kIntegerLiteral);
+    testSingleToken("12345", TokenType::kIntegerLiteral);
+}
+
+TEST(LexerTest, invalidIntegerLeadingZero) {
+    testInvalidLine("012345", 0, '0');
 }
 
 TEST(LexerTest, kFloatLiteralGt1) {
@@ -204,41 +232,55 @@ TEST(LexerTest, kCloseSquareBracket) {
     testSingleToken("]", TokenType::kCloseSquareBracket);
 }
 
-TEST(LexerTest, kFunctionDec) {
-    testSingleToken("function()", TokenType::kFunctionDec);
+TEST(LexerTest, kFunctionKeyword) {
+    testSingleToken("function", TokenType::kFunctionKeyword);
 }
 
-TEST(LexerTest, kOpenCurly) {
-    testSingleToken("{", TokenType::kOpenCurly);
+TEST(LexerTest, kOpenCurlyBrace) {
+    testSingleToken("{", TokenType::kOpenCurlyBrace);
 }
 
-TEST(LexerTest, kCloseCurly) {
-    testSingleToken("}", TokenType::kCloseCurly);
+TEST(LexerTest, kCloseCurlyBrace) {
+    testSingleToken("}", TokenType::kCloseCurlyBrace);
+}
+
+TEST(LexerTest, functionOnly) {
+    string input = "function hello";
+
+    TokenType types[] = {TokenType::kFunctionKeyword, TokenType::kIdentifier};
+
+    string lexemes[] = {"function", "hello"};
+
+    testValidLine(input, types, lexemes, 2);
 }
 
 TEST(LexerTest, functionSimpleComparison) {
     string input = "function() {return 1 == true;}";
 
-    TokenType types[] = {TokenType::kFunctionDec,
-                         TokenType::kOpenCurly,
-                         TokenType::kReturnIdentifier,
+    TokenType types[] = {TokenType::kFunctionKeyword,
+                         TokenType::kOpenParen,
+                         TokenType::kCloseParen,
+                         TokenType::kOpenCurlyBrace,
+                         TokenType::kReturnKeyword,
                          TokenType::kIntegerLiteral,
                          TokenType::kDoubleEquals,
                          TokenType::kBooleanLiteral,
                          TokenType::kSemiColon,
-                         TokenType::kCloseCurly};
+                         TokenType::kCloseCurlyBrace};
 
-    string lexemes[] = {"function()", "{", "return", "1", "==", "true", ";", "}"};
+    string lexemes[] = {"function", "(", ")", "{", "return", "1", "==", "true", ";", "}"};
 
-    testLine(input, types, lexemes, 8);
+    testValidLine(input, types, lexemes, 10);
 }
 
 TEST(LexerTest, functionNestedObjArrayComparison) {
-    string input = "function() {return (this.a.b.c.d >= thisArray[0]);}";
+    string input = "function() {return (this.a.b.c.d >= thisArray";  //[0]);}";
 
-    TokenType types[] = {TokenType::kFunctionDec,
-                         TokenType::kOpenCurly,
-                         TokenType::kReturnIdentifier,
+    TokenType types[] = {TokenType::kFunctionKeyword,
+                         TokenType::kOpenParen,
+                         TokenType::kCloseParen,
+                         TokenType::kOpenCurlyBrace,
+                         TokenType::kReturnKeyword,
                          TokenType::kOpenParen,
                          TokenType::kThisIdentifier,
                          TokenType::kPeriod,
@@ -256,21 +298,23 @@ TEST(LexerTest, functionNestedObjArrayComparison) {
                          TokenType::kCloseSquareBracket,
                          TokenType::kCloseParen,
                          TokenType::kSemiColon,
-                         TokenType::kCloseCurly};
+                         TokenType::kCloseCurlyBrace};
 
-    string lexemes[] = {"function()", "{", "return", "(", "this", ".", "a",
-                        ".",          "b", ".",      "c", ".",    "d", ">=",
-                        "thisArray",  "[", "0",      "]", ")",    ";", "}"};
+    string lexemes[] = {"function",  "(", ")", "{", "return", "(", "this", ".",
+                        "a",         ".", "b", ".", "c",      ".", "d",    ">=",
+                        "thisArray", "[", "0", "]", ")",      ";", "}"};
 
-    testLine(input, types, lexemes, 21);
+    testValidLine(input, types, lexemes, 17);
 }
 
 TEST(LexerTest, functionTernaryOp) {
     string input = "function() {return this.a['foo'] == 3 ? (this.b > 1) : (this.d == 2)}";
 
-    TokenType types[] = {TokenType::kFunctionDec,
-                         TokenType::kOpenCurly,
-                         TokenType::kReturnIdentifier,
+    TokenType types[] = {TokenType::kFunctionKeyword,
+                         TokenType::kOpenParen,
+                         TokenType::kCloseParen,
+                         TokenType::kOpenCurlyBrace,
+                         TokenType::kReturnKeyword,
                          TokenType::kThisIdentifier,
                          TokenType::kPeriod,
                          TokenType::kIdentifier,
@@ -295,19 +339,19 @@ TEST(LexerTest, functionTernaryOp) {
                          TokenType::kDoubleEquals,
                          TokenType::kIntegerLiteral,
                          TokenType::kCloseParen,
-                         TokenType::kCloseCurly};
+                         TokenType::kCloseCurlyBrace};
 
-    string lexemes[] = {"function()", "{",    "return", "this", ".",  "a", "[", "'foo'", "]", "==",
-                        "3",          "?",    "(",      "this", ".",  "b", ">", "1",     ")", ":",
-                        "(",          "this", ".",      "d",    "==", "2", ")", "}"};
+    string lexemes[] = {"function", "(",  ")", "{",    "return", "this", ".",  "a", "[", "'foo'",
+                        "]",        "==", "3", "?",    "(",      "this", ".",  "b", ">", "1",
+                        ")",        ":",  "(", "this", ".",      "d",    "==", "2", ")", "}"};
 
-    testLine(input, types, lexemes, 28);
+    testValidLine(input, types, lexemes, 30);
 }
 
 TEST(LexerTest, nestedNonsense) {
     string input = "return ((((3 + a) - 'string') * NaN) \\ x)+ -(bar['a'].this.null[1])";
 
-    TokenType types[] = {TokenType::kReturnIdentifier,
+    TokenType types[] = {TokenType::kReturnKeyword,
                          TokenType::kOpenParen,
                          TokenType::kOpenParen,
                          TokenType::kOpenParen,
@@ -335,7 +379,7 @@ TEST(LexerTest, nestedNonsense) {
                          TokenType::kPeriod,
                          TokenType::kThisIdentifier,
                          TokenType::kPeriod,
-                         TokenType::kNullIdentifier,
+                         TokenType::kNullLiteral,
                          TokenType::kOpenSquareBracket,
                          TokenType::kIntegerLiteral,
                          TokenType::kCloseSquareBracket,
@@ -345,7 +389,7 @@ TEST(LexerTest, nestedNonsense) {
                         ")",      "*",   "NaN", ")", "\\",   "x", ")",    "+", "-", "(", "bar",
                         "[",      "'a'", "]",   ".", "this", ".", "null", "[", "1", "]", ")"};
 
-    testLine(input, types, lexemes, 33);
+    testValidLine(input, types, lexemes, 33);
 }
 
 TEST(LexerTest, integerAndkIdentifier) {
@@ -355,7 +399,7 @@ TEST(LexerTest, integerAndkIdentifier) {
 
     string lexemes[] = {"1", "variableName"};
 
-    testLine(input, types, lexemes, 2);
+    testValidLine(input, types, lexemes, 2);
 }
 
 TEST(LexerTest, weirdSpacing) {
@@ -367,13 +411,13 @@ TEST(LexerTest, weirdSpacing) {
                          TokenType::kOpenParen,
                          TokenType::kOpenSquareBracket,
                          TokenType::kGreaterThan,
-                         TokenType::kNullIdentifier,
+                         TokenType::kNullLiteral,
                          TokenType::kColon,
                          TokenType::kCloseSquareBracket};
 
     string lexemes[] = {".", "-", ")", "(", "[", ">", "null", ":", "]"};
 
-    testLine(input, types, lexemes, 9);
+    testValidLine(input, types, lexemes, 9);
 }
 
 TEST(LexerTest, specialWordkIdentifier) {
@@ -383,7 +427,48 @@ TEST(LexerTest, specialWordkIdentifier) {
 
     string lexemes[] = {"thisisnotafunction", "(", ")"};
 
-    testLine(input, types, lexemes, 3);
+    testValidLine(input, types, lexemes, 3);
 }
+
+TEST(LexerTest, empty) {
+    string input = "";
+
+    TokenType types[] = {};
+
+    string lexemes[] = {};
+
+    testValidLine(input, types, lexemes, 0);
+}
+
+TEST(LexerTest, unrecognizedChar) {
+    string input = "^^";
+
+    testInvalidLine(input, 0, '^');
+}
+
+TEST(LexerTest, malformedAtStart) {
+    string input = "^ hello";
+
+    testInvalidLine(input, 0, '^');
+}
+
+TEST(LexerTest, malformedAtEnd) {
+    string input = "hello ^";
+
+    testInvalidLine(input, 6, '^');
+}
+
+TEST(LexerTest, malformedInMiddle) {
+    string input = "hello ~0~ world";
+
+    testInvalidLine(input, 6, '~');
+}
+
+TEST(LexerTest, invalidVariableName) {
+    string input = "var%name";
+
+    testInvalidLine(input, 3, '%');
+}
+
 }  // namespace tinyjs
 }  // namespace mongo
