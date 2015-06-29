@@ -127,11 +127,7 @@ def firstSingle(token):
     else:
         res = []
         for rule in grammar[token]:
-            for ruleComponent in rule:
-                newTokens = firstSingle(ruleComponent)
-                res += newTokens
-                if ("kOptional" not in newTokens):
-                    break
+            res += firstString(rule)
         return res
 
 def firstString(tokens):
@@ -153,15 +149,17 @@ def follow(token):
     res = []
     if (token == "kClause"):
         res.append("$")
-    for key, value in grammar.iteritems():
-        if ((len(value) > 1) and (value[1] == token)):
-            if (len(value) > 2):
-                newTokens = firstString(value)
-                if ("kOptional" in newTokens):
-                    newTokens.remove("kOptional")
-                res += newTokens
-            if ((len(value) > 1) and ("kOptional" in firstString(value))):  
-                res += follow(value[0])
+    for key, valueList in grammar.iteritems():
+        for value in valueList:
+            for i in range(1,len(value)):
+                if (value[i] == token):
+                    if (len(value) > i + 1):
+                        newTokens = firstString(value[(i+1):])
+                        if ("kOptional" in newTokens):
+                            newTokens.remove("kOptional")
+                        res += newTokens
+                    if ("kOptional" in firstString(value[(i+1):])):  
+                        res += follow(value[0])
     return res
 
 def table():
@@ -178,6 +176,4 @@ def table():
                 if ("$" in follow(A)):
                     table[A]["$"] = {A: alpha}
     return table
-
-print(table())
 
