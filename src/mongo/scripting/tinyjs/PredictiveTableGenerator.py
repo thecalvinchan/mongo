@@ -1,5 +1,10 @@
 grammar = {
-    clause: [[kFunctionKeyword, kOpenParen, kCloseParen, kOpenCurlyBrace, kReturnStatement, kCloseCurlyBrace], 
+    kClause: [[kFunctionKeyword, kOpenParen, kCloseParen, kOpenCurlyBrace, kReturnStatement, kCloseCurlyBrace], 
         [kReturnStatement]], 
-    variable: [[kIdentifier], 
-        [kObject]]}
+    kVariable: [[kIdentifier], 
+        [kObject]], 
+    kObject: [[kThisIdentifier, kObject], 
+        [kIdentifier, kObjectAccessor]]
+    kObjectAccessor: [[kPeriod, kIdentifier, kObjectAccessor], 
+        []]
+}
