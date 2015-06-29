@@ -1,3 +1,5 @@
+import pprint
+
 terminals = [    
     "kThisIdentifier",
     "kReturnKeyword",
@@ -158,8 +160,10 @@ def follow(token):
                         if ("kOptional" in newTokens):
                             newTokens.remove("kOptional")
                         res += newTokens
-                    if ("kOptional" in firstString(value[(i+1):])):  
-                        res += follow(value[0])
+                    if ((i == (len(value) - 1))
+                      or ("kOptional" in firstString(value[(i+1):]))): 
+                        if (key != token): 
+                            res += follow(key)
     return res
 
 def table():
@@ -168,12 +172,14 @@ def table():
         table[nonterminal] = {}
     for A, alphaList in grammar.iteritems():
         for alpha in alphaList:
-            for a in firstSingle(A):
+            for a in firstString(alpha):
                 table[A][a] = alpha
             if ("kOptional" in firstString(alpha)):
                 for b in follow(A):
-                    table[A][b] = {A: alpha}
+                    table[A][b] = alpha
                 if ("$" in follow(A)):
-                    table[A]["$"] = {A: alpha}
+                    table[A]["$"] = alpha
     return table
 
+pp = pprint.PrettyPrinter(indent=4)
+pp.pprint(table())
