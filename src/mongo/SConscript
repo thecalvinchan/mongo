@@ -40,7 +40,7 @@ env.SConscript(
         'shell',
         'tools',
         'unittest',
-        'util',
+        'util'
     ],
 )
 

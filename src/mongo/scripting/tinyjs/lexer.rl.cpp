@@ -234,7 +234,7 @@ namespace {
         kError => {
         emitError(&errorLocations, ts, eof);
         };
-      
+
     *|;
 
     write data;
