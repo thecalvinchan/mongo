@@ -58,7 +58,7 @@ Node* ASTParser::expect(TokenType t) {
 
 Node* ASTParser::clauseAction() {
     Node* head = new ClauseNode();
-    Node *child;
+    Node* child;
     if (child = (accept(TokenType::kFunctionKeyword))) {
         head->addChild(child);
         head->addChild(expect(TokenType::kOpenParen));
@@ -69,57 +69,70 @@ Node* ASTParser::clauseAction() {
     } else if (child = (accept(returnStatementAction()))) {
         head->addChild(child);
     } else {
-        error("this is not optional");
+        error("clause: sytax error");
     }
     return head;
 }
 
-void ASTParser::variableAction() {
-    if (accept(TokenType::kIdentifier)) {
-        ;
+Node* ASTParser::variableAction() {
+    Node* head = new VariableNode();
+    Node* child;
+    if (child = accept(TokenType::kIdentifier)) {
+        head->addChild(child);
+    } else if (child = accept(objectAction())){
+        head->addChild(child);
     } else {
-        objectAction();
+        error("variable: syntax error");
     }
+    return head;
 }
 
-void ASTParser::objectAction() {
-    if (accept(TokenType::kThisIdentifier)) {
-        objectAccessorAction();
-    } else if (accept(TokenType::kIdentifier)) {
-        objectAccessorAction();  // TODO: combine these two?
+Node* ASTParser::objectAction() {
+    Node* head = new ObjectNode();
+    Node* child;
+    if (child = accept(TokenType::kThisIdentifier)) {
+        head->addChild(child);
+        head->addChild(objectAccessorAction());
+    } else if (child = accept(TokenType::kIdentifier)) {
+        head->addChild(child);
+        head->addChild(objectAccessorAction()); // TODO: combine these two?
     } else {
         error("object: syntax error");
     }
+    return head;
 }
 
-void ASTParser::objectAccessorAction() {
-    if (accept(TokenType::kPeriod)) {
-        expect(TokenType::kIdentifier);
-        objectAccessorAction();
-    } else if (accept(TokenType::kOpenSquareBracket)) {
-        if (accept(TokenType::kIntegerLiteral) || accept(TokenType::kStringLiteral) ||
-            accept(TokenType::kIdentifier) ||
-            accept(std::bind(&ASTParser::arithmeticExpressionAction, this))) {
-            expect(TokenType::kCloseSquareBracket);
-            objectAccessorAction();
+Node* ASTParser::objectAccessorAction() {
+    Node* head = new ObjectAccessorNode();
+    Node* child;
+    if (child = accept(TokenType::kPeriod)) {
+        head->addChild(child);
+        head->addChild(expect(TokenType::kIdentifier));
+        head->addChild(objectAccessorAction());
+    } else if (child = accept(TokenType::kOpenSquareBracket)) {
+        Node child2;
+        if (child2 = accept(TokenType::kIntegerLiteral) || child2 = accept(TokenType::kStringLiteral) ||
+            child2 = accept(TokenType::kIdentifier) ||
+            child2 = accept(std::bind(&ASTParser::arithmeticExpressionAction, this))) {
+            head->addChild(child2);
+            head->addChild(expect(TokenType::kCloseSquareBracket));
+            head->addChild(objectAccessorAction());
         } else {
             error("object: syntax error");
         }
     }
+    // optional
 }
 
-void ASTParser::termAction() {
-    if (accept(TokenType::kIntegerLiteral)) {  // TODO: frame this as negative? restructure to use
-                                               // or's?
-        ;
-    } else if (accept(TokenType::kFloatLiteral)) {
-        ;
-    } else if (accept(TokenType::kStringLiteral)) {
-        ;
-    } else if (accept(std::bind(&ASTParser::variableAction, this))) {
-        ;
-    } else if (accept(TokenType::kBooleanLiteral)) {
-        ;
+Node* ASTParser::termAction() {
+    Node* head = new TermNode();
+    Node* child;
+    if (child = accept(TokenType::kIntegerLiteral) ||
+        child = accept(TokenType::kFloatLiteral) ||
+        child = accept(TokenType::kStringLiteral) ||
+        child = accept(std::bind(&ASTParser::variableAction, this)) ||
+        child = accept(TokenType::kBooleanLiteral)) {
+        head->addChild(child);
     } else {
         error("term: syntax error");
     }
