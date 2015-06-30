@@ -1,14 +1,4 @@
-#include "mongo/scripting/tinyjs/node.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
-#include "mongo/scripting/tinyjs/assignment_operator.h"
-#include "mongo/scripting/tinyjs/arithmetic_operator.h"
-#include "mongo/scripting/tinyjs/comparison_operator.h"
-#include "mongo/scripting/tinyjs/lexer.h"
-#include "mongo/scripting/tinyjs/logical_operator.h"
-#include "mongo/scripting/tinyjs/unary_operator.h"
-#include "mongo/scripting/tinyjs/operand.h"
-#include "mongo/db/pipeline/value.h"
-#include <stack>
 #include <stdexcept>
 
 namespace mongo {
@@ -18,29 +8,28 @@ Token currentToken;
 int currentPosition;
 
 ASTParser::ASTParser(std::vector<Token> tokens) {
-    Node* head = parseTokens(tokens);
+    parseTokens(tokens);
 }
 
 
-Node* parseTokens(std::vector<Token> tokens) {
+void ASTParser::ASTParser::parseTokens(std::vector<Token> tokens) {
     currentPosition = 0;
     currentToken = tokens[currentPosition];
     clauseAction();
-    return NULL;
 }
 
 
-void nexttoken(void) {
+void ASTParser::nexttoken(void) {
     currentPosition++;
     currentToken = tokens[currentPosition];
 }
 
 
-void error(const char msg[]) {
+void ASTParser::error(const char msg[]) {
     throw std::invalid_argument(msg);
 }
 
-int accept(Token t) {
+int ASTParser::accept(TokenType t) {
     if (currentToken.type == t) {
         nexttoken();
         return 1;
@@ -49,7 +38,7 @@ int accept(Token t) {
 }
 
 // Overloads accept to search non-terminals
-int accept(void (*action)(void)) {
+int ASTParser::accept(void ASTParser::(*action)(void)) {
     int resetPosition = currentPosition;
     try {
         action();
@@ -60,37 +49,37 @@ int accept(void (*action)(void)) {
     }
 }
 
-int expect(Token t) {
+int expect(TokenType t) {
     if (accept(t))
         return 1;
     error("expect: unexpected token");
     return 0;
 }
 
-void clauseAction() {
-    if (accept(kFunctionKeyword)) {
-        expect(kOpenParen);
-        expect(kCloseParen);
-        expect(kOpenCurlyBrace);
+void ASTParser::clauseAction() {
+    if (accept(TokenType::kFunctionKeyword)) {
+        expect(TokenType::kOpenParen);
+        expect(TokenType::kCloseParen);
+        expect(TokenType::kOpenCurlyBrace);
         returnStatementAction();
-        expect(kCloseCurlyBrace);
+        expect(TokenType::kCloseCurlyBrace);
     } else {
         returnStatementAction();
     }
 }
 
-void variableAction() {
-    if (accept(kIdentifier)) {
+void ASTParser::variableAction() {
+    if (accept(TokenType::kIdentifier)) {
         ;
     } else {
         objectAction();
     }
 }
 
-void objectAction() {
-    if (accept(kThisIdentifier)) {
+void ASTParser::objectAction() {
+    if (accept(TokenType::kThisIdentifier)) {
         objectAccessorAction();
-    } else if (accept(kIdentifier)) {
+    } else if (accept(TokenType::kIdentifier)) {
         objectAccessorAction(); // TODO: combine these two?
     } else {
         error("object: syntax error");
@@ -98,17 +87,18 @@ void objectAction() {
     }
 }
 
-void objectAccessorAction() {
-    if (accept(kPeriod)) {
-        expect(kIdentifier);
+void ASTParser::objectAccessorAction() {
+    if (accept(TokenType::kPeriod)) {
+        expect(TokenType::kIdentifier);
         objectAccessorAction();
-    } else if (accept(kOpenSquareBracket)) {
-        if (token == kIntegerLiteral ||
-            token == kStringLiteral ||
-            token == kIdentifier ||
-            token == kArithmeticExpression) {
-            
-            expect(kCloseSquareBracket);
+    } else if (accept(TokenType::kOpenSquareBracket)) {
+        if (
+            accept(TokenType::kIntegerLiteral) ||
+            accept(TokenType::kStringLiteral) ||
+            accept(TokenType::kIdentifier) ||
+            accept(&ASTParser::arithmeticExpressionAction)
+        ) {
+            expect(TokenType::kCloseSquareBracket);
             objectAccessorAction();
         } else {
             error("object: syntax error");
@@ -117,16 +107,16 @@ void objectAccessorAction() {
     } 
 }
 
-void termAction() {
-    if (accept(kIntegerLiteral)) { //TODO: frame this as negative? restructure to use or's?
+void ASTParser::termAction() {
+    if (accept(TokenType::kIntegerLiteral)) { //TODO: frame this as negative? restructure to use or's?
         ;
-    } else if (accept(kFloatLiteral)) {
+    } else if (accept(TokenType::kFloatLiteral)) {
         ;
-    } else if (accept(kStringLiteral)) {
+    } else if (accept(TokenType::kStringLiteral)) {
         ;
-    } else if (accept(kVariable)) {
+    } else if (accept(&ASTParser::variableAction)) {
         ;
-    } else if (accept(kBooleanLiteral)) {
+    } else if (accept(TokenType::kBooleanLiteral)) {
         ;
     } else {
         error("term: syntax error");
@@ -134,12 +124,12 @@ void termAction() {
     }
 }
 
-void arrayElementAction() {
-    if (accept(&termAction)) {
+void ASTParser::arrayElementAction() {
+    if (accept(&ASTParser::termAction)) {
         ;
-    } else if (accept(&arithmeticExpressionAction)) {
+    } else if (accept(&ASTParser::arithmeticExpressionAction)) {
         ;
-    } else if (accept(&booleanExpressionAction)) {
+    } else if (accept(&ASTParser::booleanExpressionAction)) {
         ;
     } else {
         error("arrayElement: syntax error");
@@ -147,14 +137,14 @@ void arrayElementAction() {
     }
 }
 
-void arrayLiteralAction() {
-    if (accept(kOpenSquareBracket)) {
-        if (accept(kCloseSquareBracket)) {
+void ASTParser::arrayLiteralAction() {
+    if (accept(TokenType::kOpenSquareBracket)) {
+        if (accept(TokenType::kCloseSquareBracket)) {
             ;
         } else {
             arrayElementAction();
             arrayTailAction();
-            expect(kCloseSquareBracket);
+            expect(TokenType::kCloseSquareBracket);
         }
     } else {
         error("arrayLiteralAction: syntax error");
@@ -162,17 +152,17 @@ void arrayLiteralAction() {
     }
 }
 
-void arrayTailAction() {
-    if (accept(kComma)) {
+void ASTParser::arrayTailAction() {
+    if (accept(TokenType::kComma)) {
         arrayElementAction();
         arrayTailAction();
     }
     // arrayTail is optional, so if it doesn't match, it's ok
 }
 
-void arrayIndexedAction() {
-    if (accept(kIdentifier)) {
-        expect(kOpenSquareBracket);
+void ASTParser::arrayIndexedAction() {
+    if (accept(TokenType::kIdentifier)) {
+        expect(TokenType::kOpenSquareBracket);
         if (token == kIntegerLiteral ||
             token == kIdentifier ||
             token == kArithmeticExpression) {
@@ -181,72 +171,72 @@ void arrayIndexedAction() {
             error("arrayIndexed: syntax error");
             nexttoken();
         } 
-        expect(kCloseSquareBracket);
+        expect(TokenType::kCloseSquareBracket);
     } else {
         error("arrayIndexed: syntax error");
         nexttoken();
     }
 }
 
-void factorAction() {
-    if (accept(&termAction)) {
+void ASTParser::factorAction() {
+    if (accept(&ASTParser::termAction)) {
         ;
-    } else if accept(kOpenParen) {
+    } else if accept(TokenType::kOpenParen) {
         arithmeticExpressionAction();
-        expect(kCloseParen);
+        expect(TokenType::kCloseParen);
     } else {
         error("factor: syntax error");
         nexttoken();
     }
 }
 
-void multiplicativeExpressionAction() {
+void ASTParser::multiplicativeExpressionAction() {
     factorAction();
     multiplicativeOperationAction();
 }
 
-void multiplicativeOperationAction() {
-    if (accept(kMultiply)) {
+void ASTParser::multiplicativeOperationAction() {
+    if (accept(TokenType::kMultiply)) {
         factorAction();
         multiplicativeOperationAction();
-    } else if (accept(kDivide)) {
+    } else if (accept(TokenType::kDivide)) {
         factorAction();
         multiplicativeOperationAction();
     }
     // multiplicativeOperation is optional, so if it doesn't match, it's ok
 }
 
-void arithmeticExpressionAction() {
+void ASTParser::arithmeticExpressionAction() {
     multiplicativeExpressionAction();
     arithmeticOperationAction();
 }
 
-void arithmeticOperationAction() {
-    if (accept(kAdd)) {
+void ASTParser::arithmeticOperationAction() {
+    if (accept(TokenType::kAdd)) {
         multiplicativeExpressionAction();
         arithmeticOperationAction();
-    } else if (accept(kSubtract)) {
+    } else if (accept(TokenType::kSubtract)) {
         multiplicativeExpressionAction();
         arithmeticOperationAction();
     }
     // arithmeticOperation is optional, so if it doesn't match, it's ok
 }
 
-void booleanFactorAction() {
-    if (accept(kOpenParen)) {
+void ASTParser::booleanFactorAction() {
+    if (accept(TokenType::kOpenParen)) {
         booleanExpressionAction();
-        expect(kCloseParen);
+        expect(TokenType::kCloseParen);
     } else {
         arithmeticExpressionAction();
     }
 }
 
-void relationalExpressionAction() {
+void ASTParser::relationalExpressionAction() {
     booleanFactorAction();
     relationalOperationAction();
 }
 
-void relationalOperationAction() {
+void ASTParser::relationalOperationAction() {
     if (accept(&comparisonOperationAction)) {
         booleanFactorAction();
         relationalOperationAction();
@@ -254,12 +244,12 @@ void relationalOperationAction() {
     // relationalOperation is optional, so if it doesn't match, it's ok
 }
 
-void booleanExpressionAction() {
+void ASTParser::booleanExpressionAction() {
     relationalExpressionAction();
     booleanOperationAction();
 }
 
-void booleanOperationAction() {
+void ASTParser::booleanOperationAction() {
     if (accept(&logicalOperationAction)) {
         relationalExpressionAction();
         booleanOperationAction();
@@ -267,25 +257,25 @@ void booleanOperationAction() {
     // booleanOperation is optional, so if it doesn't match, it's ok
 }
 
-void ternaryOperationAction() {
+void ASTParser::ternaryOperationAction() {
     booleanExpressionAction();
-    expect(kQuestionMark);
+    expect(TokenType::kQuestionMark);
     booleanExpressionAction();
-    expect(kColon);
+    expect(TokenType::kColon);
     booleanExpressionAction();
 }
 
-void ternaryOpAction() {
+void ASTParser::ternaryOpAction() {
     if (accept(&booleanExpressionAction)) {
-        expect(kQuestionMark);
+        expect(TokenType::kQuestionMark);
         expect
     }
 }
 
-void returnStatementAction() {
-    if (accept(kReturnKeyword)) {
+void ASTParser::returnStatementAction() {
+    if (accept(TokenType::kReturnKeyword)) {
         booleanExpressionAction();
-        expect(kSemiColon);
+        expect(TokenType::kSemiColon);
         nexttoken();
     } else {
         error("returnStatement: syntax error");
@@ -293,22 +283,22 @@ void returnStatementAction() {
     }
 }
 
-void logicalOperationAction() {
-    if (currentToken.type == kLogicalAnd ||
-        currentToken.type == kLogicalOr) {
+void ASTParser::logicalOperationAction() {
+    if (currentToken.type == TokenType::kLogicalAnd ||
+        currentToken.type == TokenType::kLogicalOr) {
         nexttoken();
     }
 }
 
-void comparisonOperationAction() {
-    if (currentToken.type == kTripleEquals ||
-        currentToken.type == kDoubleEquals ||
-        currentToken.type == kGreaterThan ||
-        currentToken.type == kGreaterThanEquals ||
-        currentToken.type == kLessThan ||
-        currentToken.type == kLessThanEquals ||
-        currentToken.type == kNotEquals ||
-        currentToken.type == kDoubleNotEquals) {
+void ASTParser::comparisonOperationAction() {
+    if (currentToken.type == TokenType::kTripleEquals ||
+        currentToken.type == TokenType::kDoubleEquals ||
+        currentToken.type == TokenType::kGreaterThan ||
+        currentToken.type == TokenType::kGreaterThanEquals ||
+        currentToken.type == TokenType::kLessThan ||
+        currentToken.type == TokenType::kLessThanEquals ||
+        currentToken.type == TokenType::kNotEquals ||
+        currentToken.type == TokenType::kDoubleNotEquals) {
         nexttoken();
     }
 }
