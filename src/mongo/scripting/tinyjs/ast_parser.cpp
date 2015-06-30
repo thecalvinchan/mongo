@@ -4,17 +4,13 @@
 namespace mongo {
 namespace tinyjs {
 
-Token currentToken;
-int currentPosition;
-
-ASTParser::ASTParser(std::vector<Token> tokens) {
+ASTParser::ASTParser(std::vector<Token> tokenInput) :
+    currentPosition(0), currentToken(tokenInput[0]), tokens(tokenInput) {
     parseTokens(tokens);
 }
 
 
-void ASTParser::ASTParser::parseTokens(std::vector<Token> tokens) {
-    currentPosition = 0;
-    currentToken = tokens[currentPosition];
+void ASTParser::parseTokens(std::vector<Token> tokens) {
     clauseAction();
 }
 
@@ -38,7 +34,7 @@ int ASTParser::accept(TokenType t) {
 }
 
 // Overloads accept to search non-terminals
-int ASTParser::accept(void ASTParser::(*action)(void)) {
+int ASTParser::accept(std::function<void(void)> action) {
     int resetPosition = currentPosition;
     try {
         action();
@@ -96,7 +92,7 @@ void ASTParser::objectAccessorAction() {
             accept(TokenType::kIntegerLiteral) ||
             accept(TokenType::kStringLiteral) ||
             accept(TokenType::kIdentifier) ||
-            accept(&ASTParser::arithmeticExpressionAction)
+            accept(std::bind(&ASTParser::arithmeticExpressionAction, this))
         ) {
             expect(TokenType::kCloseSquareBracket);
             objectAccessorAction();
@@ -114,7 +110,7 @@ void ASTParser::termAction() {
         ;
     } else if (accept(TokenType::kStringLiteral)) {
         ;
-    } else if (accept(&ASTParser::variableAction)) {
+    } else if (accept(std::bind(&ASTParser::variableAction, this))) {
         ;
     } else if (accept(TokenType::kBooleanLiteral)) {
         ;
@@ -125,11 +121,11 @@ void ASTParser::termAction() {
 }
 
 void ASTParser::arrayElementAction() {
-    if (accept(&ASTParser::termAction)) {
+    if (accept(std::bind(&ASTParser::termAction, this))) {
         ;
-    } else if (accept(&ASTParser::arithmeticExpressionAction)) {
+    } else if (accept(std::bind(&ASTParser::arithmeticExpressionAction, this))) {
         ;
-    } else if (accept(&ASTParser::booleanExpressionAction)) {
+    } else if (accept(std::bind(&ASTParser::booleanExpressionAction, this))) {
         ;
     } else {
         error("arrayElement: syntax error");
@@ -163,10 +159,10 @@ void ASTParser::arrayTailAction() {
 void ASTParser::arrayIndexedAction() {
     if (accept(TokenType::kIdentifier)) {
         expect(TokenType::kOpenSquareBracket);
-        if (token == kIntegerLiteral ||
-            token == kIdentifier ||
-            token == kArithmeticExpression) {
-            ;
+        if (currentToken == TokenType::kIntegerLiteral ||
+            currentToken == TokenType::kIdentifier ||
+            currentToken == TokenType::kArithmeticExpression) {
+            nexttoken();
         } else {
             error("arrayIndexed: syntax error");
             nexttoken();
@@ -179,9 +175,9 @@ void ASTParser::arrayIndexedAction() {
 }
 
 void ASTParser::factorAction() {
-    if (accept(&ASTParser::termAction)) {
+    if (accept(std::bind(&ASTParser::termAction, this))) {
         ;
-    } else if accept(TokenType::kOpenParen) {
+    } else if (accept(TokenType::kOpenParen)) {
         arithmeticExpressionAction();
         expect(TokenType::kCloseParen);
     } else {
@@ -237,7 +233,7 @@ void ASTParser::relationalExpressionAction() {
 }
 
 void ASTParser::relationalOperationAction() {
-    if (accept(&comparisonOperationAction)) {
+    if (accept(std::bind(&comparisonOperationAction, this))) {
         booleanFactorAction();
         relationalOperationAction();
     }
@@ -250,7 +246,7 @@ void ASTParser::booleanExpressionAction() {
 }
 
 void ASTParser::booleanOperationAction() {
-    if (accept(&logicalOperationAction)) {
+    if (accept(std::bind(&logicalOperationAction))) {
         relationalExpressionAction();
         booleanOperationAction();
     }
@@ -266,7 +262,7 @@ void ASTParser::ternaryOperationAction() {
 }
 
 void ASTParser::ternaryOpAction() {
-    if (accept(&booleanExpressionAction)) {
+    if (accept(std::bind(&booleanExpressionAction))) {
         expect(TokenType::kQuestionMark);
         expect
     }
