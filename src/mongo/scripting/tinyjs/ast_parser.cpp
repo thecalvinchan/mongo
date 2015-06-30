@@ -63,9 +63,9 @@ Node* ASTParser::clauseAction() {
         head->addChild(child);
         head->addChild(expect(TokenType::kOpenParen));
         head->addChild(expect(TokenType::kCloseParen));
-        expect(TokenType::kOpenCurlyBrace);
+        head->addChild(expect(TokenType::kOpenCurlyBrace));
         returnStatementAction();
-        expect(TokenType::kCloseCurlyBrace);
+        head->addChild(expect(TokenType::kCloseCurlyBrace));
     } else if (child = (accept(returnStatementAction()))) {
         head->addChild(child);
     } else {
@@ -276,32 +276,43 @@ void ASTParser::ternaryOperationAction() {
     }
 }
 
-void ASTParser::returnStatementAction() {
-    if (accept(TokenType::kReturnKeyword)) {
-        booleanExpressionAction();
-        expect(TokenType::kSemiColon);
+Node* ASTParser::returnStatementAction() {
+    Node* head = new ReturnStatementActionNode();
+    Node* child;
+    if (child = accept(TokenType::kReturnKeyword)) {
+        head->addChild(child);
+        head->addChild(booleanExpressionAction());
+        head->addChild(expect(TokenType::kSemiColon));
     } else {
         error("returnStatement: syntax error");
     }
+    return head;
 }
 
-void ASTParser::logicalOperationAction() {
-    if (accept(TokenType::kLogicalAnd) || accept(TokenType::kLogicalOr)) {
-        ;
+Node* ASTParser::logicalOperationAction() {
+    Node* head = new LogicalOperationActionNode();
+    Node* child;
+    if (child = accept(TokenType::kLogicalAnd) || child = accept(TokenType::kLogicalOr)) {
+        head->addChild(child);
     } else {
         error("logicalOperation: syntax error");
     }
+    return head;
 }
 
-void ASTParser::comparisonOperationAction() {
-    if (accept(TokenType::kTripleEquals) || accept(TokenType::kDoubleEquals) ||
-        accept(TokenType::kGreaterThan) || accept(TokenType::kGreaterThanEquals) ||
-        accept(TokenType::kLessThan) || accept(TokenType::kLessThanEquals) ||
-        accept(TokenType::kNotEquals) || accept(TokenType::kDoubleNotEquals)) {
-        ;
+Node* ASTParser::comparisonOperationAction() {
+    Node* head = new ComparisonOperationActionNode();
+    Node* child;
+    if (child = accept(TokenType::kTripleEquals) || child = accept(TokenType::kDoubleEquals) ||
+        child = accept(TokenType::kGreaterThan) || child = accept(TokenType::kGreaterThanEquals) ||
+        child = accept(TokenType::kLessThan) || child = accept(TokenType::kLessThanEquals) ||
+        child = accept(TokenType::kNotEquals) || child = accept(TokenType::kDoubleNotEquals)) {
+        head->addChild(child);
     } else {
         error("comparisonOperation: syntax error");
     }
+    return head;
 }
+
 }
 }
