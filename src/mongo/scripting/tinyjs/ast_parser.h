@@ -34,7 +34,6 @@ private:
     void booleanExpressionAction();
     void booleanOperationAction();
     void ternaryOperationAction();
-    void ternaryOpAction();
     void returnStatementAction();
     void logicalOperationAction();
     void comparisonOperationAction();

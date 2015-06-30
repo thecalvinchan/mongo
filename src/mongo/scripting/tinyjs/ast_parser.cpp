@@ -1,5 +1,6 @@
 #include "mongo/scripting/tinyjs/ast_parser.h"
 #include <stdexcept>
+#include <iostream>
 
 namespace mongo {
 namespace tinyjs {
@@ -28,6 +29,7 @@ void ASTParser::error(const char msg[]) {
 int ASTParser::accept(TokenType t) {
     if (currentToken.type == t) {
         nexttoken();
+        std::cout << currentToken.value << std::endl;
         return 1;
     }
     return 0;
@@ -45,8 +47,8 @@ int ASTParser::accept(std::function<void(void)> action) {
     }
 }
 
-int expect(TokenType t) {
-    if (accept(t))
+int ASTParser::expect(TokenType t) {
+    if (ASTParser::accept(t))
         return 1;
     error("expect: unexpected token");
     return 0;
@@ -159,10 +161,11 @@ void ASTParser::arrayTailAction() {
 void ASTParser::arrayIndexedAction() {
     if (accept(TokenType::kIdentifier)) {
         expect(TokenType::kOpenSquareBracket);
-        if (currentToken == TokenType::kIntegerLiteral ||
-            currentToken == TokenType::kIdentifier ||
-            currentToken == TokenType::kArithmeticExpression) {
-            nexttoken();
+        if (
+            accept(TokenType::kIntegerLiteral) ||
+            accept(TokenType::kIdentifier) ||
+            accept(std::bind(&ASTParser::arithmeticExpressionAction, this))) {
+            ;
         } else {
             error("arrayIndexed: syntax error");
             nexttoken();
@@ -233,7 +236,7 @@ void ASTParser::relationalExpressionAction() {
 }
 
 void ASTParser::relationalOperationAction() {
-    if (accept(std::bind(&comparisonOperationAction, this))) {
+    if (accept(std::bind(&ASTParser::comparisonOperationAction, this))) {
         booleanFactorAction();
         relationalOperationAction();
     }
@@ -246,7 +249,7 @@ void ASTParser::booleanExpressionAction() {
 }
 
 void ASTParser::booleanOperationAction() {
-    if (accept(std::bind(&logicalOperationAction))) {
+    if (accept(std::bind(&ASTParser::logicalOperationAction, this))) {
         relationalExpressionAction();
         booleanOperationAction();
     }
@@ -254,17 +257,14 @@ void ASTParser::booleanOperationAction() {
 }
 
 void ASTParser::ternaryOperationAction() {
-    booleanExpressionAction();
-    expect(TokenType::kQuestionMark);
-    booleanExpressionAction();
-    expect(TokenType::kColon);
-    booleanExpressionAction();
-}
-
-void ASTParser::ternaryOpAction() {
-    if (accept(std::bind(&booleanExpressionAction))) {
+    if (accept(std::bind(&ASTParser::booleanExpressionAction, this))) {
         expect(TokenType::kQuestionMark);
-        expect
+        booleanExpressionAction();
+        expect(TokenType::kColon);
+        booleanExpressionAction();
+    } else {
+        error("ternaryOperationAction: syntax error");
+        nexttoken();
     }
 }
 
@@ -280,23 +280,30 @@ void ASTParser::returnStatementAction() {
 }
 
 void ASTParser::logicalOperationAction() {
-    if (currentToken.type == TokenType::kLogicalAnd ||
-        currentToken.type == TokenType::kLogicalOr) {
+    if (accept(TokenType::kLogicalAnd) ||
+        accept(TokenType::kLogicalOr)) {
+        ;
+    } else {
+        error("logicalOperation: syntax error");
         nexttoken();
     }
 }
 
 void ASTParser::comparisonOperationAction() {
-    if (currentToken.type == TokenType::kTripleEquals ||
-        currentToken.type == TokenType::kDoubleEquals ||
-        currentToken.type == TokenType::kGreaterThan ||
-        currentToken.type == TokenType::kGreaterThanEquals ||
-        currentToken.type == TokenType::kLessThan ||
-        currentToken.type == TokenType::kLessThanEquals ||
-        currentToken.type == TokenType::kNotEquals ||
-        currentToken.type == TokenType::kDoubleNotEquals) {
+    if (accept(TokenType::kTripleEquals) ||
+        accept(TokenType::kDoubleEquals) ||
+        accept(TokenType::kGreaterThan) ||
+        accept(TokenType::kGreaterThanEquals) ||
+        accept(TokenType::kLessThan) ||
+        accept(TokenType::kLessThanEquals) ||
+        accept(TokenType::kNotEquals) ||
+        accept(TokenType::kDoubleNotEquals)) {
+        ;
+    } else {
+        error("comparisonOperation: syntax error");
         nexttoken();
     }
+
 }
 
 }

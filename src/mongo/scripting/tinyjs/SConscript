@@ -24,7 +24,8 @@ env.CppUnitTest(
         'ast_parser_test.cpp',
     ],
     LIBDEPS=[
-        'ast_parser'
+        'ast_parser',
+        'lexer'
     ],
 )
 
