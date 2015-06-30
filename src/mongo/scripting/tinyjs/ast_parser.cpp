@@ -258,26 +258,35 @@ void ASTParser::booleanExpressionAction() {
 }
 
 void ASTParser::booleanOperationAction() {
-    if (accept(std::bind(&ASTParser::logicalOperationAction, this))) {
-        relationalExpressionAction();
-        booleanOperationAction();
+    if (child = accept(std::bind(&ASTParser::logicalOperationAction, this))) {
+        Node* head = new BooleanOperationNode();
+        Node* child;
+        head->addChild(child);
+        head->addChild(relationalExpressionAction());
+        head->addChild(booleanOperationAction());
+        return head;
     }
+    return null;
     // booleanOperation is optional, so if it doesn't match, it's ok
 }
 
-void ASTParser::ternaryOperationAction() {
-    if (accept(std::bind(&ASTParser::booleanExpressionAction, this))) {
-        expect(TokenType::kQuestionMark);
-        booleanExpressionAction();
-        expect(TokenType::kColon);
-        booleanExpressionAction();
+Node* ASTParser::ternaryOperationAction() {
+    Node* head = new TernaryOperationNode();
+    Node* child;
+    if (child = accept(std::bind(&ASTParser::booleanExpressionAction, this))) {
+        head->addChild(child);
+        head->addChild(expect(TokenType::kQuestionMark));
+        head->addChild(booleanExpressionAction());
+        head->addChild(expect(TokenType::kColon));
+        head->addChild(booleanExpressionAction());
     } else {
         error("ternaryOperationAction: syntax error");
     }
+    return head;
 }
 
 Node* ASTParser::returnStatementAction() {
-    Node* head = new ReturnStatementActionNode();
+    Node* head = new ReturnStatementNode();
     Node* child;
     if (child = accept(TokenType::kReturnKeyword)) {
         head->addChild(child);
@@ -290,7 +299,7 @@ Node* ASTParser::returnStatementAction() {
 }
 
 Node* ASTParser::logicalOperationAction() {
-    Node* head = new LogicalOperationActionNode();
+    Node* head = new LogicalOperationNode();
     Node* child;
     if (child = accept(TokenType::kLogicalAnd) || child = accept(TokenType::kLogicalOr)) {
         head->addChild(child);
@@ -301,7 +310,7 @@ Node* ASTParser::logicalOperationAction() {
 }
 
 Node* ASTParser::comparisonOperationAction() {
-    Node* head = new ComparisonOperationActionNode();
+    Node* head = new ComparisonOperationNode();
     Node* child;
     if (child = accept(TokenType::kTripleEquals) || child = accept(TokenType::kDoubleEquals) ||
         child = accept(TokenType::kGreaterThan) || child = accept(TokenType::kGreaterThanEquals) ||
