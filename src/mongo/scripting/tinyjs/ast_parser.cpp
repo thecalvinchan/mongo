@@ -121,12 +121,20 @@ void arrayElementAction() {
 
 }
 
+void ternaryOpAction() {
+    if (accept(&booleanExpressionAction)) {
+        expect(kQuestionMark);
+        expect
+    }
+}
+
 void returnStatementAction() {
     if (accept(kReturnKeyword)) {
         booleanExpressionAction();
         expect(kSemiColon);
+        nextsym();
     } else {
-        error("")
+        error("return: syntax error");
     }
 }
 
