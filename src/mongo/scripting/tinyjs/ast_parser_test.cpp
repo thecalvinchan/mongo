@@ -44,7 +44,7 @@ using std::string;
 
 TEST(ParserTest, test1) {
 
-    string input = "return x;";
+    string input = "function() {return x > (3 + 1);}";
     std::vector<Token> tokenData = lex(input).getValue();
 
     ASTParser* a = new ASTParser(tokenData);

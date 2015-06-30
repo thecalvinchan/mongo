@@ -10,17 +10,14 @@ ASTParser::ASTParser(std::vector<Token> tokenInput) :
     parseTokens(tokens);
 }
 
-
 void ASTParser::parseTokens(std::vector<Token> tokens) {
     clauseAction();
 }
-
 
 void ASTParser::nexttoken(void) {
     currentPosition++;
     currentToken = tokens[currentPosition];
 }
-
 
 void ASTParser::error(const char msg[]) {
     throw std::invalid_argument(msg);
@@ -28,8 +25,10 @@ void ASTParser::error(const char msg[]) {
 
 int ASTParser::accept(TokenType t) {
     if (currentToken.type == t) {
-        nexttoken();
         std::cout << currentToken.value << std::endl;
+        if (currentPosition < (int) tokens.size()){
+            nexttoken();
+        }
         return 1;
     }
     return 0;
@@ -43,6 +42,7 @@ int ASTParser::accept(std::function<void(void)> action) {
         return 1;
     } catch (const std::invalid_argument& e) {
         currentPosition = resetPosition;
+        currentToken = tokens[currentPosition];
         return 0;
     }
 }
@@ -81,7 +81,6 @@ void ASTParser::objectAction() {
         objectAccessorAction(); // TODO: combine these two?
     } else {
         error("object: syntax error");
-        nexttoken();
     }
 }
 
@@ -100,7 +99,6 @@ void ASTParser::objectAccessorAction() {
             objectAccessorAction();
         } else {
             error("object: syntax error");
-            nexttoken();
         }
     } 
 }
@@ -118,7 +116,6 @@ void ASTParser::termAction() {
         ;
     } else {
         error("term: syntax error");
-        nexttoken();
     }
 }
 
@@ -131,7 +128,6 @@ void ASTParser::arrayElementAction() {
         ;
     } else {
         error("arrayElement: syntax error");
-        nexttoken();
     }
 }
 
@@ -146,7 +142,6 @@ void ASTParser::arrayLiteralAction() {
         }
     } else {
         error("arrayLiteralAction: syntax error");
-        nexttoken();
     }
 }
 
@@ -168,12 +163,10 @@ void ASTParser::arrayIndexedAction() {
             ;
         } else {
             error("arrayIndexed: syntax error");
-            nexttoken();
         } 
         expect(TokenType::kCloseSquareBracket);
     } else {
         error("arrayIndexed: syntax error");
-        nexttoken();
     }
 }
 
@@ -185,7 +178,6 @@ void ASTParser::factorAction() {
         expect(TokenType::kCloseParen);
     } else {
         error("factor: syntax error");
-        nexttoken();
     }
 }
 
@@ -264,7 +256,6 @@ void ASTParser::ternaryOperationAction() {
         booleanExpressionAction();
     } else {
         error("ternaryOperationAction: syntax error");
-        nexttoken();
     }
 }
 
@@ -272,10 +263,8 @@ void ASTParser::returnStatementAction() {
     if (accept(TokenType::kReturnKeyword)) {
         booleanExpressionAction();
         expect(TokenType::kSemiColon);
-        nexttoken();
     } else {
         error("returnStatement: syntax error");
-        nexttoken();
     }
 }
 
@@ -285,7 +274,6 @@ void ASTParser::logicalOperationAction() {
         ;
     } else {
         error("logicalOperation: syntax error");
-        nexttoken();
     }
 }
 
@@ -301,7 +289,6 @@ void ASTParser::comparisonOperationAction() {
         ;
     } else {
         error("comparisonOperation: syntax error");
-        nexttoken();
     }
 
 }
