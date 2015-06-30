@@ -18,6 +18,17 @@ env.Library(
     ]
 )
 
+env.Program(
+    target='ast_parser_experiment',
+    source=[
+        'ast_parser_experiment.cpp',
+    ],
+    LIBDEPS=[
+        'ast_parser',
+        'lexer'
+    ], CPPFLAGS=["-m32"]
+)
+
 env.CppUnitTest(
     target='ast_parser_test',
     source=[
