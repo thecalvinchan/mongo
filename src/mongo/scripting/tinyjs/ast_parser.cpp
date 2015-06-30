@@ -30,6 +30,12 @@ int accept(Token t) {
     return 0;
 }
 
+int accept(void (*action)(void)) {
+    try {
+    } catch {
+    }
+}
+
 int expect(Token t) {
     if (accept(t))
         return 1;
@@ -39,6 +45,33 @@ int expect(Token t) {
 
 void clauseAction() {
     
+}
+
+void comparisonOpAction() {
+    if (currentToken == kTripleEquals ||
+        currentToken == kDoubleEquals ||
+        currentToken == kGreaterThan ||
+        currentToken == kGreaterThanEquals ||
+        currentToken == kLessThan ||
+        currentToken == kLessThanEquals ||
+        currentToken == kNotEquals ||
+        currentToken == kDoubleNotEquals) {
+        nextsym();
+    }
+}
+
+void logicalOpAction() {
+    if (currentToken == kLogicalAnd ||
+        currentToken == kLogicalOr) {
+        nextsym();
+    }
+}
+
+void returnStatementAction() {
+    if (accept()) {
+    } else {
+        error()
+    }
 }
 
 }
