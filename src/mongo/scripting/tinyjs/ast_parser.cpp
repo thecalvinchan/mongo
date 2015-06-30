@@ -38,7 +38,74 @@ int expect(Token t) {
 }
 
 void clauseAction() {
-    
+    if (accept(kFunctionKeyword)) {
+        expect(kOpenParen);
+        expect(kCloseParen);
+        expect(kOpenCurlyBrace);
+        returnStatementAction();
+        expect(kCloseCurlyBrace);
+    } else {
+        returnStatementAction();
+    }
+}
+
+void variableAction() {
+    if (accept(kIdentifier)) {
+        ;
+    } else {
+        objectAction();
+    }
+}
+
+void objectAction() {
+    if (accept(kThisIdentifier)) {
+        objectAccessorAction();
+    } else if (accept(kIdentifier)) {
+        objectAccessorAction(); // TODO: combine these two?
+    } else {
+        error("object: syntax error");
+        nexttoken();
+    }
+}
+
+void objectAccessorAction() {
+    if (accept(kPeriod)) {
+        expect(kIdentifier);
+        objectAccessorAction();
+    } else if (accept(kOpenSquareBracket)) {
+        if (token == kIntegerLiteral ||
+            token == kStringLiteral ||
+            token == kIdentifier ||
+            token == kArithmeticExpression) {
+            
+            expect(kCloseSquareBracket);
+            objectAccessorAction();
+        } else {
+            error("object: syntax error");
+            nexttoken();
+        }
+    } 
+}
+
+void termAction() {
+    if (accept(kIntegerLiteral)) {
+        ;
+    } else if (accept(kFloatLiteral)) {
+        ;
+    } else if (accept(kStringLiteral)) {
+        ;
+    } else if (accept(kVariable)) {
+        ;
+    } else if (accept(kBooleanLiteral)) {
+        ;
+    } else {
+        error("term: syntax error");
+        nexttoken();
+    }
+}
+
+void arrayElementAction() {
+
 }
 
 }
