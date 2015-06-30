@@ -15,12 +15,25 @@ namespace mongo {
 namespace tinyjs {
 
 Token currentToken;
+int currentPosition;
 
 ASTParser::ASTParser(std::vector<Token> tokens) {
-    Node* head = parseTokens(tokens.begin(), tokens.end());
+    Node* head = parseTokens(tokens);
 }
 
-void nexttoken(void);
+
+Node* parseTokens(std::vector<Token> tokens) {
+    currentPosition = 0;
+    currentToken = tokens[currentPosition];
+    clauseAction();
+    return NULL;
+}
+
+
+void nexttoken(void) {
+    currentPosition++;
+    currentToken = tokens[currentPosition];
+}
 
 
 void error(const char msg[]) {
@@ -28,7 +41,7 @@ void error(const char msg[]) {
 }
 
 int accept(Token t) {
-    if (currentToken == t) {
+    if (currentToken.type == t) {
         nexttoken();
         return 1;
     }
@@ -37,10 +50,12 @@ int accept(Token t) {
 
 // Overloads accept to search non-terminals
 int accept(void (*action)(void)) {
+    int resetPosition = currentPosition;
     try {
         action();
         return 1;
     } catch (const std::invalid_argument& e) {
+        currentPosition = resetPosition;
         return 0;
     }
 }
@@ -271,21 +286,21 @@ void returnStatementAction() {
 }
 
 void logicalOperationAction() {
-    if (currentToken == kLogicalAnd ||
-        currentToken == kLogicalOr) {
+    if (currentToken.type == kLogicalAnd ||
+        currentToken.type == kLogicalOr) {
         nexttoken();
     }
 }
 
 void comparisonOperationAction() {
-    if (currentToken == kTripleEquals ||
-        currentToken == kDoubleEquals ||
-        currentToken == kGreaterThan ||
-        currentToken == kGreaterThanEquals ||
-        currentToken == kLessThan ||
-        currentToken == kLessThanEquals ||
-        currentToken == kNotEquals ||
-        currentToken == kDoubleNotEquals) {
+    if (currentToken.type == kTripleEquals ||
+        currentToken.type == kDoubleEquals ||
+        currentToken.type == kGreaterThan ||
+        currentToken.type == kGreaterThanEquals ||
+        currentToken.type == kLessThan ||
+        currentToken.type == kLessThanEquals ||
+        currentToken.type == kNotEquals ||
+        currentToken.type == kDoubleNotEquals) {
         nexttoken();
     }
 }
