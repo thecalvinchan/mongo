@@ -12,7 +12,7 @@ private:
     void nexttoken(void);
     void error(const char msg[]);
     int accept(TokenType t);
-    int ASTParser::accept(std::function<void(void)> action)
+    int accept(std::function<void(void)> action);
     int expect(TokenType t);
     void clauseAction();
     void variableAction();
@@ -39,8 +39,8 @@ private:
     void logicalOperationAction();
     void comparisonOperationAction();
 
-    Token currentToken;
     int currentPosition;
+    Token currentToken;
     std::vector<Token> tokens;
 };
 
