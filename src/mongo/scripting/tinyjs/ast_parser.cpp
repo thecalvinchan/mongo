@@ -5,8 +5,8 @@
 namespace mongo {
 namespace tinyjs {
 
-ASTParser::ASTParser(std::vector<Token> tokenInput) :
-    currentPosition(0), currentToken(tokenInput[0]), tokens(tokenInput) {
+ASTParser::ASTParser(std::vector<Token> tokenInput)
+    : currentPosition(0), currentToken(tokenInput[0]), tokens(tokenInput) {
     parseTokens(tokens);
 }
 
@@ -23,47 +23,55 @@ void ASTParser::error(const char msg[]) {
     throw std::invalid_argument(msg);
 }
 
-int ASTParser::accept(TokenType t) {
+Node* ASTParser::accept(TokenType t) {
     if (currentToken.type == t) {
+        Node* leaf = new LeafNode(currentToken);
         std::cout << currentToken.value << std::endl;
-        if (currentPosition < (int) tokens.size()){
+        if (currentPosition < (int)tokens.size()) {
             nexttoken();
         }
-        return 1;
+        return leaf;
     }
-    return 0;
+    return null;
 }
 
 // Overloads accept to search non-terminals
-int ASTParser::accept(std::function<void(void)> action) {
+Node* ASTParser::accept(std::function<void(void)> action) {
     int resetPosition = currentPosition;
     try {
-        action();
-        return 1;
+        Node* subTreeHead = action();
+        return subTreeHead;
     } catch (const std::invalid_argument& e) {
         currentPosition = resetPosition;
         currentToken = tokens[currentPosition];
-        return 0;
+        return null;
     }
 }
 
-int ASTParser::expect(TokenType t) {
-    if (ASTParser::accept(t))
-        return 1;
+Node* ASTParser::expect(TokenType t) {
+    Node* leaf;
+    if (leaf = ASTParser::accept(t)) {
+        return leaf;
+    }
     error("expect: unexpected token");
-    return 0;
 }
 
-void ASTParser::clauseAction() {
-    if (accept(TokenType::kFunctionKeyword)) {
-        expect(TokenType::kOpenParen);
-        expect(TokenType::kCloseParen);
+Node* ASTParser::clauseAction() {
+    Node* head = new ClauseNode();
+    Node *child;
+    if (child = (accept(TokenType::kFunctionKeyword))) {
+        head->addChild(child);
+        head->addChild(expect(TokenType::kOpenParen));
+        head->addChild(expect(TokenType::kCloseParen));
         expect(TokenType::kOpenCurlyBrace);
         returnStatementAction();
         expect(TokenType::kCloseCurlyBrace);
+    } else if (child = (accept(returnStatementAction()))) {
+        head->addChild(child);
     } else {
-        returnStatementAction();
+        error("this is not optional");
     }
+    return head;
 }
 
 void ASTParser::variableAction() {
@@ -78,7 +86,7 @@ void ASTParser::objectAction() {
     if (accept(TokenType::kThisIdentifier)) {
         objectAccessorAction();
     } else if (accept(TokenType::kIdentifier)) {
-        objectAccessorAction(); // TODO: combine these two?
+        objectAccessorAction();  // TODO: combine these two?
     } else {
         error("object: syntax error");
     }
@@ -89,22 +97,20 @@ void ASTParser::objectAccessorAction() {
         expect(TokenType::kIdentifier);
         objectAccessorAction();
     } else if (accept(TokenType::kOpenSquareBracket)) {
-        if (
-            accept(TokenType::kIntegerLiteral) ||
-            accept(TokenType::kStringLiteral) ||
+        if (accept(TokenType::kIntegerLiteral) || accept(TokenType::kStringLiteral) ||
             accept(TokenType::kIdentifier) ||
-            accept(std::bind(&ASTParser::arithmeticExpressionAction, this))
-        ) {
+            accept(std::bind(&ASTParser::arithmeticExpressionAction, this))) {
             expect(TokenType::kCloseSquareBracket);
             objectAccessorAction();
         } else {
             error("object: syntax error");
         }
-    } 
+    }
 }
 
 void ASTParser::termAction() {
-    if (accept(TokenType::kIntegerLiteral)) { //TODO: frame this as negative? restructure to use or's?
+    if (accept(TokenType::kIntegerLiteral)) {  // TODO: frame this as negative? restructure to use
+                                               // or's?
         ;
     } else if (accept(TokenType::kFloatLiteral)) {
         ;
@@ -156,14 +162,12 @@ void ASTParser::arrayTailAction() {
 void ASTParser::arrayIndexedAction() {
     if (accept(TokenType::kIdentifier)) {
         expect(TokenType::kOpenSquareBracket);
-        if (
-            accept(TokenType::kIntegerLiteral) ||
-            accept(TokenType::kIdentifier) ||
+        if (accept(TokenType::kIntegerLiteral) || accept(TokenType::kIdentifier) ||
             accept(std::bind(&ASTParser::arithmeticExpressionAction, this))) {
             ;
         } else {
             error("arrayIndexed: syntax error");
-        } 
+        }
         expect(TokenType::kCloseSquareBracket);
     } else {
         error("arrayIndexed: syntax error");
@@ -269,8 +273,7 @@ void ASTParser::returnStatementAction() {
 }
 
 void ASTParser::logicalOperationAction() {
-    if (accept(TokenType::kLogicalAnd) ||
-        accept(TokenType::kLogicalOr)) {
+    if (accept(TokenType::kLogicalAnd) || accept(TokenType::kLogicalOr)) {
         ;
     } else {
         error("logicalOperation: syntax error");
@@ -278,20 +281,14 @@ void ASTParser::logicalOperationAction() {
 }
 
 void ASTParser::comparisonOperationAction() {
-    if (accept(TokenType::kTripleEquals) ||
-        accept(TokenType::kDoubleEquals) ||
-        accept(TokenType::kGreaterThan) ||
-        accept(TokenType::kGreaterThanEquals) ||
-        accept(TokenType::kLessThan) ||
-        accept(TokenType::kLessThanEquals) ||
-        accept(TokenType::kNotEquals) ||
-        accept(TokenType::kDoubleNotEquals)) {
+    if (accept(TokenType::kTripleEquals) || accept(TokenType::kDoubleEquals) ||
+        accept(TokenType::kGreaterThan) || accept(TokenType::kGreaterThanEquals) ||
+        accept(TokenType::kLessThan) || accept(TokenType::kLessThanEquals) ||
+        accept(TokenType::kNotEquals) || accept(TokenType::kDoubleNotEquals)) {
         ;
     } else {
         error("comparisonOperation: syntax error");
     }
-
 }
-
 }
 }

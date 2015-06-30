@@ -13,12 +13,6 @@ public:
     static string type = "CLAUSE";
     ClauseNode();
     virtual ~ClauseNode();
-    static unordered_map<Terminal::TerminalType, Node::NodeType[]> Productions(
-        //Should write a factory method for checking separate classes
-        //{Terminal::FUNCTION_DEC, [Node::kFunctionDec, Node::kOpenCurly, Node::kCloseCurly]}
-        {Terminal::FUNCTION_DEC, [FunctionDec::type, Node::kOpenCurly, Node::kCloseCurly]}
-        {Terminal::IDENTIFIER, [Node::kReturnIdent
-    );
 };
 
 }
