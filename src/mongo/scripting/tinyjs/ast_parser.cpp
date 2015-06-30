@@ -9,6 +9,7 @@
 #include "mongo/scripting/tinyjs/operand.h"
 #include "mongo/db/pipeline/value.h"
 #include <stack>
+#include <stdexcept>
 
 namespace mongo {
 namespace tinyjs {
@@ -20,7 +21,9 @@ ASTParser::ASTParser(std::vector<Token> tokens) {
 }
 
 void nexttoken(void);
-void error(const char msg[]);
+void error(const char msg[]) {
+    throw std::invalid_argument(msg);
+}
 
 int accept(Token t) {
     if (currentToken == t) {
@@ -30,9 +33,13 @@ int accept(Token t) {
     return 0;
 }
 
+// Overloads accept to search non-terminals
 int accept(void (*action)(void)) {
     try {
-    } catch {
+        action();
+        return 1;
+    } catch (const std::invalid_argument& e) {
+        return 0;
     }
 }
 
@@ -114,16 +121,12 @@ void arrayElementAction() {
 
 }
 
-void comparisonOpAction() {
-    if (currentToken == kTripleEquals ||
-        currentToken == kDoubleEquals ||
-        currentToken == kGreaterThan ||
-        currentToken == kGreaterThanEquals ||
-        currentToken == kLessThan ||
-        currentToken == kLessThanEquals ||
-        currentToken == kNotEquals ||
-        currentToken == kDoubleNotEquals) {
-        nextsym();
+void returnStatementAction() {
+    if (accept(kReturnKeyword)) {
+        booleanExpressionAction();
+        expect(kSemiColon);
+    } else {
+        error("")
     }
 }
 
@@ -134,10 +137,16 @@ void logicalOpAction() {
     }
 }
 
-void returnStatementAction() {
-    if (accept()) {
-    } else {
-        error()
+void comparisonOpAction() {
+    if (currentToken == kTripleEquals ||
+        currentToken == kDoubleEquals ||
+        currentToken == kGreaterThan ||
+        currentToken == kGreaterThanEquals ||
+        currentToken == kLessThan ||
+        currentToken == kLessThanEquals ||
+        currentToken == kNotEquals ||
+        currentToken == kDoubleNotEquals) {
+        nextsym();
     }
 }
 
