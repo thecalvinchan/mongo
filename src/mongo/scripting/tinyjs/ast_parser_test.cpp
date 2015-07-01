@@ -34,8 +34,8 @@
 #include <vector>
 
 #include "mongo/unittest/unittest.h"
-#include "mongo/scripting/tinyjs/ast_parser.h"
  #include "mongo/scripting/tinyjs/lexer.h"
+#include "mongo/scripting/tinyjs/ast_parser.h"
 
 namespace mongo {
 namespace tinyjs {
