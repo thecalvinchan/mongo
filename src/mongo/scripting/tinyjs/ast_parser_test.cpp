@@ -42,16 +42,18 @@ namespace tinyjs {
 
 using std::string;
 
+void testParseTree(string input, string expected) {
+    std::vector<Token> tokenData = lex(input).getValue();
+    ASTParser* a = new ASTParser(tokenData);
+    std::string res = a->traverse();
+    ASSERT(res == expected);
+}
 
 TEST(ParserTest, test1) {
 
-    string input = "function() {return x > (3 + 1);}";
-    std::vector<Token> tokenData = lex(input).getValue();
-
-    ASTParser* a = new ASTParser(tokenData);
-    std::cout << "made parse tree";
-    a->traverse();
 }
+
+
 
 } // namespace tinyjs
 } // namespace mongo

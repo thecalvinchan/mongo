@@ -20,13 +20,15 @@ void Node::addChild(std::unique_ptr<Node> child) {
     }
 }
 
-std::vector<std::unique_ptr<Node> > Node::getChildren() {
-    return std::move(this->children);
+std::vector<std::unique_ptr<Node> > const& Node::getChildren() {
+    return this->children;
 }
 
 std::string Node::getName() {
     return this->name;
 }
+
+
 
 }
 }

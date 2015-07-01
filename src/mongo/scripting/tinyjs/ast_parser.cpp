@@ -18,15 +18,17 @@ ASTParser::~ASTParser() {
     this->tokens.clear();
 }
 
-void traverseSubtree(std::unique_ptr<Node> node) {
-    std::cout << node->getName() << std::endl;
-    for (std::vector<std::unique_ptr<Node> >::iterator it = node->getChildren().begin(); it != node->getChildren().end(); it++) {
-        traverseSubtree(std::move(*it));
+std::string traverseSubtree(Node* node) {
+    std::string res = node->getName();
+    for (std::vector<std::unique_ptr<Node> >::const_iterator it = node->getChildren().begin(); it != node->getChildren().end(); it++) {
+        res += " ";
+        res += traverseSubtree((*it).get());
     }
+    return res;
 }  
 
-void ASTParser::traverse() {
-    traverseSubtree(std::move(this->head));
+std::string ASTParser::traverse() {
+    return traverseSubtree((this->head).get());
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {
@@ -88,7 +90,7 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
     } else if ((child = accept(std::bind(&ASTParser::returnStatementAction, this)))) {
         head->addChild(std::move(child));
     } else {
-        error("clause: sytax error");
+        error("clause: syntax error");
     }
     return head;
 }
