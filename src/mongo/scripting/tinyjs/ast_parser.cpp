@@ -18,6 +18,17 @@ ASTParser::~ASTParser() {
     this->tokens.clear();
 }
 
+void traverseSubtree(std::unique_ptr<Node> node) {
+    std::cout << node->getName() << std::endl;
+    for (std::vector<std::unique_ptr<Node> >::iterator it = node->getChildren().begin(); it != node->getChildren().end(); it++) {
+        traverseSubtree(std::move(*it));
+    }
+}  
+
+void ASTParser::traverse() {
+    traverseSubtree(std::move(this->head));
+}
+
 void ASTParser::parseTokens(std::vector<Token> tokens) {
     this->head = clauseAction();
 }

@@ -42,12 +42,6 @@ namespace tinyjs {
 
 using std::string;
 
-void traverse(std::unique_ptr<Node> node) {
-    std::cout << node->getName() << std::endl;
-    for (std::vector<std::unique_ptr<Node> >::iterator it = node->getChildren().begin(); it != node->getChildren().end(); it++) {
-        traverse(std::move(*it));
-    }
-}  
 
 TEST(ParserTest, test1) {
 
@@ -55,7 +49,8 @@ TEST(ParserTest, test1) {
     std::vector<Token> tokenData = lex(input).getValue();
 
     ASTParser* a = new ASTParser(tokenData);
-    (void) a;
+    std::cout << "made parse tree";
+    a->traverse();
 }
 
 } // namespace tinyjs

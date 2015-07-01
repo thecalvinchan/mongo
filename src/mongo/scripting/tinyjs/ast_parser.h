@@ -10,6 +10,7 @@ public:
     ASTParser(std::vector<Token> tokens);
     ~ASTParser();
     void printTree();
+    void traverse();
 private:
     void parseTokens(std::vector<Token> tokens);
     void nexttoken(void);
