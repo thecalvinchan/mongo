@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <memory>
 #include "mongo/db/pipeline/value.h"
 #include "mongo/scripting/tinyjs/lexer.h"
 
@@ -16,7 +17,7 @@ public:
     void addChild(std::unique_ptr<Node> child);
 private:    
     TokenType type;
-    std::string value;
+    StringData value;
     std::vector<std::unique_ptr<Node> > children;
 };
 

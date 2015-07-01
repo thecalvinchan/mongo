@@ -5,7 +5,8 @@ Import('env')
 env.Library(
     target='ast_parser',
     source=[
-        'ast_parser.cpp'
+        'ast_parser.cpp',
+        'node.cpp'
     ],
     LIBDEPS=[
     ]
@@ -15,17 +16,6 @@ env.Library(
     target='lexer',
     source=[
         'lexer.cpp', 
-    ]
-)
-
-env.Program(
-    target='ast_parser_experiment',
-    source=[
-        'ast_parser_experiment.cpp',
-    ],
-    LIBDEPS=[
-        'ast_parser',
-        'lexer'
     ]
 )
 
