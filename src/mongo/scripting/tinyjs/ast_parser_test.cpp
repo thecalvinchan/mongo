@@ -42,6 +42,10 @@ namespace tinyjs {
 
 using std::string;
 
+void traverse(std::unique_ptr<Node> node) {
+    std::cout << node.name << endl;
+}
+
 TEST(ParserTest, test1) {
 
     string input = "function() {return x > (3 + 1);}";
