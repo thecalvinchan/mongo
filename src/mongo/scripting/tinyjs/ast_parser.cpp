@@ -134,9 +134,7 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction() {
     } else if ((child = accept(TokenType::kOpenSquareBracket))) {
         head->addChild(std::move(child));
         std::unique_ptr<Node> child2;
-        if ((child2 = accept(TokenType::kIntegerLiteral)) || (child2 = accept(TokenType::kStringLiteral)) ||
-            (child2 = accept(TokenType::kIdentifier)) ||
-            (child2 = accept(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
+        if ((child2 = accept(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
             head->addChild(std::move(child2));
             head->addChild(std::move(expect(TokenType::kCloseSquareBracket)));
             head->addChild(std::move(objectAccessorAction()));

@@ -103,7 +103,9 @@ TEST(ParserTest, test4) {
         "ClauseNode LeafNode LeafNode LeafNode LeafNode ReturnStatementNode LeafNode "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
         "MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode LeafNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
+        "LeafNode "
         "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
         "VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
@@ -112,18 +114,21 @@ TEST(ParserTest, test4) {
     testParseTree(input, expected);
 }
 
-TEST(ParserTest, test1) {
+TEST(ParserTest, test5) {
     string input = "return this[3+3] == 90.1;";
 
     string expected =
         "ClauseNode ReturnStatementNode LeafNode BooleanExpressionNode RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode "
+        "ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode TermNode LeafNode ArithmeticOperationNode "
+        "LeafNode MultiplicativeExpressionNode FactorNode TermNode LeafNode LeafNode "
         "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
         "LeafNode";
 
-    //testParseTree(input, expected);
+    testParseTree(input, expected);
 }
 
 
