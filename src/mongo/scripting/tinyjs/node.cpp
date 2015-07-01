@@ -1,13 +1,14 @@
-#pragma once
-
 #include "mongo/scripting/tinyjs/node.h"
+
+namespace mongo {
+namespace tinyjs {
 
 Node::Node(std::string name) {
     this->name = name;
 }
 
 Node::~Node() {
-    for (std::vector<std::unique_ptr<Node> >::iterator it = this->children.begin(); it != this->children.end(); i++) {
+    for (std::vector<std::unique_ptr<Node> >::iterator it = this->children.begin(); it != this->children.end(); it++) {
         (*it).reset();
     }
     this->children.clear();
@@ -15,11 +16,12 @@ Node::~Node() {
 
 void Node::addChild(std::unique_ptr<Node> child) {
     if (child) {
-        this->children.push_back(child);
+        this->children.push_back(std::move(child));
     }
+}
 
-std::vector<std::unique_ptr<Node> Node::getChildren() {
-    return this->children;
+std::vector<std::unique_ptr<Node> > Node::getChildren() {
+    return std::move(this->children);
 }
 
 std::string Node::getName() {
@@ -27,3 +29,5 @@ std::string Node::getName() {
 }
 
 }
+}
+

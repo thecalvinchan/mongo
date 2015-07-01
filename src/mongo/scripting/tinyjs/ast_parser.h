@@ -1,10 +1,9 @@
 #include <vector>
 #include "mongo/scripting/tinyjs/lexer.h"
+#include "mongo/scripting/tinyjs/node.h"
 
 namespace mongo {
 namespace tinyjs {
-
-class Node;
 
 class ASTParser {
 public:

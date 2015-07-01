@@ -1,5 +1,5 @@
 #include "mongo/scripting/tinyjs/ast_parser.h"
-#include "mongo/scripting/tinyjs/Node.h"
+#include "mongo/scripting/tinyjs/node.h"
 #include "mongo/scripting/tinyjs/clause.h"
 #include <stdexcept>
 #include <iostream>

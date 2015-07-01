@@ -34,8 +34,8 @@
 #include <vector>
 
 #include "mongo/unittest/unittest.h"
-#include "mongo/scripting/tinyjs/ast_parser.h"
  #include "mongo/scripting/tinyjs/lexer.h"
+#include "mongo/scripting/tinyjs/ast_parser.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -44,8 +44,8 @@ using std::string;
 
 void traverse(std::unique_ptr<Node> node) {
     std::cout << node->getName() << std::endl;
-    for (std::vector<std::unique_ptr<Node> >::iterator it = node->getChildren().begin(); it != node->getChildren().end(); i++) {
-        traverse(*it);
+    for (std::vector<std::unique_ptr<Node> >::iterator it = node->getChildren().begin(); it != node->getChildren().end(); it++) {
+        traverse(std::move(*it));
     }
 }  
 
