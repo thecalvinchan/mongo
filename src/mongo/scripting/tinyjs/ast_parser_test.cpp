@@ -43,11 +43,11 @@ namespace tinyjs {
 using std::string;
 
 void traverse(std::unique_ptr<Node> node) {
-    std::cout << node.name << endl;
-    for (child : node.getChildren()) {
-        traverse(child);
+    std::cout << node->getName() << std::endl;
+    for (std::vector<std::unique_ptr<Node> >::iterator it = node->getChildren().begin(); it != node->getChildren().end(); i++) {
+        traverse(*it);
     }
-}
+}  
 
 TEST(ParserTest, test1) {
 

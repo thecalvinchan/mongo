@@ -10,122 +10,128 @@ namespace tinyjs {
 
 class ClauseNode: public Node {
 public:
-    ClauseNode(Token token);
+    ClauseNode(): Node("ClauseNode") {};
 };
 
 class LeafNode: public Node {
 public:
-    LeafNode(Token token);
+    LeafNode(Token token): Node("LeafNode") {
+        this->type = token.type;
+        this->value = token.value;
+    };
+private:
+    TokenType type;
+    StringData value;
 };
 
 class VariableNode: public Node {
 public:
-    VariableNode(Token token);
+    VariableNode(): Node("VariableNode") {};
 };
 
 class ObjectNode: public Node {
 public:
-    ObjectNode(Token token);
+    ObjectNode(): Node("ObjectNode") {};
 };
 
 class ObjectAccessorNode: public Node {
 public:
-    ObjectAccessorNode(Token token);
+    ObjectAccessorNode(): Node("ObjectAccessorNode") {};
 };
 
 class TermNode: public Node {
 public:
-    TermNode(Token token);
+    TermNode(): Node("TermNode") {};
 };
 
 class ArrayElementNode: public Node {
 public:
-    ArrayElementNode(Token token);
+    ArrayElementNode(): Node("ArrayElementNode") {};
 };
 
 class ArrayLiteralNode: public Node {
 public:
-    ArrayLiteralNode(Token token);
+    ArrayLiteralNode(): Node("ArrayLiteralNode") {};
 };
 
 class ArrayTailNode: public Node {
 public:
-    ArrayTailNode(Token token);
+    ArrayTailNode(): Node("ArrayTailNode") {};
 };
 
 class ArrayIndexedNode: public Node {
 public:
-    ArrayIndexedNode(Token token);
+    ArrayIndexedNode(): Node("ArrayIndexedNode") {};
 };
 
 class FactorNode: public Node {
 public:
-    FactorNode(Token token);
+    FactorNode(): Node("FactorNode") {};
 };
 
 class MultiplicativeExpressionNode: public Node {
 public:
-    MultiplicativeExpressionNode(Token token);
+    MultiplicativeExpressionNode(): Node("MultiplicativeExpressionNode") {};
 };
 
 class MultiplicativeOperationNode: public Node {
 public:
-    MultiplicativeOperationNode(Token token);
+    MultiplicativeOperationNode(): Node("MultiplicativeOperationNode") {};
 };
 
 class ArithmeticExpressionNode: public Node {
 public:
-    ArithmeticExpressionNode(Token token);
+    ArithmeticExpressionNode(): Node("ArithmeticExpressionNode") {};
 };
 
 class ArithmeticOperationNode: public Node {
 public:
-    ArithmeticOperationNode(Token token);
+    ArithmeticOperationNode(): Node("ArithmeticOperationNode") {};
 };
 
 class BooleanFactorNode: public Node {
 public:
-    BooleanFactorNode(Token token);
+    BooleanFactorNode(): Node("BooleanFactorNode") {};
 };
 
 class RelationalExpressionNode: public Node {
 public:
-    RelationalExpressionNode(Token token);
+    RelationalExpressionNode(): Node("RelationalExpressionNode") {};
 };
 
 class RelationalOperationNode: public Node {
 public:
-    RelationalOperationNode(Token token);
+    RelationalOperationNode(): Node("RelationalOperationNode") {};
 };
 
 class BooleanExpressionNode: public Node {
 public:
-    BooleanExpressionNode(Token token);
+    BooleanExpressionNode(): Node("BooleanExpressionNode") {};
 };
 
 class BooleanOperationNode: public Node {
 public:
-    BooleanOperationNode(Token token);
+    BooleanOperationNode(): Node("BooleanOperationNode") {};
 };
 
 class TernaryOperationNode: public Node {
 public:
-    TernaryOperationNode(Token token);
+    TernaryOperationNode(): Node("TernaryOperationNoder") {};
 };
 
 class ReturnStatementNode: public Node {
 public:
-    ReturnStatementNode(Token token);
+    ReturnStatementNode(): Node("ReturnStatementNode") {};
 };
 
 class LogicalOperationNode: public Node {
 public:
-    LogicalOperationNode(Token token);
+    LogicalOperationNode(): Node("LogicalOperationNode") {};
 };
 
 class ComparisonOperationNode: public Node {
 public:
-    ComparisonOperationNode(Token token);
+    ComparisonOperationNode(): Node("ComparisonOperationNode") {};
 };
 
 }

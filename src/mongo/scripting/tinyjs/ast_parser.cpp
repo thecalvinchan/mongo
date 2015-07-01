@@ -65,7 +65,7 @@ std::unique_ptr<Node> ASTParser::expect(TokenType t) {
 }
 
 std::unique_ptr<Node> ASTParser::clauseAction() {
-    std::unique_ptr<Node> head(new ClauseNode(currentToken));
+    std::unique_ptr<Node> head(new ClauseNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kFunctionKeyword))) {
         head->addChild(std::move(child));
@@ -83,7 +83,7 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
 }
 
 std::unique_ptr<Node> ASTParser::variableAction() {
-    std::unique_ptr<Node> head(new VariableNode(currentToken));
+    std::unique_ptr<Node> head(new VariableNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kIdentifier))) {
         head->addChild(std::move(child));
@@ -96,7 +96,7 @@ std::unique_ptr<Node> ASTParser::variableAction() {
 }
 
 std::unique_ptr<Node> ASTParser::objectAction() {
-    std::unique_ptr<Node> head(new ObjectNode(currentToken));
+    std::unique_ptr<Node> head(new ObjectNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kThisIdentifier))) {
         head->addChild(std::move(child));
@@ -111,7 +111,7 @@ std::unique_ptr<Node> ASTParser::objectAction() {
 }
 
 std::unique_ptr<Node> ASTParser::objectAccessorAction() {
-    std::unique_ptr<Node> head(new ObjectAccessorNode(currentToken));
+    std::unique_ptr<Node> head(new ObjectAccessorNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kPeriod))) {
         head->addChild(std::move(child));
@@ -136,7 +136,7 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction() {
 }
 
 std::unique_ptr<Node> ASTParser::termAction() {
-    std::unique_ptr<Node> head (new TermNode(currentToken));
+    std::unique_ptr<Node> head (new TermNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kIntegerLiteral)) ||
         (child = accept(TokenType::kFloatLiteral)) ||
@@ -151,7 +151,7 @@ std::unique_ptr<Node> ASTParser::termAction() {
 }
 
 std::unique_ptr<Node> ASTParser::arrayElementAction() {
-    std::unique_ptr<Node> head (new ArrayElementNode(currentToken));
+    std::unique_ptr<Node> head (new ArrayElementNode());
     std::unique_ptr<Node> child;
     if ((child = accept(std::bind(&ASTParser::termAction, this)))) {
         head->addChild(std::move(child));
@@ -166,7 +166,7 @@ std::unique_ptr<Node> ASTParser::arrayElementAction() {
 }
 
 std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
-    std::unique_ptr<Node> head (new ArrayLiteralNode(currentToken));
+    std::unique_ptr<Node> head (new ArrayLiteralNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kOpenSquareBracket))) {
         head->addChild(std::move(child));
@@ -185,7 +185,7 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
 }
 
 std::unique_ptr<Node> ASTParser::arrayTailAction() {
-    std::unique_ptr<Node> head (new ArrayTailNode(currentToken));
+    std::unique_ptr<Node> head (new ArrayTailNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kComma))) {
         head->addChild(std::move(child));
@@ -198,7 +198,7 @@ std::unique_ptr<Node> ASTParser::arrayTailAction() {
 }
 
 std::unique_ptr<Node> ASTParser::arrayIndexedAction() {
-    std::unique_ptr<Node> head (new ArrayIndexedNode(currentToken));
+    std::unique_ptr<Node> head (new ArrayIndexedNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kIdentifier))) {
         head->addChild(std::move(child));
@@ -218,7 +218,7 @@ std::unique_ptr<Node> ASTParser::arrayIndexedAction() {
 }
 
 std::unique_ptr<Node> ASTParser::factorAction() {
-    std::unique_ptr<Node> head (new FactorNode(currentToken));
+    std::unique_ptr<Node> head (new FactorNode());
     std::unique_ptr<Node> child;
     if ((child = accept(std::bind(&ASTParser::termAction, this)))) {
         head->addChild(std::move(child));
@@ -233,14 +233,14 @@ std::unique_ptr<Node> ASTParser::factorAction() {
 }
 
 std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
-    std::unique_ptr<Node> head (new MultiplicativeExpressionNode(currentToken));
+    std::unique_ptr<Node> head (new MultiplicativeExpressionNode());
     head->addChild(std::move(factorAction()));
     head->addChild(std::move(multiplicativeOperationAction()));
     return head;
 }
 
 std::unique_ptr<Node> ASTParser::multiplicativeOperationAction() {
-    std::unique_ptr<Node> head (new MultiplicativeOperationNode(currentToken));
+    std::unique_ptr<Node> head (new MultiplicativeOperationNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kMultiply))) {
         head->addChild(std::move(child));
@@ -258,14 +258,14 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction() {
 }
 
 std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
-    std::unique_ptr<Node> head (new ArithmeticExpressionNode(currentToken));
+    std::unique_ptr<Node> head (new ArithmeticExpressionNode());
     head->addChild(std::move(multiplicativeExpressionAction()));
     head->addChild(std::move(arithmeticOperationAction()));
     return head;
 }
 
 std::unique_ptr<Node> ASTParser::arithmeticOperationAction() {
-    std::unique_ptr<Node> head (new ArithmeticOperationNode(currentToken));
+    std::unique_ptr<Node> head (new ArithmeticOperationNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kAdd))) {
         head->addChild(std::move(child));
@@ -283,7 +283,7 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction() {
 }
 
 std::unique_ptr<Node> ASTParser::booleanFactorAction() {
-    std::unique_ptr<Node> head (new BooleanFactorNode(currentToken));
+    std::unique_ptr<Node> head (new BooleanFactorNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kOpenParen))) {
         head->addChild(std::move(child));
@@ -296,14 +296,14 @@ std::unique_ptr<Node> ASTParser::booleanFactorAction() {
 }
 
 std::unique_ptr<Node> ASTParser::relationalExpressionAction() {
-    std::unique_ptr<Node> head (new RelationalExpressionNode(currentToken));
+    std::unique_ptr<Node> head (new RelationalExpressionNode());
     head->addChild(std::move(booleanFactorAction()));
     head->addChild(std::move(relationalOperationAction()));
     return head;
 }
 
 std::unique_ptr<Node> ASTParser::relationalOperationAction() {
-    std::unique_ptr<Node> head (new RelationalOperationNode(currentToken));
+    std::unique_ptr<Node> head (new RelationalOperationNode());
     std::unique_ptr<Node> child;
     if ((child = accept(std::bind(&ASTParser::comparisonOperationAction, this)))) {
         head->addChild(std::move(child));
@@ -316,14 +316,14 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction() {
 }
 
 std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
-    std::unique_ptr<Node> head (new BooleanExpressionNode(currentToken));
+    std::unique_ptr<Node> head (new BooleanExpressionNode());
     head->addChild(std::move(relationalExpressionAction()));
     head->addChild(std::move(booleanOperationAction()));
     return head;
 }
 
 std::unique_ptr<Node> ASTParser::booleanOperationAction() {
-    std::unique_ptr<Node> head (new BooleanOperationNode(currentToken));
+    std::unique_ptr<Node> head (new BooleanOperationNode());
     std::unique_ptr<Node> child;
     if ((child = accept(std::bind(&ASTParser::logicalOperationAction, this)))) {
         head->addChild(std::move(child));
@@ -336,7 +336,7 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction() {
 }
 
 std::unique_ptr<Node> ASTParser::ternaryOperationAction() {
-    std::unique_ptr<Node> head (new TernaryOperationNode(currentToken));
+    std::unique_ptr<Node> head (new TernaryOperationNode());
     std::unique_ptr<Node> child;
     if ((child = accept(std::bind(&ASTParser::booleanExpressionAction, this)))) {
         head->addChild(std::move(child));
@@ -351,7 +351,7 @@ std::unique_ptr<Node> ASTParser::ternaryOperationAction() {
 }
 
 std::unique_ptr<Node> ASTParser::returnStatementAction() {
-    std::unique_ptr<Node> head (new ReturnStatementNode(currentToken));
+    std::unique_ptr<Node> head (new ReturnStatementNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kReturnKeyword))) {
         head->addChild(std::move(child));
@@ -364,7 +364,7 @@ std::unique_ptr<Node> ASTParser::returnStatementAction() {
 }
 
 std::unique_ptr<Node> ASTParser::logicalOperationAction() {
-    std::unique_ptr<Node> head (new LogicalOperationNode(currentToken));
+    std::unique_ptr<Node> head (new LogicalOperationNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kLogicalAnd)) || (child = accept(TokenType::kLogicalOr))) {
         head->addChild(std::move(child));
@@ -375,7 +375,7 @@ std::unique_ptr<Node> ASTParser::logicalOperationAction() {
 }
 
 std::unique_ptr<Node> ASTParser::comparisonOperationAction() {
-    std::unique_ptr<Node> head (new ComparisonOperationNode(currentToken));
+    std::unique_ptr<Node> head (new ComparisonOperationNode());
     std::unique_ptr<Node> child;
     if ((child = accept(TokenType::kTripleEquals)) || (child = accept(TokenType::kDoubleEquals)) ||
         (child = accept(TokenType::kGreaterThan)) || (child = accept(TokenType::kGreaterThanEquals)) ||

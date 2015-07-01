@@ -10,14 +10,14 @@ namespace mongo {
 namespace tinyjs {
 class Node {
 public:
-    Node(Token token);
+    Node(std::string name);
     ~Node();
     Value *returnValue() const;
     void addChild(std::unique_ptr<Node> child);
-    std::vector<std::unique_ptr<Node> getChildren();
+    std::vector<std::unique_ptr<Node>> getChildren();
+    std::string getName();
 private:    
-    TokenType type;
-    std::string value;
+    std::string name;
     std::vector<std::unique_ptr<Node> > children;
 };
 

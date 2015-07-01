@@ -2,9 +2,8 @@
 
 #include "mongo/scripting/tinyjs/node.h"
 
-Node::Node(Token token) {
-    this->type = token.type;
-    this->value = token.value;
+Node::Node(std::string name) {
+    this->name = name;
 }
 
 Node::~Node() {
@@ -18,8 +17,13 @@ void Node::addChild(std::unique_ptr<Node> child) {
     if (child) {
         this->children.push_back(child);
     }
-std::vector<std::unique_ptr<Node> getChildren() {
+
+std::vector<std::unique_ptr<Node> Node::getChildren() {
     return this->children;
+}
+
+std::string Node::getName() {
+    return this->name;
 }
 
 }
