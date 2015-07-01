@@ -10,6 +10,7 @@ class ASTParser {
 public:
     ASTParser(std::vector<Token> tokens);
     ~ASTParser();
+    void printTree();
 private:
     void parseTokens(std::vector<Token> tokens);
     void nexttoken(void);
@@ -46,6 +47,7 @@ private:
     int currentPosition;
     Token currentToken;
     std::vector<Token> tokens;
+    std::unique_ptr<Node> head;
 };
 
 }
