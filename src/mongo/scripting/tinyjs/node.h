@@ -10,10 +10,10 @@ class Node {
 public:
     Node();
     ~Node();
-    virtual Value *returnValue() const;
+    Value *returnValue() const;
     void addChild(std::unique_ptr<Node> child);
 private:    
-    virtual static TokenType type;
+    TokenType type;
     std::vector<std::unique_ptr<Node> > children;
 };
 
