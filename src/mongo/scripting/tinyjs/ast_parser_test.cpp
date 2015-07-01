@@ -44,6 +44,9 @@ using std::string;
 
 void traverse(std::unique_ptr<Node> node) {
     std::cout << node.name << endl;
+    for (child : node.getChildren()) {
+        traverse(child);
+    }
 }
 
 TEST(ParserTest, test1) {

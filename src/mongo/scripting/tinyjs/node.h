@@ -14,9 +14,10 @@ public:
     ~Node();
     Value *returnValue() const;
     void addChild(std::unique_ptr<Node> child);
+    std::vector<std::unique_ptr<Node> getChildren();
 private:    
     TokenType type;
-    string value;
+    std::string value;
     std::vector<std::unique_ptr<Node> > children;
 };
 

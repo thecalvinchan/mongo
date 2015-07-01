@@ -18,4 +18,8 @@ void Node::addChild(std::unique_ptr<Node> child) {
     if (child) {
         this->children.push_back(child);
     }
+std::vector<std::unique_ptr<Node> getChildren() {
+    return this->children;
+}
+
 }
