@@ -132,6 +132,7 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction() {
         head->addChild(std::move(objectAccessorAction()));
         return head;
     } else if ((child = accept(TokenType::kOpenSquareBracket))) {
+        head->addChild(std::move(child));
         std::unique_ptr<Node> child2;
         if ((child2 = accept(TokenType::kIntegerLiteral)) || (child2 = accept(TokenType::kStringLiteral)) ||
             (child2 = accept(TokenType::kIdentifier)) ||
