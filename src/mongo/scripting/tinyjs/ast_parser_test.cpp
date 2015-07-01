@@ -34,7 +34,7 @@
 #include <vector>
 
 #include "mongo/unittest/unittest.h"
- #include "mongo/scripting/tinyjs/lexer.h"
+#include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
 
 namespace mongo {
@@ -44,16 +44,88 @@ using std::string;
 
 void testParseTree(string input, string expected) {
     std::vector<Token> tokenData = lex(input).getValue();
-    ASTParser* a = new ASTParser(tokenData);
+    ASTParser *a = new ASTParser(tokenData);
     std::string res = a->traverse();
+    std::cout << res << std::endl;
     ASSERT(res == expected);
 }
 
 TEST(ParserTest, test1) {
+    string input = "return this.a == 1;";
 
+    string expected =
+        "ClauseNode ReturnStatementNode LeafNode BooleanExpressionNode RelationalExpressionNode "
+        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
+        "LeafNode";
+
+    testParseTree(input, expected);
+}
+
+TEST(ParserTest, test2) {
+    string input = "function() {return this.a === 1;}";
+
+    string expected =
+        "ClauseNode LeafNode LeafNode LeafNode LeafNode ReturnStatementNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
+        "LeafNode LeafNode";
+
+    testParseTree(input, expected);
+}
+
+TEST(ParserTest, test3) {
+    string input = "function() {return this.a.b.c.d === 1;}";
+
+    string expected =
+        "ClauseNode LeafNode LeafNode LeafNode LeafNode ReturnStatementNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "ObjectAccessorNode LeafNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "ObjectAccessorNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
+        "LeafNode LeafNode";
+
+    testParseTree(input, expected);
+}
+
+TEST(ParserTest, test4) {
+    string input = "function() {return this['a'] === this.b;}";
+
+    string expected =
+        "ClauseNode LeafNode LeafNode LeafNode LeafNode ReturnStatementNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
+        "VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "LeafNode LeafNode";
+
+    testParseTree(input, expected);
+}
+
+TEST(ParserTest, test1) {
+    string input = "return this[3+3] == 90.1;";
+
+    string expected =
+        "ClauseNode ReturnStatementNode LeafNode BooleanExpressionNode RelationalExpressionNode "
+        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
+        "LeafNode";
+
+    //testParseTree(input, expected);
 }
 
 
-
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo
