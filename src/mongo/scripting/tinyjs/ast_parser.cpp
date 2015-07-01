@@ -1,4 +1,5 @@
 #include "mongo/scripting/tinyjs/ast_parser.h"
+#include "mongo/scripting/tinyjs/Node.h"
 #include <stdexcept>
 #include <iostream>
 #include <memory>
@@ -33,7 +34,7 @@ std::unique_ptr<Node> ASTParser::accept(TokenType t) {
         }
         return leaf;
     }
-    return null;
+    return NULL;
 }
 
 // Overloads accept to search non-terminals
