@@ -2,7 +2,9 @@
 
 #include "mongo/scripting/tinyjs/node.h"
 
-Node::Node() {
+Node::Node(Token token) {
+    this->type = token.type;
+    this->value = token.value;
 }
 
 Node::~Node() {
