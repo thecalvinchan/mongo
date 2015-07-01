@@ -13,8 +13,13 @@ ASTParser::ASTParser(std::vector<Token> tokenInput)
     parseTokens(tokens);
 }
 
+ASTParser::~ASTParser() {
+    this->head.reset();
+    this->tokens.clear();
+}
+
 void ASTParser::parseTokens(std::vector<Token> tokens) {
-    clauseAction();
+    this->head = clauseAction();
 }
 
 void ASTParser::nexttoken(void) {

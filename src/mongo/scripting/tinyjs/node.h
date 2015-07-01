@@ -16,7 +16,7 @@ public:
     void addChild(std::unique_ptr<Node> child);
 private:    
     TokenType type;
-    string value;
+    std::string value;
     std::vector<std::unique_ptr<Node> > children;
 };
 
