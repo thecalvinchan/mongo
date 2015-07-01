@@ -1,20 +1,23 @@
 #include "mongo/db/pipeline/value.h"
+#include <vector>
 
 #ifndef NODE_H
 #define NODE_H
 
 namespace mongo {
-
+namespace tinyjs {
 class Node {
 public:
     Node();
-    virtual ~Node();
+    ~Node();
     virtual Value *returnValue() const;
+    void addChild(std::unique_ptr<Node> child);
 private:    
-    virtual static NodeType type;
-    virtual static bool terminal;
+    virtual static TokenType type;
+    std::vector<std::unique_ptr<Node> > children;
 };
 
+}
 }
 
 #endif
