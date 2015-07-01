@@ -28,8 +28,15 @@ std::string Node::getName() {
     return this->name;
 }
 
+std::string Node::getValue() {
+    std::string res = this->getName();
+    for (std::vector<std::unique_ptr<Node> >::const_iterator it = this->children.begin(); it != this->children.end(); it++) {
+        res += " ";
+        res += ((*it).get())->getValue();
+    }
+    return res;
+}
 
 
 }
 }
-

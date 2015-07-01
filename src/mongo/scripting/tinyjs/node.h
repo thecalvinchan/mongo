@@ -17,6 +17,7 @@ public:
     void addChild(std::unique_ptr<Node> child);
     std::vector<std::unique_ptr<Node> > const& getChildren();
     std::string getName();
+    std::string getValue();
 private:    
     std::string name;
     std::vector<std::unique_ptr<Node> > children;

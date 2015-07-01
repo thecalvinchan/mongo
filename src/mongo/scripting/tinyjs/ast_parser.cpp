@@ -28,7 +28,7 @@ std::string traverseSubtree(Node* node) {
 }  
 
 std::string ASTParser::traverse() {
-    return traverseSubtree((this->head).get());
+    return ((this->head).get())->getValue();
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {
