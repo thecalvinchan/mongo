@@ -42,6 +42,11 @@ namespace tinyjs {
 
 using std::string;
 
+/**
+ * This function takes in an input string, lexes and parses it, 
+ * and compares the preorder traversal of the parse tree to the expected output. 
+ * It assumes that the lexing will not return with an error.
+ */
 void testParseTree(string input, string expected) {
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser* a = new ASTParser(tokenData);
@@ -51,6 +56,9 @@ void testParseTree(string input, string expected) {
     delete a;
 }
 
+/* 
+ *
+ */
 void testSynaxError(string input) {
     std::vector<Token> tokenData = lex(input).getValue();
     ASSERT_THROWS(new ASTParser(tokenData), std::exception);
@@ -216,6 +224,21 @@ TEST(ParserTest, test8) {
 
     testParseTree(input, expected);
 }
+
+TEST(ParserTest, test9) {
+    string input = "return (3*4)/8 + y;";
+
+    string expected =
+        "ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
+        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
+        "OpenParen ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
+        "Integer MultiplicativeOperationNode Multiply FactorNode TermNode Integer CloseParen "
+        "MultiplicativeOperationNode Divide FactorNode TermNode Integer ArithmeticOperationNode "
+        "Add MultiplicativeExpressionNode FactorNode TermNode Integer Semicolon";
+
+    testParseTree(input, expected);
+}
+
 
 TEST(ParserTest, ErrorBadOperator) {
     testSynaxError("return (x++1);");
