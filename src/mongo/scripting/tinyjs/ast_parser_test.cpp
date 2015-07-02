@@ -57,7 +57,8 @@ void testParseTree(string input, string expected) {
 }
 
 /* 
- *
+ * This function takes in an input string, lexes it, and asserts 
+ * that parsing it will result in a syntax error.
  */
 void testSynaxError(string input) {
     std::vector<Token> tokenData = lex(input).getValue();
@@ -226,7 +227,7 @@ TEST(ParserTest, test8) {
 }
 
 TEST(ParserTest, test9) {
-    string input = "return (3*4)/8 + y;";
+    string input = "return (3*4)/8 - y;";
 
     string expected =
         "ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
@@ -234,7 +235,7 @@ TEST(ParserTest, test9) {
         "OpenParen ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
         "Integer MultiplicativeOperationNode Multiply FactorNode TermNode Integer CloseParen "
         "MultiplicativeOperationNode Divide FactorNode TermNode Integer ArithmeticOperationNode "
-        "Add MultiplicativeExpressionNode FactorNode TermNode Integer Semicolon";
+        "Subtract MultiplicativeExpressionNode FactorNode TermNode Integer Semicolon";
 
     testParseTree(input, expected);
 }

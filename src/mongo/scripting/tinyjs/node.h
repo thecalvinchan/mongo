@@ -43,7 +43,7 @@ public:
     virtual ~Node();
     Value *returnValue() const;
     void addChild(std::unique_ptr<Node> child);
-    virtual std::string getName();
+    virtual std::string getName() = 0;
     virtual std::string getValue();
     std::vector<std::unique_ptr<Node> >* getChildren();
 protected:

@@ -57,7 +57,7 @@ std::string NonTerminalNode::getName() {
     return _name;
 }
 std::string NonTerminalNode::getValue() {
-    std::string res = getName();
+    std::string res = this->getName();
     std::vector<std::unique_ptr<Node> >* children = getChildren();
     for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
          it != children->end(); it++) {
@@ -94,7 +94,7 @@ std::string TerminalNode::getName() {
     return _names[static_cast<int>(_type)];
 };
 std::string TerminalNode::getValue() {
-    return getName();
+    return this->getName();
 }
 const std::string TerminalNode::_names[] = {
     "ThisIdentifier",
