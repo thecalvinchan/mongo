@@ -131,6 +131,22 @@ TEST(ParserTest, test5) {
     testParseTree(input, expected);
 }
 
+TEST(ParserTest, test6) {
+    string input = "return this[3+3] == 90.1;";
+
+    string expected =
+        "ClauseNode ReturnStatementNode LeafNode BooleanExpressionNode RelationalExpressionNode "
+        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode "
+        "ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode TermNode LeafNode ArithmeticOperationNode "
+        "LeafNode MultiplicativeExpressionNode FactorNode TermNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
+        "LeafNode";
+
+    testParseTree(input, expected);
+}
 
 }  // namespace tinyjs
 }  // namespace mongo
