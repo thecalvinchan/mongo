@@ -51,10 +51,6 @@ void Node::addChild(std::unique_ptr<Node> child) {
     }
 }
 
-std::vector<std::unique_ptr<Node>> const &Node::getChildren() {
-    return _children;
-}
-
 std::string Node::getValue() {
     std::string res = this->getName();
     for (std::vector<std::unique_ptr<Node>>::const_iterator it = _children.begin();
@@ -63,6 +59,10 @@ std::string Node::getValue() {
         res += ((*it).get())->getValue();
     }
     return res;
+}
+
+std::vector<std::unique_ptr<Node> >* Node::getChildren() {
+    return &_children;
 }
 
 }

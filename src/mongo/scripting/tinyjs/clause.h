@@ -38,29 +38,64 @@ namespace tinyjs {
 
 class NonTerminalNode : public Node {
 public:
+    NonTerminalNode(std::string name);
+    ~NonTerminalNode();
     std::string getName();
+    std::string getValue();
 };
+NonTerminalNode::~NonTerminalNode() {
+    std::vector<std::unique_ptr<Node> >* children = getChildren();
+    for (std::vector<std::unique_ptr<Node>>::iterator it = children->begin();
+         it != children->end(); it++) {
+        (*it).reset();
+    }
+    children->clear();
+}
+NonTerminalNode::NonTerminalNode(std::string name) : Node(name) {
+}
 std::string NonTerminalNode::getName() {
     return _name;
+}
+std::string NonTerminalNode::getValue() {
+    std::string res = getName();
+    std::vector<std::unique_ptr<Node> >* children = getChildren();
+    for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
+         it != children->end(); it++) {
+        res += " ";
+        res += ((*it).get())->getValue();
+    }
+    return res;
 }
 
 class TerminalNode : public Node {
 public:
-    TerminalNode(Token token) : Node("TerminalNode") {
-        _type = token.type;
-        _value = token.value;
-    };
-
-    std::string getName() {
-        return _names[static_cast<int>(_type)];
-    };
-
+    TerminalNode(Token token);
+    ~TerminalNode();
+    std::string getName();
+    std::string getValue();
 private:
     TokenType _type;
     StringData _value;
     static const std::string _names[];
 };
-
+TerminalNode::TerminalNode(Token token) : Node("TerminalNode") {
+    _type = token.type;
+    _value = token.value;
+};
+TerminalNode::~TerminalNode() {
+    std::vector<std::unique_ptr<Node> >* children = getChildren();
+    for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
+         it != children->end(); it++) {
+        (*it).reset();
+    }
+    children->clear();
+}
+std::string TerminalNode::getName() {
+    return _names[static_cast<int>(_type)];
+};
+std::string TerminalNode::getValue() {
+    return getName();
+}
 const std::string TerminalNode::_names[] = {
     "ThisIdentifier",
     "ReturnKeyword",
