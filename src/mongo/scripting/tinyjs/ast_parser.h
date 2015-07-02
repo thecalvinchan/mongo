@@ -16,8 +16,8 @@ private:
     void nexttoken(void);
     void error(const char msg[]);
 
-    std::unique_ptr<Node> accept(TokenType t);
-    std::unique_ptr<Node> accept(std::function< std::unique_ptr<Node> (void) > action);
+    std::unique_ptr<Node> acceptIf(TokenType t);
+    std::unique_ptr<Node> acceptIf(std::function< std::unique_ptr<Node> (void) > action);
     std::unique_ptr<Node> expect(TokenType t);
 
     std::unique_ptr<Node> clauseAction();
