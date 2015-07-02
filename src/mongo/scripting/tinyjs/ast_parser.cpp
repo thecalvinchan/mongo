@@ -360,9 +360,14 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction() {
 }
 
 std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
-    std::unique_ptr<Node> head(new BooleanExpressionNode());
-    head->addChild(std::move(relationalExpressionAction()));
-    head->addChild(std::move(booleanOperationAction()));
+    std::unique_ptr<Node> head (new BooleanExpressionNode());
+    std::unique_ptr<Node> child;
+    if ((child = acceptIf(std::bind(&ASTParser::relationalExpressionAction, this)))) {
+        head->addChild(std::move(child));
+        head->addChild(std::move(booleanOperationAction()));
+    } else {
+        error("booleanExpressionAction: syntax error");
+    }
     return head;
 }
 
@@ -373,18 +378,20 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction() {
         head->addChild(std::move(child));
         head->addChild(std::move(relationalExpressionAction()));
         head->addChild(std::move(booleanOperationAction()));
-        return head;
+    } else if ((child = acceptIf(std::bind(&ASTParser::ternaryOperationAction, this)))) {
+        head->addChild(std::move(child));
+    } else {
+        return NULL;
+        // booleanOperation is optional, so if it doesn't match, it's ok
     }
-    return NULL;
-    // booleanOperation is optional, so if it doesn't match, it's ok
+    return head;
 }
 
 std::unique_ptr<Node> ASTParser::ternaryOperationAction() {
     std::unique_ptr<Node> head(new TernaryOperationNode());
     std::unique_ptr<Node> child;
-    if ((child = acceptIf(std::bind(&ASTParser::booleanExpressionAction, this)))) {
+    if ((child = acceptIf(TokenType::kQuestionMark))) {
         head->addChild(std::move(child));
-        head->addChild(std::move(expect(TokenType::kQuestionMark)));
         head->addChild(std::move(booleanExpressionAction()));
         head->addChild(std::move(expect(TokenType::kColon)));
         head->addChild(std::move(booleanExpressionAction()));

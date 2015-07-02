@@ -197,7 +197,7 @@ public:
 
 class TernaryOperationNode : public NonTerminalNode {
 public:
-    TernaryOperationNode() : NonTerminalNode("TernaryOperationNoder"){};
+    TernaryOperationNode() : NonTerminalNode("TernaryOperationNode"){};
 };
 
 class ReturnStatementNode : public NonTerminalNode {

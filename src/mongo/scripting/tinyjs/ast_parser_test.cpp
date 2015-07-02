@@ -154,6 +154,52 @@ TEST(ParserTest, test6) {
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
         "LeafNode ObjectAccessorNode LeafNode LeafNode ObjectAccessorNode LeafNode LeafNode "
         "LeafNode";
+        
+    testParseTree(input, expected);
+}
+
+TEST(ParserTest, test7) {
+    string input = "return this.a == 3 ? (this.b > this.c): (this.d == this.e);";
+
+    string expected =
+        "ClauseNode ReturnStatementNode LeafNode BooleanExpressionNode "
+        "RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode TermNode VariableNode ObjectNode LeafNode "
+        "ObjectAccessorNode LeafNode LeafNode RelationalOperationNode ComparisonOperationNode "
+        "LeafNode BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode "
+        "FactorNode TermNode LeafNode BooleanOperationNode TernaryOperationNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
+        "VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
+        "VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode LeafNode "
+        "LeafNode BooleanExpressionNode RelationalExpressionNode BooleanFactorNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
+        "VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
+        "VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode LeafNode LeafNode";
+
+        testParseTree(input, expected);
+}
+
+TEST(ParserTest, test8) {
+    string input = "function() {return x > (3 + 1);}";
+
+    string expected =
+        "ClauseNode LeafNode LeafNode LeafNode LeafNode ReturnStatementNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
+        "ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode TermNode VariableNode LeafNode "
+        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode LeafNode "
+        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
+        "ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode TermNode LeafNode ArithmeticOperationNode "
+        "LeafNode "
+        "MultiplicativeExpressionNode FactorNode TermNode LeafNode LeafNode LeafNode LeafNode";
 
     testParseTree(input, expected);
 }
