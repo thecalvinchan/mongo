@@ -49,16 +49,6 @@ ASTParser::~ASTParser() {
     this->tokens.clear();
 }
 
-std::string traverseSubtree(Node* node) {
-    std::string res = node->getName();
-    for (std::vector<std::unique_ptr<Node>>::const_iterator it = node->getChildren().begin();
-         it != node->getChildren().end(); it++) {
-        res += " ";
-        res += traverseSubtree((*it).get());
-    }
-    return res;
-}
-
 std::string ASTParser::traverse() {
     return ((this->head).get())->getValue();
 }
