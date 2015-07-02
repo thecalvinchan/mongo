@@ -84,9 +84,13 @@ enum class TokenType {
 struct Token {
     TokenType type;
     StringData value;
-    Token(TokenType t, StringData v) {
+    const char* tokenStart;
+    const char* tokenEnd;
+    Token(TokenType t, StringData v, const char* ts, const char* te) {
         type = t;
         value = v;
+        tokenStart = ts;
+        tokenEnd = te;
     }
 };
 

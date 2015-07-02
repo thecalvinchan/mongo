@@ -249,7 +249,7 @@ namespace {
  * This function adds a token containing type and value to the tokenData array.
  */
 void emit(TokenType t, std::vector<Token> *tokenData, const char *ts, const char *te) {
-    tokenData->emplace_back(t, StringData(ts, (te - ts)));
+    tokenData->emplace_back(t, StringData(ts, (te - ts)), ts, te);
 }
 
 /*
