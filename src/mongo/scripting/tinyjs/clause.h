@@ -145,7 +145,7 @@ public:
 
 class TernaryOperationNode : public Node {
 public:
-    TernaryOperationNode() : Node("TernaryOperationNoder"){};
+    TernaryOperationNode() : Node("TernaryOperationNode"){};
 };
 
 class ReturnStatementNode : public Node {

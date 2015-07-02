@@ -366,7 +366,7 @@ std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
         head->addChild(std::move(child));
         head->addChild(std::move(booleanOperationAction()));
     } else {
-        error("booleanExpressionAction: syntax error")
+        error("booleanExpressionAction: syntax error");
     }
     return head;
 }
@@ -379,7 +379,7 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction() {
         head->addChild(std::move(relationalExpressionAction()));
         head->addChild(std::move(booleanOperationAction()));
     } else if ((child = acceptIf(std::bind(&ASTParser::ternaryOperationAction, this)))) {
-        head->addChild(child);
+        head->addChild(std::move(child));
     } else {
         return NULL;
         // booleanOperation is optional, so if it doesn't match, it's ok
