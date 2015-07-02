@@ -63,7 +63,7 @@ namespace {
     kAdd                 = '+';
     kSubtract            = '-';
     kMultiply            = '*';
-    kDivide              = '\\';
+    kDivide              = '/';
     kTripleEquals        = '===';
     kDoubleEquals        = '==';
     kLessThan            = '<';

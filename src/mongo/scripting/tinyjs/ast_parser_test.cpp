@@ -72,10 +72,10 @@ TEST(ParserTest, test1) {
         "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
         "RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier "
+        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
         "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode Integer "
-        "Semicolon";
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
+        "SemiColon";
 
     testParseTree(input, expected);
 }
@@ -88,10 +88,10 @@ TEST(ParserTest, test2) {
         "ReturnKeyword "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
         "MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier"
+        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
         "RelationalOperationNode ComparisonOperationNode TripleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode Integer "
-        "Semicolon CloseCurlyBrace";
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
+        "SemiColon CloseCurlyBrace";
 
     testParseTree(input, expected);
 }
@@ -104,12 +104,12 @@ TEST(ParserTest, test3) {
         "ReturnKeyword "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
         "MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier "
+        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
         "ObjectAccessorNode Period Identifier ObjectAccessorNode Period Identifier "
         "ObjectAccessorNode Period Identifier "
         "RelationalOperationNode ComparisonOperationNode TripleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode Integer "
-        "Semicolon CloseCurlyBrace";
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
+        "SemiColon CloseCurlyBrace";
 
     testParseTree(input, expected);
 }
@@ -122,13 +122,13 @@ TEST(ParserTest, test4) {
         "ReturnKeyword "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
         "MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisKeyword ObjectAccessorNode OpenSquareBracket "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode String "
+        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode OpenSquareBracket "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode StringLiteral "
         "CloseSquareBracket "
         "RelationalOperationNode ComparisonOperationNode TripleEquals BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier "
-        "Semicolon CloseCurlyBrace";
+        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
+        "SemiColon CloseCurlyBrace";
 
     testParseTree(input, expected);
 }
@@ -140,13 +140,13 @@ TEST(ParserTest, test5) {
         "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
         "RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisKeyword ObjectAccessorNode OpenSquareBracket "
+        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode OpenSquareBracket "
         "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode Integer ArithmeticOperationNode "
-        "Add MultiplicativeExpressionNode FactorNode TermNode Integer CloseSquareBracket "
+        "MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral ArithmeticOperationNode "
+        "Add MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral CloseSquareBracket "
         "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode FloatLiteral "
-        "Semicolon";
+        "SemiColon";
 
     testParseTree(input, expected);
 }
@@ -158,21 +158,21 @@ TEST(ParserTest, test6) {
         "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
         "RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier "
+        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
         "ObjectAccessorNode OpenSquareBracket ArithmeticExpressionNode "
         "MultiplicativeExpressionNode "
-        "FactorNode TermNode Integer CloseSquareBracket ObjectAccessorNode Period Identifier "
+        "FactorNode TermNode IntegerLiteral CloseSquareBracket ObjectAccessorNode Period Identifier "
         "ObjectAccessorNode OpenSquareBracket ArithmeticExpressionNode "
         "MultiplicativeExpressionNode "
-        "FactorNode TermNode Integer CloseSquareBracket ObjectAccessorNode Period Identifier "
+        "FactorNode TermNode IntegerLiteral CloseSquareBracket ObjectAccessorNode Period Identifier "
         "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode VariableNode "
-        "ObjectNode ThisKeyword ObjectAccessorNode Period Identifier ObjectAccessorNode "
+        "ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier ObjectAccessorNode "
         "OpenSquareBracket "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode Integer "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
         "CloseSquareBracket ObjectAccessorNode Period Identifier ObjectAccessorNode Period "
         "Identifier "
-        "Semicolon";
+        "SemiColon";
 
     testParseTree(input, expected);
 }
@@ -183,25 +183,25 @@ TEST(ParserTest, test7) {
     string expected =
         "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
         "RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode VariableNode ObjectNode ThisKeyword "
-        "ObjectAccessorNode Period Integer RelationalOperationNode ComparisonOperationNode "
+        "MultiplicativeExpressionNode FactorNode TermNode VariableNode ObjectNode ThisIdentifier "
+        "ObjectAccessorNode Period Identifier RelationalOperationNode ComparisonOperationNode "
         "DoubleEquals BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode "
-        "FactorNode TermNode Integer BooleanOperationNode TernaryOperationNode QuestionMark "
+        "FactorNode TermNode IntegerLiteral BooleanOperationNode TernaryOperationNode QuestionMark "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode OpenParen "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier "
+        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
         "RelationalOperationNode ComparisonOperationNode GreaterThan BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier CloseParen "
+        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier CloseParen "
         "Colon BooleanExpressionNode RelationalExpressionNode BooleanFactorNode OpenParen "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier "
+        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
         "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier CloseParen "
-        "Semicolon";
+        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier CloseParen "
+        "SemiColon";
 
         testParseTree(input, expected);
 }
@@ -218,24 +218,23 @@ TEST(ParserTest, test8) {
         "RelationalOperationNode ComparisonOperationNode GreaterThan BooleanFactorNode OpenParen "
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
         "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode Integer ArithmeticOperationNode "
+        "MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral ArithmeticOperationNode "
         "Add "
-        "MultiplicativeExpressionNode FactorNode TermNode Integer CloseParen Semicolon "
+        "MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral CloseParen SemiColon "
         "CloseCurlyBrace";
 
     testParseTree(input, expected);
 }
 
 TEST(ParserTest, test9) {
-    string input = "return (3*4)/8 - y;";
-
+    string input = "return (3*4)\\8 - y;";
     string expected =
         "ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
         "OpenParen ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "Integer MultiplicativeOperationNode Multiply FactorNode TermNode Integer CloseParen "
-        "MultiplicativeOperationNode Divide FactorNode TermNode Integer ArithmeticOperationNode "
-        "Subtract MultiplicativeExpressionNode FactorNode TermNode Integer Semicolon";
+        "IntegerLiteral MultiplicativeOperationNode Multiply FactorNode TermNode IntegerLiteral CloseParen "
+        "MultiplicativeOperationNode Divide FactorNode TermNode IntegerLiteral ArithmeticOperationNode "
+        "Subtract MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral SemiColon";
 
     testParseTree(input, expected);
 }
@@ -253,7 +252,7 @@ TEST(ParserTest, ErrorNoReturn) {
     testSynaxError("x > 1");
 }
 
-TEST(ParserTest, ErrorNoSemicolon) {
+TEST(ParserTest, ErrorNoSemiColon) {
     testSynaxError("return (x == 1)");
 }
 

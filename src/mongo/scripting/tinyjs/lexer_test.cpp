@@ -145,7 +145,7 @@ TEST(LexerTest, kMultiply) {
 }
 
 TEST(LexerTest, kDivide) {
-    testSingleToken("\\", TokenType::kDivide);
+    testSingleToken("/", TokenType::kDivide);
 }
 
 TEST(LexerTest, kAdd) {
@@ -353,7 +353,7 @@ TEST(LexerTest, functionTernaryOp) {
 }
 
 TEST(LexerTest, nestedNonsense) {
-    string input = "return ((((3 + a) - 'string') * NaN) \\ x)+ -(bar['a'].this.null[1])";
+    string input = "return ((((3 + a) - 'string') * NaN) / x)+ -(bar['a'].this.null[1])";
 
     TokenType types[] = {TokenType::kReturnKeyword,
                          TokenType::kOpenParen,
