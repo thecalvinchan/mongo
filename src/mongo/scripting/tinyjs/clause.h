@@ -28,8 +28,6 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include "mongo/scripting/tinyjs/node.h"
 #include "mongo/db/pipeline/value.h"
 
@@ -38,101 +36,91 @@ namespace tinyjs {
 
 class NonTerminalNode : public Node {
 public:
-    NonTerminalNode(std::string name);
-    ~NonTerminalNode();
-    std::string getName();
-    std::string getValue();
+    NonTerminalNode(std::string name) : Node(name) {}
+    ~NonTerminalNode() {
+        std::vector<std::unique_ptr<Node> >* children = getChildren();
+        for (std::vector<std::unique_ptr<Node>>::iterator it = children->begin();
+             it != children->end(); it++) {
+            (*it).reset();
+        }
+        children->clear();
+    }
+    std::string getName() {
+        return _name;
+    }
+    std::string getValue() {;
+        std::string res = getName();
+        std::vector<std::unique_ptr<Node> >* children = getChildren();
+        for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
+             it != children->end(); it++) {
+            res += " ";
+            res += ((*it).get())->getValue();
+        }
+        return res;
+    }
 };
-NonTerminalNode::~NonTerminalNode() {
-    std::vector<std::unique_ptr<Node> >* children = getChildren();
-    for (std::vector<std::unique_ptr<Node>>::iterator it = children->begin();
-         it != children->end(); it++) {
-        (*it).reset();
-    }
-    children->clear();
-}
-NonTerminalNode::NonTerminalNode(std::string name) : Node(name) {
-}
-std::string NonTerminalNode::getName() {
-    return _name;
-}
-std::string NonTerminalNode::getValue() {
-    std::string res = getName();
-    std::vector<std::unique_ptr<Node> >* children = getChildren();
-    for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
-         it != children->end(); it++) {
-        res += " ";
-        res += ((*it).get())->getValue();
-    }
-    return res;
-}
 
 class TerminalNode : public Node {
 public:
-    TerminalNode(Token token);
-    ~TerminalNode();
-    std::string getName();
-    std::string getValue();
+    TerminalNode(Token token) : Node("TerminalNode") {
+        _type = token.type;
+        _value = token.value;
+    }
+    ~TerminalNode() {
+        std::vector<std::unique_ptr<Node> >* children = getChildren();
+        for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
+             it != children->end(); it++) {
+            (*it).reset();
+        }
+        children->clear();
+    }
+    std::string getName() {
+        return _names[static_cast<int>(_type)];
+    }
+    std::string getValue() {
+        return getName();
+    }
 private:
     TokenType _type;
     StringData _value;
-    static const std::string _names[];
-};
-TerminalNode::TerminalNode(Token token) : Node("TerminalNode") {
-    _type = token.type;
-    _value = token.value;
-};
-TerminalNode::~TerminalNode() {
-    std::vector<std::unique_ptr<Node> >* children = getChildren();
-    for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
-         it != children->end(); it++) {
-        (*it).reset();
-    }
-    children->clear();
-}
-std::string TerminalNode::getName() {
-    return _names[static_cast<int>(_type)];
-};
-std::string TerminalNode::getValue() {
-    return getName();
-}
-const std::string TerminalNode::_names[] = {
-    "ThisIdentifier",
-    "ReturnKeyword",
-    "NullLiteral",
-    "UndefinedLiteral",
-    "FunctionKeyword",
-    "IntegerLiteral",
-    "FloatLiteral",
-    "BooleanLiteral",
-    "StringLiteral",
-    "Identifier",
-    "Add",
-    "Subtract",
-    "Multiply",
-    "Divide",
-    "TripleEquals",
-    "DoubleEquals",
-    "LessThan",
-    "LessThanEquals",
-    "GreaterThan",
-    "GreaterThanEquals",
-    "NotEquals",
-    "DoubleNotEquals",
-    "LogicalAnd",
-    "LogicalOr",
-    "LogicalNot",
-    "SemiColon",
-    "OpenParen",
-    "CloseParen",
-    "QuestionMark",
-    "Colon",
-    "Period",
-    "Comma",
-    "OpenSquareBracket",
-    "CloseSquareBracket",
-    "OpenCurlyBrace",
-    "CloseCurlyBrace"
+    std::string _names[36] = {
+        "ThisIdentifier",
+        "ReturnKeyword",
+        "NullLiteral",
+        "UndefinedLiteral",
+        "FunctionKeyword",
+        "IntegerLiteral",
+        "FloatLiteral",
+        "BooleanLiteral",
+        "StringLiteral",
+        "Identifier",
+        "Add",
+        "Subtract",
+        "Multiply",
+        "Divide",
+        "TripleEquals",
+        "DoubleEquals",
+        "LessThan",
+        "LessThanEquals",
+        "GreaterThan",
+        "GreaterThanEquals",
+        "NotEquals",
+        "DoubleNotEquals",
+        "LogicalAnd",
+        "LogicalOr",
+        "LogicalNot",
+        "SemiColon",
+        "OpenParen",
+        "CloseParen",
+        "QuestionMark",
+        "Colon",
+        "Period",
+        "Comma",
+        "OpenSquareBracket",
+        "CloseSquareBracket",
+        "OpenCurlyBrace",
+        "CloseCurlyBrace"
+    };
 };
 
 class ClauseNode : public NonTerminalNode {
