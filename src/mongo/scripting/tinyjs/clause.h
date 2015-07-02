@@ -36,131 +36,183 @@
 namespace mongo {
 namespace tinyjs {
 
-class ClauseNode : public Node {
+class NonTerminalNode : public Node {
 public:
-    ClauseNode() : Node("ClauseNode"){};
+    std::string getName();
 };
+std::string NonTerminalNode::getName() {
+    return _name;
+}
 
-class LeafNode : public Node {
+class TerminalNode : public Node {
 public:
-    LeafNode(Token token) : Node("LeafNode") {
+    TerminalNode(Token token) : Node("TerminalNode") {
         _type = token.type;
         _value = token.value;
+    };
+
+    std::string getName() {
+        return _names[static_cast<int>(_type)];
     };
 
 private:
     TokenType _type;
     StringData _value;
+    static const std::string _names[];
 };
 
-class VariableNode : public Node {
-public:
-    VariableNode() : Node("VariableNode"){};
+const std::string TerminalNode::_names[] = {
+    "ThisIdentifier",
+    "ReturnKeyword",
+    "NullLiteral",
+    "UndefinedLiteral",
+    "FunctionKeyword",
+    "IntegerLiteral",
+    "FloatLiteral",
+    "BooleanLiteral",
+    "StringLiteral",
+    "Identifier",
+    "Add",
+    "Subtract",
+    "Multiply",
+    "Divide",
+    "TripleEquals",
+    "DoubleEquals",
+    "LessThan",
+    "LessThanEquals",
+    "GreaterThan",
+    "GreaterThanEquals",
+    "NotEquals",
+    "DoubleNotEquals",
+    "LogicalAnd",
+    "LogicalOr",
+    "LogicalNot",
+    "SemiColon",
+    "OpenParen",
+    "CloseParen",
+    "QuestionMark",
+    "Colon",
+    "Period",
+    "Comma",
+    "OpenSquareBracket",
+    "CloseSquareBracket",
+    "OpenCurlyBrace",
+    "CloseCurlyBrace"
 };
 
-class ObjectNode : public Node {
+class ClauseNode : public NonTerminalNode {
 public:
-    ObjectNode() : Node("ObjectNode"){};
+    ClauseNode() : NonTerminalNode("ClauseNode"){};
 };
 
-class ObjectAccessorNode : public Node {
+class VariableNode : public NonTerminalNode {
 public:
-    ObjectAccessorNode() : Node("ObjectAccessorNode"){};
+    VariableNode() : NonTerminalNode("VariableNode"){};
 };
 
-class TermNode : public Node {
+class ObjectNode : public NonTerminalNode {
 public:
-    TermNode() : Node("TermNode"){};
+    ObjectNode() : NonTerminalNode("ObjectNode"){};
 };
 
-class ArrayElementNode : public Node {
+class ObjectAccessorNode : public NonTerminalNode {
 public:
-    ArrayElementNode() : Node("ArrayElementNode"){};
+    ObjectAccessorNode() : NonTerminalNode("ObjectAccessorNode"){};
 };
 
-class ArrayLiteralNode : public Node {
+class TermNode : public NonTerminalNode {
 public:
-    ArrayLiteralNode() : Node("ArrayLiteralNode"){};
+    TermNode() : NonTerminalNode("TermNode"){};
 };
 
-class ArrayTailNode : public Node {
+class ArrayElementNode : public NonTerminalNode {
 public:
-    ArrayTailNode() : Node("ArrayTailNode"){};
+    ArrayElementNode() : NonTerminalNode("ArrayElementNode"){};
 };
 
-class ArrayIndexedNode : public Node {
+class ArrayLiteralNode : public NonTerminalNode {
 public:
-    ArrayIndexedNode() : Node("ArrayIndexedNode"){};
+    ArrayLiteralNode() : NonTerminalNode("ArrayLiteralNode"){};
 };
 
-class FactorNode : public Node {
+class ArrayTailNode : public NonTerminalNode {
 public:
-    FactorNode() : Node("FactorNode"){};
+    ArrayTailNode() : NonTerminalNode("ArrayTailNode"){};
 };
 
-class MultiplicativeExpressionNode : public Node {
+class ArrayIndexedNode : public NonTerminalNode {
 public:
-    MultiplicativeExpressionNode() : Node("MultiplicativeExpressionNode"){};
+    ArrayIndexedNode() : NonTerminalNode("ArrayIndexedNode"){};
 };
 
-class MultiplicativeOperationNode : public Node {
+class FactorNode : public NonTerminalNode {
 public:
-    MultiplicativeOperationNode() : Node("MultiplicativeOperationNode"){};
+    FactorNode() : NonTerminalNode("FactorNode"){};
 };
 
-class ArithmeticExpressionNode : public Node {
+class MultiplicativeExpressionNode : public NonTerminalNode {
 public:
-    ArithmeticExpressionNode() : Node("ArithmeticExpressionNode"){};
+    MultiplicativeExpressionNode() : NonTerminalNode("MultiplicativeExpressionNode"){};
 };
 
-class ArithmeticOperationNode : public Node {
+class MultiplicativeOperationNode : public NonTerminalNode {
 public:
-    ArithmeticOperationNode() : Node("ArithmeticOperationNode"){};
+    MultiplicativeOperationNode() : NonTerminalNode("MultiplicativeOperationNode"){};
 };
 
-class BooleanFactorNode : public Node {
+class ArithmeticExpressionNode : public NonTerminalNode {
 public:
-    BooleanFactorNode() : Node("BooleanFactorNode"){};
+    ArithmeticExpressionNode() : NonTerminalNode("ArithmeticExpressionNode"){};
 };
 
-class RelationalExpressionNode : public Node {
+class ArithmeticOperationNode : public NonTerminalNode {
 public:
-    RelationalExpressionNode() : Node("RelationalExpressionNode"){};
+    ArithmeticOperationNode() : NonTerminalNode("ArithmeticOperationNode"){};
 };
 
-class RelationalOperationNode : public Node {
+class BooleanFactorNode : public NonTerminalNode {
 public:
-    RelationalOperationNode() : Node("RelationalOperationNode"){};
+    BooleanFactorNode() : NonTerminalNode("BooleanFactorNode"){};
 };
 
-class BooleanExpressionNode : public Node {
+class RelationalExpressionNode : public NonTerminalNode {
 public:
-    BooleanExpressionNode() : Node("BooleanExpressionNode"){};
+    RelationalExpressionNode() : NonTerminalNode("RelationalExpressionNode"){};
 };
 
-class BooleanOperationNode : public Node {
+class RelationalOperationNode : public NonTerminalNode {
 public:
-    BooleanOperationNode() : Node("BooleanOperationNode"){};
+    RelationalOperationNode() : NonTerminalNode("RelationalOperationNode"){};
 };
 
-class TernaryOperationNode : public Node {
+class BooleanExpressionNode : public NonTerminalNode {
 public:
-    TernaryOperationNode() : Node("TernaryOperationNoder"){};
+    BooleanExpressionNode() : NonTerminalNode("BooleanExpressionNode"){};
 };
 
-class ReturnStatementNode : public Node {
+class BooleanOperationNode : public NonTerminalNode {
 public:
-    ReturnStatementNode() : Node("ReturnStatementNode"){};
+    BooleanOperationNode() : NonTerminalNode("BooleanOperationNode"){};
 };
 
-class LogicalOperationNode : public Node {
+class TernaryOperationNode : public NonTerminalNode {
 public:
-    LogicalOperationNode() : Node("LogicalOperationNode"){};
+    TernaryOperationNode() : NonTerminalNode("TernaryOperationNoder"){};
 };
 
-class ComparisonOperationNode : public Node {
+class ReturnStatementNode : public NonTerminalNode {
 public:
-    ComparisonOperationNode() : Node("ComparisonOperationNode"){};
+    ReturnStatementNode() : NonTerminalNode("ReturnStatementNode"){};
+};
+
+class LogicalOperationNode : public NonTerminalNode {
+public:
+    LogicalOperationNode() : NonTerminalNode("LogicalOperationNode"){};
+};
+
+class ComparisonOperationNode : public NonTerminalNode {
+public:
+    ComparisonOperationNode() : NonTerminalNode("ComparisonOperationNode"){};
 };
 }
 }

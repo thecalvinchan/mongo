@@ -46,20 +46,26 @@ void testParseTree(string input, string expected) {
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser* a = new ASTParser(tokenData);
     std::string res = a->traverse();
-    // std::cout << res << std::endl;
+    std::cout << res << std::endl;
     ASSERT(res == expected);
+    delete a;
+}
+
+void testSynaxError(string input) {
+    std::vector<Token> tokenData = lex(input).getValue();
+    ASSERT_THROWS(new ASTParser(tokenData), std::exception);
 }
 
 TEST(ParserTest, test1) {
     string input = "return this.a == 1;";
 
     string expected =
-        "ClauseNode ReturnStatementNode LeafNode BooleanExpressionNode RelationalExpressionNode "
+        "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
-        "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
-        "LeafNode";
+        "TermNode VariableNode ObjectNode ThisKeyword ObjectAccessorNode Period Identifier "
+        "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode Integer "
+        "Semicolon";
 
     testParseTree(input, expected);
 }
@@ -132,20 +138,56 @@ TEST(ParserTest, test5) {
 }
 
 TEST(ParserTest, test6) {
-    string input = "return this[3+3] == 90.1;";
+    string input = "return this.a[3].b[2].c == this.b[5].c.d;";
 
     string expected =
         "ClauseNode ReturnStatementNode LeafNode BooleanExpressionNode RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode "
-        "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode LeafNode ArithmeticOperationNode "
-        "LeafNode MultiplicativeExpressionNode FactorNode TermNode LeafNode LeafNode "
+        "TermNode VariableNode ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "ObjectAccessorNode LeafNode ArithmeticExpressionNode MultiplicativeExpressionNode "
+        "FactorNode TermNode LeafNode LeafNode ObjectAccessorNode LeafNode LeafNode "
+        "ObjectAccessorNode LeafNode ArithmeticExpressionNode MultiplicativeExpressionNode "
+        "FactorNode TermNode LeafNode LeafNode ObjectAccessorNode LeafNode LeafNode "
         "RelationalOperationNode ComparisonOperationNode LeafNode BooleanFactorNode "
+        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode VariableNode "
+        "ObjectNode LeafNode ObjectAccessorNode LeafNode LeafNode ObjectAccessorNode LeafNode "
         "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode LeafNode "
+        "LeafNode ObjectAccessorNode LeafNode LeafNode ObjectAccessorNode LeafNode LeafNode "
         "LeafNode";
 
     testParseTree(input, expected);
+}
+
+TEST(ParserTest, ErrorBadOperator) {
+    testSynaxError("return (x++1);");
+}
+
+TEST(ParserTest, ErrorOperatorBeyondSubset) {
+    testSynaxError("return (x++);");
+}
+
+TEST(ParserTest, ErrorNoReturn) {
+    testSynaxError("x > 1");
+}
+
+TEST(ParserTest, ErrorNoSemicolon) {
+    testSynaxError("return (x == 1)");
+}
+
+TEST(ParserTest, ErrorTernaryTooShort) {
+    testSynaxError("return x ? 1 : ;");
+}
+
+TEST(ParserTest, ErrorObjectBeyondSubset) {
+    testSynaxError("function() {return object.a;}");
+}
+
+TEST(ParserTest, ErrorFunctionArgumentsBeyondSubset) {
+    testSynaxError("function(a) {return (a == 1);}");
+}
+
+TEST(ParserTest, ErrorBadArrayIndex) {
+    testSynaxError("function() {return (arr['string'] == 1);}");
 }
 
 }  // namespace tinyjs

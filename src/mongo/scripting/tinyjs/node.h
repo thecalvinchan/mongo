@@ -44,7 +44,7 @@ public:
     Value *returnValue() const;
     void addChild(std::unique_ptr<Node> child);
     std::vector<std::unique_ptr<Node>> const &getChildren();
-    std::string getName();
+    virtual std::string getName();
     std::string getValue();
 
 private:

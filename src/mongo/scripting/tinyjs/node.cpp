@@ -55,10 +55,6 @@ std::vector<std::unique_ptr<Node>> const &Node::getChildren() {
     return _children;
 }
 
-std::string Node::getName() {
-    return _name;
-}
-
 std::string Node::getValue() {
     std::string res = this->getName();
     for (std::vector<std::unique_ptr<Node>>::const_iterator it = _children.begin();
@@ -68,5 +64,6 @@ std::string Node::getValue() {
     }
     return res;
 }
+
 }
 }

@@ -78,7 +78,7 @@ void ASTParser::error(const char msg[]) {
 
 std::unique_ptr<Node> ASTParser::acceptIf(TokenType t) {
     if (currentToken.type == t) {
-        std::unique_ptr<Node> leaf(new LeafNode(currentToken));
+        std::unique_ptr<Node> leaf(new TerminalNode(currentToken));
         if (currentPosition < (int)tokens.size()) {
             nexttoken();
         }
