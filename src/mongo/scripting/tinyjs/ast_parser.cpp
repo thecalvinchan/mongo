@@ -33,8 +33,6 @@
 #include <stdexcept>
 
 #include "mongo/scripting/tinyjs/ast_parser.h"
-#include "mongo/scripting/tinyjs/clause.h"
-#include "mongo/scripting/tinyjs/node.h"
 
 namespace mongo {
 namespace tinyjs {

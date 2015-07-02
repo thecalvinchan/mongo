@@ -31,7 +31,7 @@
 #include <vector>
 
 #include "mongo/scripting/tinyjs/node.h"
- #include "mongo/scripting/tinyjs/clause.h"
+#include "mongo/scripting/tinyjs/clause.h"
 
 namespace mongo {
 namespace tinyjs {

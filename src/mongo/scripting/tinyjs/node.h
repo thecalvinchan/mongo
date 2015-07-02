@@ -40,11 +40,11 @@ namespace tinyjs {
 class Node {
 public:
     Node(std::string name);
-    virtual ~Node();
+    virtual ~Node() = 0;
     Value *returnValue() const;
     void addChild(std::unique_ptr<Node> child);
     virtual std::string getName() = 0;
-    virtual std::string getValue();
+    virtual std::string getValue() = 0;
     std::vector<std::unique_ptr<Node> >* getChildren();
 protected:
     std::string _name;
