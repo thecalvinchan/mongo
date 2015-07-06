@@ -34,65 +34,6 @@
 namespace mongo {
 namespace tinyjs {
 
-class NonTerminalNode : public Node {
-public:
-    NonTerminalNode(std::string name) : Node(name) {}
-    virtual ~NonTerminalNode() = 0;
-    std::string getName() {
-        return _name;
-    }
-    //getValue and getChildren are only used for testing
-    std::string getValue() {;
-        std::string res = getName();
-        std::vector<std::unique_ptr<Node> >* children = this->getChildren();
-        for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();
-             it != children->end(); it++) {
-            res += " ";
-            res += ((*it).get())->getValue();
-        }
-        return res;
-    }
-    virtual std::vector<std::unique_ptr<Node> >* getChildren() = 0;
-};
-
-class UnaryOperator : public NonTerminalNode {
-public:
-    UnaryOperator();
-    ~UnaryOperator();
-    std::vector<std::unique_ptr<Node> >* getChildren();
-    std::unique_ptr<Node> getChild();
-private:
-    std::unique_ptr<Node> child;
-};
-
-class BinaryOperator : public NonTerminalNode {
-public:
-    BinaryOperator();
-    ~BinaryOperator();
-    std::vector<std::unique_ptr<Node> >* getChildren();
-    std::unique_ptr<Node> getLeftChild();
-    std::unique_ptr<Node> getRightChild();
-private:
-    std::unique_ptr<Node> leftChild;
-    std::unique_ptr<Node> rightChild;
-};
-
-class TernaryOperator : public NonTerminalNode {
-public:
-    TernaryOperator();
-    ~TernaryOperator();
-    std::vector<std::unique_ptr<Node> >* getChildren();
-    std::unique_ptr<Node> getLeftChild();
-    std::unique_ptr<Node> getMiddleChild();
-    std::unique_ptr<Node> getRightChild();
-private:
-    std::unique_ptr<Node> leftChild;
-    std::unique_ptr<Node> middleChild;
-    std::unique_ptr<Node> rightChild;
-};
-
-class TerminalNode : public Node {
-};
 
 class NullLiteralNode : public TerminalNode {
 };
