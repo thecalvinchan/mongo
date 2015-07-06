@@ -84,7 +84,8 @@ Boolean matchToken(TokenType t) {
  * This function takes in a TokenType which should be one of the types that does correspond
  * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
  * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier
- * If the current token matches the input, it calls nexttoken() and returns a node corresponding to the token. Otherwise, it
+ * If the current token matches the input, it calls nexttoken() and returns a node corresponding to
+ * the token. Otherwise, it
  * returns NULL.
  */
 std::unique_ptr<Node> ASTParser::matchNode(TokenType t) {
@@ -98,8 +99,13 @@ std::unique_ptr<Node> ASTParser::matchNode(TokenType t) {
     return NULL;
 }
 
-std::unique_ptr<Node> makeTerminalNode(TokenType type) {
-
+/** 
+ * This function takes in a TokenType which should be one of the types that does correspond
+ * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
+ * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier. It creates and returns a corresponding TerminalNode.
+ */
+std::unique_ptr<TerminalNode> makeTerminalNode(TokenType type) {
+    //TODO
 }
 
 // Overloads acceptIf to search non-terminals
@@ -125,15 +131,14 @@ std::unique_ptr<Node> ASTParser::expect(TokenType t) {
 
 std::unique_ptr<Node> ASTParser::clauseAction() {
     std::unique_ptr<Node> head;
-    std::unique_ptr<Node> child;
-    if ((child = tryTokenMatch(TokenType::kFunctionKeyword))) { //TODO: don't expect a node from simple terminals 
+    if (matchToken(TokenType::kFunctionKeyword)) {
         expect(TokenType::kOpenParen);
         expect(TokenType::kCloseParen);
         expect(TokenType::kOpenCurlyBrace);
         head = std::move(returnStatementAction());
         expect(TokenType::kCloseCurlyBrace);
-    } else if ((child = acceptIf(std::bind(&ASTParser::returnStatementAction, this)))) {
-        head = std::move(child);
+    } else if ((head = tryProductionMatch(std::bind(&ASTParser::returnStatementAction, this)))) {
+        ;
     } else {
         error("clause: syntax error");
     }
@@ -141,98 +146,74 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
 }
 
 std::unique_ptr<Node> ASTParser::variableAction() {
-    std::unique_ptr<Node> head;
-    if ((head = acceptIf(TokenType::kIdentifier))) { 
-        ; //TODO: make this prettier
-    } else if ((head = acceptIf(std::bind(&ASTParser::objectAction, this)))) {
-        ;
-    } else {
-        error("variable: syntax error");
-    }
-    return head;
-}
-
-std::unique_ptr<Node> ASTParser::objectAction() {
-    std::unique_ptr<Node> head(new ObjectNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kThisIdentifier))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(objectAccessorAction()));
-    } else if ((child = acceptIf(TokenType::kIdentifier))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(objectAccessorAction()));  // TODO: combine these two?
-    } else {
-        error("object: syntax error");
-    }
-    return head;
+    std::unique_ptr<Node> leftChild;
+    leftChild = std::move(matchNode(TokenType::kIdentifier);
+    return std::move(objectAccessorAction(std::move(leftChild)));
 }
 
 std::unique_ptr<Node> ASTParser::objectAccessorAction() {
-    std::unique_ptr<Node> head(new ObjectAccessorNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kPeriod))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(expect(TokenType::kIdentifier)));
-        head->addChild(std::move(objectAccessorAction()));
-        return head;
-    } else if ((child = acceptIf(TokenType::kOpenSquareBracket))) {
-        head->addChild(std::move(child));
-        std::unique_ptr<Node> child2;
-        if ((child2 = acceptIf(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
-            head->addChild(std::move(child2));
-            head->addChild(std::move(expect(TokenType::kCloseSquareBracket)));
-            head->addChild(std::move(objectAccessorAction()));
-            return head;
-        } else {
-            error("object: syntax error");
-        }
+    std::unique_ptr<Node> head;
+
+    if ((matchToken(TokenType::kPeriod))) {
+        head = make_unique<ObjectAccessorNode>(kPeriod); 
+
+        head->setLeftChild(std::move(leftChild));
+        head->setRightChild(std::move(matchNode(kIdentifier)));
+        
+
+    } else if ((tokenMatch(TokenType::kOpenSquareBracket))) {
+        head = make_unique<ArithmeticNode>(kOpenSquareBracket));
+        head->setLeftChild(std::move(leftChild));
+        head->setRightChild(std::move(std::bind(&ASTParser::arithmeticExpressionAction, this)));
+        expect(TokenType::kCloseSquareBracket);
+    } else {
+        // multiplicativeOperation is optional, so if it doesn't match, just return leftChild
+        return leftChild;
     }
-    return NULL;
-    // optional
+
+    return std::move(objectAccessorAction(head));
 }
 
 std::unique_ptr<Node> ASTParser::termAction() {
-    std::unique_ptr<Node> head(new TermNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kIntegerLiteral)) ||
-        (child = acceptIf(TokenType::kFloatLiteral)) ||
-        (child = acceptIf(TokenType::kStringLiteral)) ||
-        (child = acceptIf(std::bind(&ASTParser::variableAction, this))) ||
-        (child = acceptIf(TokenType::kBooleanLiteral))) {
-        head->addChild(std::move(child));
+    std::unique_ptr<Node> head;
+    if ((head = matchNode(TokenType::kIntegerLiteral)) ||
+        (head = matchNode(TokenType::kFloatLiteral)) ||
+        (head = matchNode(TokenType::kStringLiteral)) ||
+        (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
+        (head = matchNode(TokenType::kBooleanLiteral))) {
+        ;
     } else {
         error("term: syntax error");
     }
     return head;
 }
 
+//TODO 
 std::unique_ptr<Node> ASTParser::arrayElementAction() {
-    std::unique_ptr<Node> head(new ArrayElementNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(std::bind(&ASTParser::termAction, this)))) {
-        head->addChild(std::move(child));
-    } else if ((child = acceptIf(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
-        head->addChild(std::move(child));
-    } else if ((child = acceptIf(std::bind(&ASTParser::booleanExpressionAction, this)))) {
-        head->addChild(std::move(child));
+    std::unique_ptr<Node> head;
+    if ((head = tryProductionMatch(std::bind(&ASTParser::termAction, this)))) {
+        ;
+    } else if ((head = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
+        ;
+    } else if ((head = tryProductionMatch(std::bind(&ASTParser::booleanExpressionAction, this)))) {
+        ;
     } else {
         error("arrayElement: syntax error");
     }
     return head;
 }
 
+//TODO
 std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
     std::unique_ptr<Node> head(new ArrayLiteralNode());
     std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kOpenSquareBracket))) {
-        head->addChild(std::move(child));
-        std::unique_ptr<Node> child2;
-        if ((child2 = acceptIf(TokenType::kCloseSquareBracket))) {
-            head->addChild(std::move(child2));
+    if (matchToken(TokenType::kOpenSquareBracket)) {
+        if (matchToken(TokenType::kCloseSquareBracket)) {
+            ; // Case where array is empty
         } else {
-            head->addChild(std::move(arrayElementAction()));
-            head->addChild(std::move(arrayTailAction()));
-            head->addChild(std::move(expect(TokenType::kCloseSquareBracket)));
+            // At this point we can assume there is at least one element in the array
+            std::vector<std::unique_ptr<Node> > elements = findElements();
+            head.setChildren(elements);
         }
     } else {
         error("arrayLiteralAction: syntax error");
@@ -240,221 +221,195 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
     return head;
 }
 
-std::unique_ptr<Node> ASTParser::arrayTailAction() {
-    std::unique_ptr<Node> head(new ArrayTailNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kComma))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(arrayElementAction()));
-        head->addChild(std::move(arrayTailAction()));
-        return head;
+std::vector<std::unique_ptr<Node> > findElements() {
+    std::vector<std::unique_ptr<Node> > elements;
+    elements.push_back(std::move(arrayElementAction()));
+    while (!(matchToken(TokenType::kCloseSquareBracket))) {
+        expect(TokenType::kComma);
+        elements.push_back(std::move(arrayElementAction()));
     }
-    return NULL;
-    // arrayTail is optional, so if it doesn't match, it's ok
+    return elements;
 }
 
-std::unique_ptr<Node> ASTParser::arrayIndexedAction() {
-    std::unique_ptr<Node> head(new ArrayIndexedNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kIdentifier))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(expect(TokenType::kOpenSquareBracket)));
-        std::unique_ptr<Node> child2;
-        if ((child2 = acceptIf(TokenType::kIntegerLiteral)) ||
-            (child2 = acceptIf(TokenType::kIdentifier)) ||
-            (child2 = acceptIf(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
-            head->addChild(std::move(child2));
+std::unique_ptr<Node> ASTParser::arrayAccessorAction() {
+    std::unique_ptr<Node> head(new ArrayAccessorNode());
+    std::unique_ptr<Node> leftChild;
+    if ((leftChild = matchNode(TokenType::kIdentifier))) {
+        head->setLeftChild(std::move(child));
+        expect(TokenType::kOpenSquareBracket);
+        std::unique_ptr<Node> rightChild;
+        if ((rightChild = matchNode(TokenType::kIntegerLiteral)) ||
+            (rightChild = matchNode(TokenType::kIdentifier)) ||
+            (rightChild = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
+            head->setRightChild(std::move(rightChild));
         } else {
-            error("arrayIndexed: syntax error");
+            error("arrayAccessor: syntax error");
         }
-        head->addChild(std::move(expect(TokenType::kCloseSquareBracket)));
+        expect(TokenType::kCloseSquareBracket);
     } else {
-        error("arrayIndexed: syntax error");
+        error("arrayAccessor: syntax error");
     }
     return head;
 }
 
 std::unique_ptr<Node> ASTParser::factorAction() {
-    std::unique_ptr<Node> head(new FactorNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(std::bind(&ASTParser::termAction, this)))) {
-        head->addChild(std::move(child));
-    } else if ((child = acceptIf(TokenType::kOpenParen))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(arithmeticExpressionAction()));
-        head->addChild(std::move(expect(TokenType::kCloseParen)));
+    std::unique_ptr<Node> head;
+    if ((head = tryProductionMatch(std::bind(&ASTParser::termAction, this)))) {
+        ;
+    } else if (matchToken(TokenType::kOpenParen)) {
+        head = std::move(arithmeticExpressionAction());
+        expect(TokenType::kCloseParen);
     } else {
         error("factor: syntax error");
     }
     return head;
 }
 
+//Pass the left child as an argument to multOp 
 std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
-    std::unique_ptr<Node> head(new MultiplicativeExpressionNode());
-    head->addChild(std::move(factorAction()));
-    head->addChild(std::move(multiplicativeOperationAction()));
-    return head;
+    std::unique_ptr<Node> leftChild;
+    leftChild = std::move(factorAction());
+    return std::move(multiplicativeOperationAction(std::move(leftChild)));
 }
 
-std::unique_ptr<Node> ASTParser::multiplicativeOperationAction() {
-    std::unique_ptr<Node> head(new MultiplicativeOperationNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kMultiply))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(factorAction()));
-        head->addChild(std::move(multiplicativeOperationAction()));
-        return head;
-    } else if ((child = acceptIf(TokenType::kDivide))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(factorAction()));
-        head->addChild(std::move(multiplicativeOperationAction()));
-        return head;
+// Takes in left child, tries to match * or /. If success, builds an ArithmeticNode with the given left child
+// and cretes the right child. 
+// Otherwise, just return the given left child, because multOp is optional
+//TODO better comment
+std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<Node> leftChild) {
+    std::unique_ptr<Node> head;
+
+    if ((tokenMatch(TokenType::kMultiply))) {
+        head = make_unique<ArithmeticNode>(kMultiply); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
+    } else if ((tokenMatch(TokenType::kDivide))) {
+        head = make_unique<ArithmeticNode>(kDivide));
+    } else {
+        // multiplicativeOperation is optional, so if it doesn't match, just return leftChild
+        return leftChild;
     }
-    return NULL;
-    // multiplicativeOperation is optional, so if it doesn't match, it's ok
+
+    head->setLeftChild(std::move(leftChild));
+    head->setRightChild(std::move(factorAction()));
+    return std::move(multiplicativeOperationAction(head));
+
 }
+
 
 std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
-    std::unique_ptr<Node> head(new ArithmeticExpressionNode());
-    head->addChild(std::move(multiplicativeExpressionAction()));
-    head->addChild(std::move(arithmeticOperationAction()));
-    return head;
+    std::unique_ptr<Node> leftChild;
+    leftChild = std::move(multiplicativeExpressionAction());
+    return std::move(arithmeticOperationAction(std::move(leftChild)));
 }
 
-std::unique_ptr<Node> ASTParser::arithmeticOperationAction() {
-    std::unique_ptr<Node> head(new ArithmeticOperationNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kAdd))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(multiplicativeExpressionAction()));
-        head->addChild(std::move(arithmeticOperationAction()));
-        return head;
-    } else if ((child = acceptIf(TokenType::kSubtract))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(multiplicativeExpressionAction()));
-        head->addChild(std::move(arithmeticOperationAction()));
-        return head;
+
+std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node> leftChild) {
+    std::unique_ptr<Node> head;
+
+    if ((tokenMatch(TokenType::kAdd))) {
+        head = make_unique<ArithmeticNode>(kAdd); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
+    } else if ((tokenMatch(TokenType::kSubtract))) {
+        head = make_unique<ArithmeticNode>(kSubtract));
+    } else {
+        // arithmeticOperation is optional, so if it doesn't match, just return leftChild
+        return leftChild;
     }
-    return NULL;
-    // arithmeticOperation is optional, so if it doesn't match, it's ok
+
+    head->setLeftChild(std::move(leftChild));
+    head->setRightChild(std::move(multiplicativeExpressionAction()));
+    return std::move(arithmeticOperationAction(head));
 }
 
 std::unique_ptr<Node> ASTParser::booleanFactorAction() {
-    std::unique_ptr<Node> head(new BooleanFactorNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
-        head->addChild(std::move(child));
+    std::unique_ptr<Node> head;
+    if ((head = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
+        ;
     } else {
-        head->addChild(std::move(expect(TokenType::kOpenParen)));
-        head->addChild(std::move(booleanExpressionAction()));
-        head->addChild(std::move(expect(TokenType::kCloseParen)));
-
+        expect(TokenType::kOpenParen);
+        head = std::move(booleanExpressionAction());
+        expect(TokenType::kCloseParen);
     }
     return head;
 }
+
 
 std::unique_ptr<Node> ASTParser::relationalExpressionAction() {
-    std::unique_ptr<Node> head(new RelationalExpressionNode());
-    head->addChild(std::move(booleanFactorAction()));
-    head->addChild(std::move(relationalOperationAction()));
-    return head;
+    std::unique_ptr<Node> leftChild;
+    leftChild = std::move(booleanFactorAction());
+    return std::move(relationalOperationAction(std::move(leftChild)));
 }
 
-std::unique_ptr<Node> ASTParser::relationalOperationAction() {
-    std::unique_ptr<Node> head(new RelationalOperationNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(std::bind(&ASTParser::comparisonOperationAction, this)))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(booleanFactorAction()));
-        head->addChild(std::move(relationalOperationAction()));
-        return head;
+
+std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node> leftChild) {
+    std::unique_ptr<Node> head;
+
+    if ((tokenMatch(TokenType::kTripleEquals))) {
+        head = make_unique<ComparisonNode>(kTripleEquals); 
+    } else if ((tokenMatch(TokenType::kDoubleEquals))) {
+        head = make_unique<ComparisonNode>(kDoubleEquals));
+    } else if ((tokenMatch(TokenType::kGreaterThan))) {
+        head = make_unique<ComparisonNode>(kGreaterThan));
+    } else if ((tokenMatch(TokenType::kGreaterThanEquals))) {
+        head = make_unique<ComparisonNode>(kGreaterThanEquals));
+    } else if ((tokenMatch(TokenType::kLessThan))) {
+        head = make_unique<ComparisonNode>(kLessThan));
+    } else if ((tokenMatch(TokenType::kLessThanEquals))) {
+        head = make_unique<ComparisonNode>(kLessThanEquals));
+    } else {
+        // relationalOperation is optional, so if it doesn't match, just return leftChild
+        return leftChild;
     }
-    return NULL;
-    // relationalOperation is optional, so if it doesn't match, it's ok
+
+    head->setLeftChild(std::move(leftChild));
+    head->setRightChild(std::move(booleanFactorAction()));
+    return std::move(relationalOperationAction(head));
 }
+
 
 std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
-    std::unique_ptr<Node> head (new BooleanExpressionNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(std::bind(&ASTParser::relationalExpressionAction, this)))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(booleanOperationAction()));
-    } else {
-        error("booleanExpressionAction: syntax error");
-    }
-    return head;
+    std::unique_ptr<Node> leftChild;
+    leftChild = std::move(relationalExpressionAction());
+    return std::move(booleanOperationAction(std::move(leftChild)));
 }
+
 
 std::unique_ptr<Node> ASTParser::booleanOperationAction() {
-    std::unique_ptr<Node> head(new BooleanOperationNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(std::bind(&ASTParser::logicalOperationAction, this)))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(relationalExpressionAction()));
-        head->addChild(std::move(booleanOperationAction()));
-    } else if ((child = acceptIf(std::bind(&ASTParser::ternaryOperationAction, this)))) {
-        head->addChild(std::move(child));
+    std::unique_ptr<Node> head;
+
+    if ((tokenMatch(TokenType::kLogicalAnd))) {
+        head = make_unique<ComparisonNode>(kLogicalAnd); 
+    } else if ((tokenMatch(TokenType::kLogicalOr))) {
+        head = make_unique<ComparisonNode>(kLogicalOr));
     } else {
-        return NULL;
-        // booleanOperation is optional, so if it doesn't match, it's ok
+        // booleanOperation is optional, so if it doesn't match, just return leftChild
+        return leftChild;
     }
-    return head;
+
+    head->setLeftChild(std::move(leftChild));
+    head->setRightChild(std::move(relationalExpressionAction()));
+    return std::move(booleanOperationAction(head));
+
 }
 
-std::unique_ptr<Node> ASTParser::ternaryOperationAction() {
+std::unique_ptr<Node> ASTParser::ternaryOperationAction() { //TODO: should this be structured more like returnStatementAction?
     std::unique_ptr<Node> head(new TernaryOperationNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kQuestionMark))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(booleanExpressionAction()));
-        head->addChild(std::move(expect(TokenType::kColon)));
-        head->addChild(std::move(booleanExpressionAction()));
-    } else {
-        error("ternaryOperationAction: syntax error");
-    }
+    head->setChild1(std::move(booleanExpressionAction()));
+    expect(TokenType::kQuestionMark);
+    head->setChild2(std::move(booleanExpressionAction()));
+    expect(TokenType::kColon);
+    head->setChild3(std::move(booleanExpressionAction()));
     return head;
 }
 
 std::unique_ptr<Node> ASTParser::returnStatementAction() {
     std::unique_ptr<Node> head(new ReturnStatementNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kReturnKeyword))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(booleanExpressionAction()));
-        head->addChild(std::move(expect(TokenType::kSemiColon)));
+    if (matchToken(TokenType::kReturnKeyword)) {
+        head->setChild(std::move(booleanExpressionAction()));
+        expect(TokenType::kSemiColon);
     } else {
         error("returnStatement: syntax error");
     }
     return head;
 }
 
-std::unique_ptr<Node> ASTParser::logicalOperationAction() {
-    std::unique_ptr<Node> head(new LogicalOperationNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kLogicalAnd)) || (child = acceptIf(TokenType::kLogicalOr))) {
-        head->addChild(std::move(child));
-    } else {
-        error("logicalOperation: syntax error");
-    }
-    return head;
-}
-
-std::unique_ptr<Node> ASTParser::comparisonOperationAction() {
-    std::unique_ptr<Node> head(new ComparisonOperationNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kTripleEquals)) ||
-        (child = acceptIf(TokenType::kDoubleEquals)) ||
-        (child = acceptIf(TokenType::kGreaterThan)) ||
-        (child = acceptIf(TokenType::kGreaterThanEquals)) ||
-        (child = acceptIf(TokenType::kLessThan)) ||
-        (child = acceptIf(TokenType::kLessThanEquals)) ||
-        (child = acceptIf(TokenType::kNotEquals)) ||
-        (child = acceptIf(TokenType::kDoubleNotEquals))) {
-        head->addChild(std::move(child));
-    } else {
-        error("comparisonOperation: syntax error");
-    }
-    return head;
-}
 }
 }
