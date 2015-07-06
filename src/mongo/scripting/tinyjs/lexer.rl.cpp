@@ -48,7 +48,6 @@ namespace {
 %%{
     machine lexer;
 
-    kThisIdentifier      = 'this';
     kReturnKeyword       = 'return';
     kNullLiteral         = 'null';
     kUndefinedLiteral    = 'undefined';
@@ -89,10 +88,6 @@ namespace {
     kError               = any;
   
     main := |*
-      
-        kThisIdentifier => {
-        emit(TokenType::kThisIdentifier, &tokenData, ts, te);
-        };
 
         kReturnKeyword => {
         emit(TokenType::kReturnKeyword, &tokenData, ts, te);

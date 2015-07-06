@@ -64,7 +64,7 @@ void ASTParser::error(const char msg[]) {
     throw std::invalid_argument(msg);
 }
 
-std::unique_ptr<Node> ASTParser::acceptIf(TokenType t) {
+std::unique_ptr<Node> ASTParser::tryTokenMatch(TokenType t) {
     if (currentToken.type == t) {
         std::unique_ptr<Node> leaf(new TerminalNode(currentToken));
         if (currentPosition < (int)tokens.size()) {
@@ -76,7 +76,7 @@ std::unique_ptr<Node> ASTParser::acceptIf(TokenType t) {
 }
 
 // Overloads acceptIf to search non-terminals
-std::unique_ptr<Node> ASTParser::acceptIf(std::function<std::unique_ptr<Node>(void)> action) {
+std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_ptr<Node>(void)> action) {
     int resetPosition = currentPosition;
     try {
         // std::unique_ptr<Node> subTreeHead = action();
@@ -97,17 +97,16 @@ std::unique_ptr<Node> ASTParser::expect(TokenType t) {
 }
 
 std::unique_ptr<Node> ASTParser::clauseAction() {
-    std::unique_ptr<Node> head(new ClauseNode());
+    std::unique_ptr<Node> head;
     std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kFunctionKeyword))) {
-        head->addChild(std::move(child));
-        head->addChild(std::move(expect(TokenType::kOpenParen)));
-        head->addChild(std::move(expect(TokenType::kCloseParen)));
-        head->addChild(std::move(expect(TokenType::kOpenCurlyBrace)));
-        head->addChild(std::move(returnStatementAction()));
-        head->addChild(std::move(expect(TokenType::kCloseCurlyBrace)));
+    if ((child = tryTokenMatch(TokenType::kFunctionKeyword))) { //TODO: don't expect a node from simple terminals 
+        expect(TokenType::kOpenParen);
+        expect(TokenType::kCloseParen);
+        expect(TokenType::kOpenCurlyBrace);
+        head = std::move(returnStatementAction());
+        expect(TokenType::kCloseCurlyBrace);
     } else if ((child = acceptIf(std::bind(&ASTParser::returnStatementAction, this)))) {
-        head->addChild(std::move(child));
+        head = std::move(child);
     } else {
         error("clause: syntax error");
     }
@@ -115,12 +114,11 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
 }
 
 std::unique_ptr<Node> ASTParser::variableAction() {
-    std::unique_ptr<Node> head(new VariableNode());
-    std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kIdentifier))) {
-        head->addChild(std::move(child));
-    } else if ((child = acceptIf(std::bind(&ASTParser::objectAction, this)))) {
-        head->addChild(std::move(child));
+    std::unique_ptr<Node> head;
+    if ((head = acceptIf(TokenType::kIdentifier))) { 
+        ; //TODO: make this prettier
+    } else if ((head = acceptIf(std::bind(&ASTParser::objectAction, this)))) {
+        ;
     } else {
         error("variable: syntax error");
     }

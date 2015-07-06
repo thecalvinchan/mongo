@@ -88,8 +88,8 @@ void testSingleToken(string inputString, TokenType t) {
 
 // Simple tests for each type of token, where input contains just one token
 
-TEST(LexerTest, kThisIdentifier) {
-    testSingleToken("this", TokenType::kThisIdentifier);
+TEST(LexerTest, thisAsIdentifier) {
+    testSingleToken("this", TokenType::kIdentifier);
 }
 
 TEST(LexerTest, kReturnKeyword) {
@@ -286,7 +286,7 @@ TEST(LexerTest, functionNestedObjArrayComparison) {
                          TokenType::kOpenCurlyBrace,
                          TokenType::kReturnKeyword,
                          TokenType::kOpenParen,
-                         TokenType::kThisIdentifier,
+                         TokenType::kIdentifier,
                          TokenType::kPeriod,
                          TokenType::kIdentifier,
                          TokenType::kPeriod,
@@ -319,7 +319,7 @@ TEST(LexerTest, functionTernaryOp) {
                          TokenType::kCloseParen,
                          TokenType::kOpenCurlyBrace,
                          TokenType::kReturnKeyword,
-                         TokenType::kThisIdentifier,
+                         TokenType::kIdentifier,
                          TokenType::kPeriod,
                          TokenType::kIdentifier,
                          TokenType::kOpenSquareBracket,
@@ -329,7 +329,7 @@ TEST(LexerTest, functionTernaryOp) {
                          TokenType::kIntegerLiteral,
                          TokenType::kQuestionMark,
                          TokenType::kOpenParen,
-                         TokenType::kThisIdentifier,
+                         TokenType::kIdentifier,
                          TokenType::kPeriod,
                          TokenType::kIdentifier,
                          TokenType::kGreaterThan,
@@ -337,7 +337,7 @@ TEST(LexerTest, functionTernaryOp) {
                          TokenType::kCloseParen,
                          TokenType::kColon,
                          TokenType::kOpenParen,
-                         TokenType::kThisIdentifier,
+                         TokenType::kIdentifier,
                          TokenType::kPeriod,
                          TokenType::kIdentifier,
                          TokenType::kDoubleEquals,
@@ -381,7 +381,7 @@ TEST(LexerTest, nestedNonsense) {
                          TokenType::kStringLiteral,
                          TokenType::kCloseSquareBracket,
                          TokenType::kPeriod,
-                         TokenType::kThisIdentifier,
+                         TokenType::kIdentifier,
                          TokenType::kPeriod,
                          TokenType::kNullLiteral,
                          TokenType::kOpenSquareBracket,
@@ -390,7 +390,7 @@ TEST(LexerTest, nestedNonsense) {
                          TokenType::kCloseParen};
 
     string lexemes[] = {"return", "(",   "(",   "(", "(",    "3", "+",    "a", ")", "-", "'string'",
-                        ")",      "*",   "NaN", ")", "\\",   "x", ")",    "+", "-", "(", "bar",
+                        ")",      "*",   "NaN", ")", "/",   "x", ")",    "+", "-", "(", "bar",
                         "[",      "'a'", "]",   ".", "this", ".", "null", "[", "1", "]", ")"};
 
     testValidLine(input, types, lexemes, 33);
