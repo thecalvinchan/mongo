@@ -13,6 +13,16 @@ private:
     bool value;
 }
 
+BooleanLiteralNode::BooleanLiteralNode(float val) : value(val) {}
+
+std::string BooleanLiteralNode::getName() {
+    return value ? "true" : "false";
+}
+
+bool BooleanLiteralNode::getValue() {
+    return value;
+}
+
 }
 }
 
