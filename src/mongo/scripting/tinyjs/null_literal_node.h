@@ -4,6 +4,10 @@ namespace mongo {
 namespace tinyjs {
 
 class NullLiteralNode : public TerminalNode {
+    NullLiteralNode();
+    ~NullLiteralNode();
+    std::string getName();
+    int getValue();
 }
 
 }

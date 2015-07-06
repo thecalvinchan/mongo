@@ -5,7 +5,7 @@ namespace tinyjs {
 
 class TerminalNode : public Node {
     TerminalNode();
-    ~TerminalNode();
+    virtual ~TerminalNode() = 0;
 };
 
 }
