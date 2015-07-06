@@ -60,10 +60,6 @@ void ASTParser::nexttoken(void) {
     currentToken = tokens[currentPosition];
 }
 
-void ASTParser::error(const char msg[]) {
-    throw std::invalid_argument(msg);
-}
-
 /**
  * This function takes in a TokenType which should be one of the types that does not correspond
  * to a node in the abstract syntax tree - for example, parentheses, semicolons, "return", etc.
@@ -124,7 +120,7 @@ std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_pt
 std::unique_ptr<Node> ASTParser::expect(TokenType t) {
     std::unique_ptr<Node> leaf = this->acceptIf(t);
     if (leaf == NULL) {
-        error("expect: unexpected token");
+        throw ParseException("expected different token", currentToken); //TODO better error message
     }
     return leaf;
 }
@@ -150,7 +146,7 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
     } else if ((head = tryProductionMatch(std::bind(&ASTParser::returnStatementAction, this)))) {
         ;
     } else {
-        error("clause: syntax error");
+        throw ParseException("clause", currentToken);
     }
     return head;
 }
@@ -212,7 +208,7 @@ std::unique_ptr<Node> ASTParser::termAction() {
         (head = matchNode(TokenType::kBooleanLiteral))) {
         ;
     } else {
-        error("term: syntax error");
+        throw ParseException("term", currentToken);
     }
     return head;
 }
@@ -234,7 +230,7 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
             head.setChildren(elements);
         }
     } else {
-        error("arrayLiteralAction: syntax error");
+        throw ParseException("array literal", currentToken);
     }
     return head;
 }
@@ -269,11 +265,11 @@ std::unique_ptr<Node> ASTParser::arrayAccessorAction() {
             (rightChild = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
             head->setRightChild(std::move(rightChild));
         } else {
-            error("arrayAccessor: syntax error");
+            throw ParseException("array accessor", currentToken);
         }
         expect(TokenType::kCloseSquareBracket);
     } else {
-        error("arrayAccessor: syntax error");
+        throw ParseException("array accessor", currentToken);
     }
     return head;
 }
@@ -291,7 +287,7 @@ std::unique_ptr<Node> ASTParser::factorAction() {
         head = std::move(arithmeticExpressionAction());
         expect(TokenType::kCloseParen);
     } else {
-        error("factor: syntax error");
+        throw ParseException("factor", currentToken);
     }
     return head;
 }
@@ -478,7 +474,7 @@ std::unique_ptr<Node> ASTParser::returnStatementAction() {
         head->setChild(std::move(booleanExpressionAction()));
         expect(TokenType::kSemiColon);
     } else {
-        error("returnStatement: syntax error");
+        throw ParseException("return statement", currentToken);
     }
     return head;
 }
