@@ -64,15 +64,42 @@ void ASTParser::error(const char msg[]) {
     throw std::invalid_argument(msg);
 }
 
-std::unique_ptr<Node> ASTParser::tryTokenMatch(TokenType t) {
+/**
+ * This function takes in a TokenType which should be one of the types that does not correspond
+ * to a node in the abstract syntax tree - for example, parentheses, semicolons, "return", etc.
+ * If the current token matches the input, it calls nexttoken() and returns true. Otherwise, it
+ * returns false.
+ */
+Boolean matchToken(TokenType t) {
     if (currentToken.type == t) {
-        std::unique_ptr<Node> leaf(new TerminalNode(currentToken));
+        if (currentPosition < (int)tokens.size()) {
+            nexttoken();
+        }
+        return true;
+    }
+    return false;
+}
+
+/**
+ * This function takes in a TokenType which should be one of the types that does correspond
+ * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
+ * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier
+ * If the current token matches the input, it calls nexttoken() and returns a node corresponding to the token. Otherwise, it
+ * returns NULL.
+ */
+std::unique_ptr<Node> ASTParser::matchNode(TokenType t) {
+    if (currentToken.type == t) {
+        std::unique_ptr<Node> leaf = std::move(makeTerminalNode(currentToken));
         if (currentPosition < (int)tokens.size()) {
             nexttoken();
         }
         return leaf;
     }
     return NULL;
+}
+
+std::unique_ptr<Node> makeTerminalNode(TokenType type) {
+
 }
 
 // Overloads acceptIf to search non-terminals
