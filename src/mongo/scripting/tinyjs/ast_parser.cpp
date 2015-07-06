@@ -317,12 +317,13 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction() {
 std::unique_ptr<Node> ASTParser::booleanFactorAction() {
     std::unique_ptr<Node> head(new BooleanFactorNode());
     std::unique_ptr<Node> child;
-    if ((child = acceptIf(TokenType::kOpenParen))) {
+    if ((child = acceptIf(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
         head->addChild(std::move(child));
+    } else {
+        head->addChild(std::move(expect(TokenType::kOpenParen)));
         head->addChild(std::move(booleanExpressionAction()));
         head->addChild(std::move(expect(TokenType::kCloseParen)));
-    } else {
-        head->addChild(std::move(arithmeticExpressionAction()));
+
     }
     return head;
 }

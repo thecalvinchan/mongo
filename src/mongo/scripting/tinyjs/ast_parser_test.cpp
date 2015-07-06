@@ -215,10 +215,12 @@ TEST(ParserTest, test8) {
         "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
         "ArithmeticExpressionNode "
         "MultiplicativeExpressionNode FactorNode TermNode VariableNode Identifier "
-        "RelationalOperationNode ComparisonOperationNode GreaterThan BooleanFactorNode OpenParen "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
+        "RelationalOperationNode ComparisonOperationNode GreaterThan BooleanFactorNode "
         "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral ArithmeticOperationNode "
+        "MultiplicativeExpressionNode FactorNode OpenParen "
+        "ArithmeticExpressionNode "
+        "MultiplicativeExpressionNode FactorNode "
+        "TermNode IntegerLiteral ArithmeticOperationNode "
         "Add "
         "MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral CloseParen SemiColon "
         "CloseCurlyBrace";
@@ -227,15 +229,15 @@ TEST(ParserTest, test8) {
 }
 
 TEST(ParserTest, test9) {
-    //string input = "return (3*4)/8 - y;";
-    string input = "return 3*4/8 - y;";
+    string input = "return (3*4)/8 - y;";
+
     string expected =
-        "ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
+        "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
         "OpenParen ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
         "IntegerLiteral MultiplicativeOperationNode Multiply FactorNode TermNode IntegerLiteral CloseParen "
         "MultiplicativeOperationNode Divide FactorNode TermNode IntegerLiteral ArithmeticOperationNode "
-        "Subtract MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral SemiColon";
+        "Subtract MultiplicativeExpressionNode FactorNode TermNode VariableNode Identifier SemiColon";
 
     testParseTree(input, expected);
 }
