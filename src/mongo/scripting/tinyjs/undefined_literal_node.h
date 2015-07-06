@@ -10,5 +10,13 @@ class UndefinedLiteralNode : public TerminalNode {
     int getValue();
 }
 
+std::string UndefinedLiteralNode::getName() {
+    return "undefined";
+}
+
+int NullLiteralNode::getValue() {
+    return 0;
+}
+
 }
 }

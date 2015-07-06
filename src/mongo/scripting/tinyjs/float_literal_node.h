@@ -13,6 +13,17 @@ private:
     float value;
 }
 
+FloatLiteralNode::FloatLiteralNode(float val) : value(val) {
+}
+
+std::string FloatLiteralNode::getName() {
+    return std::to_string(value);
+}
+
+float FloatLiteralNode::getValue() {
+    return value;
+}
+
 }
 }
 

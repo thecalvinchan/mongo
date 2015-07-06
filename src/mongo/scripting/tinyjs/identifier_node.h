@@ -13,6 +13,17 @@ private:
     std::string value;
 }
 
+IdentifierNode::IdentifierNode(std::string val) : value(val) {
+}
+
+std::string IdentifierNode::getName() {
+    return getValue();
+}
+
+std::string IdentifierNode::getValue() {
+    return value;
+}
+
 }
 }
 

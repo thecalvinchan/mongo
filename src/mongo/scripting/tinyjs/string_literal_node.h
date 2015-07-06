@@ -13,6 +13,17 @@ private:
     std::string value;
 }
 
+StringLiteralNode::StringLiteralNode(std::string val) : value(val) {
+}
+
+std::string StringLiteralNode::getName() {
+    return value;
+}
+
+std::string StringLiteralNode::getValue() {
+    return value;
+}
+
 }
 }
 

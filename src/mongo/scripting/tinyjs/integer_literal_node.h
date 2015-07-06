@@ -13,5 +13,16 @@ private:
     int value;
 }
 
+IntegerLiteralNode::IntegerLiteralNode(int val) : value(val) {
+}
+
+std::string IntegerLiteralNode::getName() {
+    return std::to_string(value);
+}
+
+int IntegerLiteralNode::getValue() {
+    return value;
+}
+
 }
 }

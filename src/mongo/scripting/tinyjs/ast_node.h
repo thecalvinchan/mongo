@@ -40,7 +40,6 @@ public:
     virtual ~Node() = 0;
     Value *returnValue() const;
     virtual std::string getName() = 0;
-    virtual std::string getValue() = 0;
 protected:
     std::string _name;
 };
