@@ -129,6 +129,16 @@ std::unique_ptr<Node> ASTParser::expect(TokenType t) {
     return leaf;
 }
 
+/** 
+ * Each of the following functions represents a production rule, described in its header comment.
+ * TODO: more explanation of the functions 
+ */
+
+/**
+ * clause: 
+ *        'function() {' returnStatement '}'
+ *      | returnStatement
+ */
 std::unique_ptr<Node> ASTParser::clauseAction() {
     std::unique_ptr<Node> head;
     if (matchToken(TokenType::kFunctionKeyword)) {
@@ -145,12 +155,23 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
     return head;
 }
 
+/**
+ * variable: 
+ *        identifier
+ *      | objectAccessor
+ */
 std::unique_ptr<Node> ASTParser::variableAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(matchNode(TokenType::kIdentifier);
     return std::move(objectAccessorAction(std::move(leftChild)));
 }
 
+/**
+ * objectAccessor: 
+ *        '.' identifier objectAccessor
+ *      | '[' arithmeticExpression ']' objectAccessor
+ *      | OPTIONAL
+ */
 std::unique_ptr<Node> ASTParser::objectAccessorAction() {
     std::unique_ptr<Node> head;
 
@@ -174,6 +195,14 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction() {
     return std::move(objectAccessorAction(head));
 }
 
+/**
+ * termAction: 
+ *        integer
+ *      | float
+ *      | string
+ *      | variable
+ *      | boolean
+ */
 std::unique_ptr<Node> ASTParser::termAction() {
     std::unique_ptr<Node> head;
     if ((head = matchNode(TokenType::kIntegerLiteral)) ||
@@ -188,22 +217,11 @@ std::unique_ptr<Node> ASTParser::termAction() {
     return head;
 }
 
-//TODO 
-std::unique_ptr<Node> ASTParser::arrayElementAction() {
-    std::unique_ptr<Node> head;
-    if ((head = tryProductionMatch(std::bind(&ASTParser::termAction, this)))) {
-        ;
-    } else if ((head = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
-        ;
-    } else if ((head = tryProductionMatch(std::bind(&ASTParser::booleanExpressionAction, this)))) {
-        ;
-    } else {
-        error("arrayElement: syntax error");
-    }
-    return head;
-}
-
-//TODO
+/**
+ * arrayLiteral: 
+ *        []
+ *      | [arrayElements]
+ */
 std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
     std::unique_ptr<Node> head(new ArrayLiteralNode());
     std::unique_ptr<Node> child;
@@ -212,7 +230,7 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
             ; // Case where array is empty
         } else {
             // At this point we can assume there is at least one element in the array
-            std::vector<std::unique_ptr<Node> > elements = findElements();
+            std::vector<std::unique_ptr<Node> > elements = arrayElements();
             head.setChildren(elements);
         }
     } else {
@@ -221,16 +239,24 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
     return head;
 }
 
-std::vector<std::unique_ptr<Node> > findElements() {
+/**
+ * arrayElements: 
+ *        booleanExpression (',' booleanExpression)*
+ */
+std::vector<std::unique_ptr<Node> > arrayElements() {
     std::vector<std::unique_ptr<Node> > elements;
-    elements.push_back(std::move(arrayElementAction()));
+    elements.push_back(std::move(booleanExpressionAction()));
     while (!(matchToken(TokenType::kCloseSquareBracket))) {
         expect(TokenType::kComma);
-        elements.push_back(std::move(arrayElementAction()));
+        elements.push_back(std::move(booleanExpressionAction()));
     }
     return elements;
 }
 
+/**
+ * arrayAccessor: 
+ *        identifier '[' (integer | identifier | arithmeticExpression) ']'
+ */
 std::unique_ptr<Node> ASTParser::arrayAccessorAction() {
     std::unique_ptr<Node> head(new ArrayAccessorNode());
     std::unique_ptr<Node> leftChild;
@@ -252,6 +278,11 @@ std::unique_ptr<Node> ASTParser::arrayAccessorAction() {
     return head;
 }
 
+/**
+ * factor: 
+ *        term
+ *      | '(' arithmeticExpression ')'
+ */
 std::unique_ptr<Node> ASTParser::factorAction() {
     std::unique_ptr<Node> head;
     if ((head = tryProductionMatch(std::bind(&ASTParser::termAction, this)))) {
@@ -265,17 +296,21 @@ std::unique_ptr<Node> ASTParser::factorAction() {
     return head;
 }
 
-//Pass the left child as an argument to multOp 
+/**
+ * multiplicativeExpression: 
+ *        factor multiplicativeOperation
+ */
 std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(factorAction());
     return std::move(multiplicativeOperationAction(std::move(leftChild)));
 }
 
-// Takes in left child, tries to match * or /. If success, builds an ArithmeticNode with the given left child
-// and cretes the right child. 
-// Otherwise, just return the given left child, because multOp is optional
-//TODO better comment
+/**
+ * multiplicativeOperation: 
+ *        ('*' | '/') factor multiplicativeOperation
+ *      | OPTIONAL
+ */
 std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<Node> leftChild) {
     std::unique_ptr<Node> head;
 
@@ -294,14 +329,21 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
 
 }
 
-
+/**
+ * arithmeticExpression: 
+ *        multiplicativeExpression arithmeticOperation
+ */
 std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(multiplicativeExpressionAction());
     return std::move(arithmeticOperationAction(std::move(leftChild)));
 }
 
-
+/**
+ * arithmeticOperation: 
+ *        ('+' | '-') multiplicativeExpression arithmeticOperation
+ *      | OPTIONAL
+ */
 std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node> leftChild) {
     std::unique_ptr<Node> head;
 
@@ -319,6 +361,11 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node>
     return std::move(arithmeticOperationAction(head));
 }
 
+/**
+ * booleanFactor: 
+ *        arithmeticExpression
+ *      | '(' booleanExpression ')'
+ */
 std::unique_ptr<Node> ASTParser::booleanFactorAction() {
     std::unique_ptr<Node> head;
     if ((head = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
@@ -331,14 +378,21 @@ std::unique_ptr<Node> ASTParser::booleanFactorAction() {
     return head;
 }
 
-
+/**
+ * relationalExpression: 
+ *        booleanFactor relationalOperation
+ */
 std::unique_ptr<Node> ASTParser::relationalExpressionAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(booleanFactorAction());
     return std::move(relationalOperationAction(std::move(leftChild)));
 }
 
-
+/**
+ * relationalOperation: 
+ *        ('===' | '==' | '>' | '>=' | '<' | '>=') booleanFactor relationalOperation
+ *      | OPTIONAL
+ */
 std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node> leftChild) {
     std::unique_ptr<Node> head;
 
@@ -364,35 +418,49 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
     return std::move(relationalOperationAction(head));
 }
 
-
+/**
+ * booleanExpression: 
+ *        relationalExpression booleanOperation
+ */
 std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(relationalExpressionAction());
     return std::move(booleanOperationAction(std::move(leftChild)));
 }
 
-
-std::unique_ptr<Node> ASTParser::booleanOperationAction() {
+/**
+ * booleanOperation: 
+ *        ('&&' | '||') booleanExpression booleanOperation
+        | ternaryOperation booleanOperation
+ *      | OPTIONAL
+ */
+std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> leftChild) {
     std::unique_ptr<Node> head;
 
-    if ((tokenMatch(TokenType::kLogicalAnd))) {
-        head = make_unique<ComparisonNode>(kLogicalAnd); 
+    if (head = tryProductionMatch(std::bind(&ASTParser::ternaryOperationAction, this))) {
+        head->setChild1(leftChild);
+    } else if ((tokenMatch(TokenType::kLogicalAnd))) {
+        head = make_unique<ComparisonNode>(kLogicalAnd);
+        head->setLeftChild(std::move(leftChild));
+        head->setRightChild(std::move(booleanExpressionAction())); 
     } else if ((tokenMatch(TokenType::kLogicalOr))) {
         head = make_unique<ComparisonNode>(kLogicalOr));
+        head->setLeftChild(std::move(leftChild));
+        head->setRightChild(std::move(booleanExpressionAction())); 
     } else {
         // booleanOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
     }
 
-    head->setLeftChild(std::move(leftChild));
-    head->setRightChild(std::move(relationalExpressionAction()));
     return std::move(booleanOperationAction(head));
-
 }
 
+/**
+ * ternaryOperation: 
+ *        '?' booleanExpression ':' booleanExpression
+ */
 std::unique_ptr<Node> ASTParser::ternaryOperationAction() { //TODO: should this be structured more like returnStatementAction?
     std::unique_ptr<Node> head(new TernaryOperationNode());
-    head->setChild1(std::move(booleanExpressionAction()));
     expect(TokenType::kQuestionMark);
     head->setChild2(std::move(booleanExpressionAction()));
     expect(TokenType::kColon);
@@ -400,6 +468,10 @@ std::unique_ptr<Node> ASTParser::ternaryOperationAction() { //TODO: should this 
     return head;
 }
 
+/**
+ * returnStatement: 
+ *        'return' booleanExpression ';'
+ */
 std::unique_ptr<Node> ASTParser::returnStatementAction() {
     std::unique_ptr<Node> head(new ReturnStatementNode());
     if (matchToken(TokenType::kReturnKeyword)) {
