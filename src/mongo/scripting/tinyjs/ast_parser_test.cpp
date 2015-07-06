@@ -227,7 +227,8 @@ TEST(ParserTest, test8) {
 }
 
 TEST(ParserTest, test9) {
-    string input = "return (3*4)\\8 - y;";
+    //string input = "return (3*4)/8 - y;";
+    string input = "return 3*4/8 - y;";
     string expected =
         "ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
         "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
