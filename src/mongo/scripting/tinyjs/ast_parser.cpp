@@ -275,8 +275,8 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
             ; // Case where array is empty
         } else {
             // At this point we can assume there is at least one element in the array
-            std::vector<std::unique_ptr<Node> > elements = arrayElements();
-            checked_cast<ArrayLiteral*>(head.get())->setChildren(std::move(elements));
+            //std::vector<std::unique_ptr<Node> > elements = arrayElements();
+            (checked_cast<ArrayLiteral*>(head.get()))->setChildren(std::move(arrayElements()));
         }
     } else {
         throw ParseException("array literal", currentToken);
@@ -456,8 +456,9 @@ std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
  */
 std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> leftChild) {
     std::unique_ptr<Node> head;
-
-    if (head = tryProductionMatch(std::bind(&ASTParser::ternaryOperationAction, leftChild))) {
+    std::function<std::unique_ptr<Node>()> fn =
+        [this, &leftChild]() { return ternaryOperationAction(std::move(leftChild));  };
+    if ((head = tryProductionMatch(fn))) {
         checked_cast<TernaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
     } else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
         head.reset(new BinaryOperator(TokenType::kLogicalAnd));
