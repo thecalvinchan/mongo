@@ -12,6 +12,7 @@ public:
     //getValue and getChildren are only used for testing
     virtual std::vector<Node*>* getChildren() = 0;
     Value* getValue() const;
+    std::string getName() const;
     TokenType getType();
 private:
     TokenType type;
