@@ -1,3 +1,5 @@
+#pragma once
+
 #include "mongo/scripting/tinyjs/nonterminal_node.h"
 
 namespace mongo {
@@ -7,7 +9,7 @@ class BinaryOperator : public NonTerminalNode {
 public:
     BinaryOperator(TokenType type);
     ~BinaryOperator();
-    std::vector<Node* >* getChildren();
+    std::vector<Node*>* getChildren();
     Node* getLeftChild();
     Node* getRightChild();
     void setLeftChild(std::unique_ptr<Node>);

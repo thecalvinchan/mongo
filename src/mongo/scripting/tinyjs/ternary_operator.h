@@ -1,3 +1,5 @@
+#pragma once
+
 #include "mongo/scripting/tinyjs/nonterminal_node.h"
 
 namespace mongo {

@@ -48,7 +48,7 @@ ASTParser::~ASTParser() {
 }
 
 std::string ASTParser::traverse() {
-    return ((this->head).get())->getValue();
+    return ((this->head).get())->getValue()->getString();
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {
@@ -66,7 +66,7 @@ void ASTParser::nexttoken(void) {
  * If the current token matches the input, it calls nexttoken() and returns true. Otherwise, it
  * returns false.
  */
-Boolean matchImplicitTerminal(TokenType t) {
+bool ASTParser::matchImplicitTerminal(TokenType t) {
     if (currentToken.type == t) {
         if (currentPosition < (int)tokens.size()) {
             nexttoken();
@@ -100,30 +100,32 @@ std::unique_ptr<Node> ASTParser::matchNodeTerminal(TokenType t) {
  * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
  * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier. It creates and returns a corresponding TerminalNode.
  */
-std::unique_ptr<TerminalNode> makeTerminalNode(Token token) {
+std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
+    std::unique_ptr<TerminalNode> node;
     switch (token.type) {
-        case kNullLiteral:
-            std_unique_ptr<TerminalNode> node(new TerminalNode(BSONNULL));
+        case TokenType::kNullLiteral:
+            node.reset((new TerminalNode(BSONNULL)));
             break;
-        case kUndefinedLiteral:
-            std_unique_ptr<TerminalNode> node(new TerminalNode(BSONUndefined));
+        case TokenType::kUndefinedLiteral:
+            node.reset((new TerminalNode(BSONUndefined)));
             break;
-        case kIntegerLiteral:
-            std_unique_ptr<TerminalNode> node(new TerminalNode(std::stoi(token.value)));
+        case TokenType::kIntegerLiteral:
+            node.reset((new TerminalNode(std::stoi(token.value.rawData()))));
             break;
-        case kFloatLiteral:
-            std_unique_ptr<TerminalNode> node(new TerminalNode(std::stof(token.value)));
+        case TokenType::kFloatLiteral:
+            node.reset((new TerminalNode(std::stof(token.value.rawData()))));
             break;
-        case kBooleanLiteral:
+        case TokenType::kBooleanLiteral: {
             bool boolValue = (token.value == "true");
-            std_unique_ptr<TerminalNode> node(new TerminalNode(boolValue));
+            node.reset((new TerminalNode(boolValue))); 
+        }
             break;
-        case kStringLiteral:
-            std_unique_ptr<TerminalNode> node(new TerminalNode(token.value));
+        case TokenType::kStringLiteral:
+            node.reset((new TerminalNode(token.value.rawData())));
             break;
         break;
-        case kIdentifier:
-            std_unique_ptr<TerminalNode> node(new TerminalNode(token.value, true));
+        case TokenType::kIdentifier:
+            node.reset((new TerminalNode(token.value.rawData(), true)));
             break;
         default:
             return NULL;
@@ -184,7 +186,7 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
  */
 std::unique_ptr<Node> ASTParser::variableAction() {
     std::unique_ptr<Node> leftChild;
-    leftChild = std::move(matchNodeTerminal(TokenType::kIdentifier);
+    leftChild = std::move(matchNodeTerminal(TokenType::kIdentifier));
     return std::move(objectAccessorAction(std::move(leftChild)));
 }
 
@@ -194,15 +196,15 @@ std::unique_ptr<Node> ASTParser::variableAction() {
  *      | '[' arithmeticExpression ']' objectAccessor
  *      | OPTIONAL
  */
-std::unique_ptr<Node> ASTParser::objectAccessorAction() {
+std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> leftChild) {
     std::unique_ptr<Node> head;
 
     if ((matchImplicitTerminal(TokenType::kPeriod))) {
-        head = make_unique<BinaryOperator>(kPeriod); 
+        head.reset(new BinaryOperator(kPeriod)); 
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(matchNodeTerminal(TokenType::kIdentifier)));
     } else if ((tokenMatch(TokenType::kOpenSquareBracket))) {
-        head = make_unique<BinaryOperator>(TokenType::kOpenSquareBracket));
+        head.reset(new BinaryOperator(TokenType::kOpenSquareBracket));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(std::bind(&ASTParser::arithmeticExpressionAction, this)));
         expectImplicitTerminal(TokenType::kCloseSquareBracket);
@@ -309,9 +311,9 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
     std::unique_ptr<Node> head;
 
     if ((tokenMatch(TokenType::kMultiply))) {
-        head = make_unique<BinaryOperator>(TokenType::kMultiply); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
+        head.reset(new BinaryOperator(TokenType::kMultiply)); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
     } else if ((tokenMatch(TokenType::kDivide))) {
-        head = make_unique<BinaryOperator>(TokenType::kDivide));
+        head.reset(new BinaryOperator(TokenType::kDivide));
     } else {
         // multiplicativeOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -342,9 +344,9 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node>
     std::unique_ptr<Node> head;
 
     if ((tokenMatch(TokenType::kAdd))) {
-        head = make_unique<BinaryOperator>(TokenType::kAdd); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
+        head.reset(new BinaryOperator(TokenType::kAdd)); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
     } else if ((tokenMatch(TokenType::kSubtract))) {
-        head = make_unique<BinaryOperator>(TokenType::kSubtract));
+       head.reset(new BinaryOperator>(TokenType::kSubtract));
     } else {
         // arithmeticOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -391,17 +393,17 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
     std::unique_ptr<Node> head;
 
     if ((tokenMatch(TokenType::kTripleEquals))) {
-        head = make_unique<BinaryOperator>(TokenType::kTripleEquals); 
+        head.reset(new BinaryOperator(TokenType::kTripleEquals)); 
     } else if ((tokenMatch(TokenType::kDoubleEquals))) {
-        head = make_unique<BinaryOperator>(TokenType::kDoubleEquals));
+        head.reset(new BinaryOperator(TokenType::kDoubleEquals));
     } else if ((tokenMatch(TokenType::kGreaterThan))) {
-        head = make_unique<BinaryOperator>(TokenType::kGreaterThan));
+        head.reset(new BinaryOperator(TokenType::kGreaterThan));
     } else if ((tokenMatch(TokenType::kGreaterThanEquals))) {
-        head = make_unique<BinaryOperator>(TokenType::kGreaterThanEquals));
+        head.reset(new BinaryOperator(TokenType::kGreaterThanEquals));
     } else if ((tokenMatch(TokenType::kLessThan))) {
-        head = make_unique<BinaryOperator>(TokenType::kLessThan));
+        head.reset(new BinaryOperator(TokenType::kLessThan));
     } else if ((tokenMatch(TokenType::kLessThanEquals))) {
-        head = make_unique<BinaryOperator>(TokenType::kLessThanEquals));
+        head.reset(new BinaryOperator(TokenType::kLessThanEquals));
     } else {
         // relationalOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -434,11 +436,11 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
     if (head = tryProductionMatch(std::bind(&ASTParser::ternaryOperationAction, this))) {
         head->setLeftChild(leftChild);
     } else if ((tokenMatch(TokenType::kLogicalAnd))) {
-        head = make_unique<BinaryOperator>(TokenType::kLogicalAnd);
+        head.reset(new BinaryOperator(TokenType::kLogicalAnd));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(booleanExpressionAction())); 
     } else if ((tokenMatch(TokenType::kLogicalOr))) {
-        head = make_unique<BinaryOperator>(TokenType::kLogicalOr));
+        head.reset(new BinaryOperator(TokenType::kLogicalOr));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(booleanExpressionAction())); 
     } else {

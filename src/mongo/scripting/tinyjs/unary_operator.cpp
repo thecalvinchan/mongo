@@ -7,7 +7,7 @@ UnaryOperator::UnaryOperator(TokenType type) : NonTerminalNode(type) {
 }
 
 std::vector<Node*>* getChildren() {
-    std::vector<std::unique_ptr<Node> > children;
+    std::vector<Node*> children;
     children.push_back(child.get());
     return &children;
 }

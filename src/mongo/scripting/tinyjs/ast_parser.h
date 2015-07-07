@@ -30,8 +30,12 @@
 
 #include <vector>
 
+#include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/node.h"
+#include "mongo/scripting/tinyjs/terminal_node.h"
+#include "mongo/scripting/tinyjs/ternary_operator.h"
 #include "mongo/scripting/tinyjs/parse_exception.h"
+#include "mongo/scripting/tinyjs/unary_operator.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -48,15 +52,16 @@ private:
     void nexttoken(void);
     void error(const char msg[]);
 
-    Boolean matchImplicitTerminal(TokenType t);
-    std::unique_ptr<Node> ASTParser::matchNodeTerminal(TokenType t);
-    std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_ptr<Node>(void)> action)
-    void ASTParser::expectImplicitTerminal(TokenType t);
+    bool matchImplicitTerminal(TokenType t);
+    std::unique_ptr<Node> matchNodeTerminal(TokenType t);
+    std::unique_ptr<TerminalNode> makeTerminalNode(Token token);
+    std::unique_ptr<Node> tryProductionMatch(std::function<std::unique_ptr<Node>(void)> action);
+    void expectImplicitTerminal(TokenType t);
 
     std::unique_ptr<Node> clauseAction();
     std::unique_ptr<Node> variableAction();
     std::unique_ptr<Node> objectAction();
-    std::unique_ptr<Node> objectAccessorAction();
+    std::unique_ptr<Node> objectAccessorAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> termAction();
     std::unique_ptr<Node> arrayElementAction();
     std::unique_ptr<Node> arrayLiteralAction();
@@ -64,18 +69,16 @@ private:
     std::unique_ptr<Node> arrayIndexedAction();
     std::unique_ptr<Node> factorAction();
     std::unique_ptr<Node> multiplicativeExpressionAction();
-    std::unique_ptr<Node> multiplicativeOperationAction();
+    std::unique_ptr<Node> multiplicativeOperationAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> arithmeticExpressionAction();
-    std::unique_ptr<Node> arithmeticOperationAction();
+    std::unique_ptr<Node> arithmeticOperationAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> booleanFactorAction();
     std::unique_ptr<Node> relationalExpressionAction();
-    std::unique_ptr<Node> relationalOperationAction();
+    std::unique_ptr<Node> relationalOperationAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> booleanExpressionAction();
-    std::unique_ptr<Node> booleanOperationAction();
-    std::unique_ptr<Node> ternaryOperationAction();
+    std::unique_ptr<Node> booleanOperationAction(std::unique_ptr<Node> leftChild);
+    std::unique_ptr<Node> ternaryOperationAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> returnStatementAction();
-    std::unique_ptr<Node> logicalOperationAction();
-    std::unique_ptr<Node> comparisonOperationAction();
 
     int currentPosition;
     Token currentToken;

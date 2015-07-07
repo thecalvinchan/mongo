@@ -1,3 +1,5 @@
+#pragma once
+
 #include "mongo/scripting/tinyjs/nonterminal_node.h"
 #include <vector>
 
@@ -8,7 +10,7 @@ class UnaryOperator : public NonTerminalNode {
 public:
     UnaryOperator(TokenType type);
     ~UnaryOperator();
-    std::vector<std::unique_ptr<Node> >* getChildren();
+    std::vector<Node*>* getChildren();
     Node* getChild();
     void setChild(std::unique_ptr<Node> node);
 private:
