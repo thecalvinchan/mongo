@@ -31,6 +31,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <queue>
 
 #include "mongo/scripting/tinyjs/ast_parser.h"
 
@@ -48,7 +49,16 @@ ASTParser::~ASTParser() {
 }
 
 std::string ASTParser::traverse() {
-    return ((this->head).get())->getValue()->getString();
+    return ((this->head).get())->getValue();
+    std::queue<Node *> nodes;
+    nodes.push_back(head);
+    while (!nodes.empty()) {
+        Node* node = nodes.pop_front();
+        std::vector<Node *> children = node->getChildren();
+        for (int i = 0; i<children.size(); i++) {
+            nodes.push_back(children[i]);
+        }
+    }
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {
