@@ -31,8 +31,7 @@
 #include <vector>
 
 #include "mongo/scripting/tinyjs/node.h"
-#include "mongo/scripting/tinyjs/clause.h"
- #include "mongo/scripting/tinyjs/parse_exception.h"
+#include "mongo/scripting/tinyjs/parse_exception.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -49,9 +48,10 @@ private:
     void nexttoken(void);
     void error(const char msg[]);
 
-    std::unique_ptr<Node> acceptIf(TokenType t);
-    std::unique_ptr<Node> acceptIf(std::function<std::unique_ptr<Node>(void)> action);
-    std::unique_ptr<Node> expect(TokenType t);
+    Boolean matchImplicitTerminal(TokenType t);
+    std::unique_ptr<Node> ASTParser::matchNodeTerminal(TokenType t);
+    std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_ptr<Node>(void)> action)
+    void ASTParser::expectImplicitTerminal(TokenType t);
 
     std::unique_ptr<Node> clauseAction();
     std::unique_ptr<Node> variableAction();
