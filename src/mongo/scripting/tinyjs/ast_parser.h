@@ -36,6 +36,7 @@
 #include "mongo/scripting/tinyjs/ternary_operator.h"
 #include "mongo/scripting/tinyjs/parse_exception.h"
 #include "mongo/scripting/tinyjs/unary_operator.h"
+#include "mongo/scripting/tinyjs/array_literal.h"
 
 namespace mongo {
 namespace tinyjs {

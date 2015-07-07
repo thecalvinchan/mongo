@@ -10,6 +10,10 @@ Value* const NonTerminalNode::getValue() {
     return NULL;
 }
 
+std::string const NonTerminalNode::getName() {
+    return type.value;
+}
+
 TokenType NonTerminalNode::getType() {
     return type;
 }
