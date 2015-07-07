@@ -27,6 +27,7 @@
  */
 
 #include "mongo/platform/basic.h"
+#include "mongo/base/checked_cast.h"
 
 #include <iostream>
 #include <memory>
@@ -50,13 +51,14 @@ ASTParser::~ASTParser() {
 
 std::string ASTParser::traverse() {
     std::queue<Node *> nodes;
-    nodes.push_back(head);
+    nodes.push(head.get());
     while (!nodes.empty()) {
-        Node* node = nodes.pop_front();
-        std::vector<Node *> children = node->getChildren();
-        for (int i = 0; i<children.size(); i++) {
-            nodes.push_back(children[i]);
+        Node* node = nodes.front();
+        std::vector<Node *> children = *(node->getChildren());
+        for (size_t i = 0; i<children.size(); i++) {
+            nodes.push(children[i]);
         }
+        nodes.pop();
     }
     return ""; //TODO
 }
@@ -207,23 +209,22 @@ std::unique_ptr<Node> ASTParser::variableAction() {
  *      | OPTIONAL
  */
 std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> leftChild) {
-    std::unique_ptr<BinaryOperator> head;
 
     if ((matchImplicitTerminal(TokenType::kPeriod))) {
-        head.reset(new BinaryOperator(TokenType::kPeriod)); 
+        std::unique_ptr<BinaryOperator> head (new BinaryOperator(TokenType::kPeriod));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(matchNodeTerminal(TokenType::kIdentifier)));
     } else if ((matchImplicitTerminal(TokenType::kOpenSquareBracket))) {
-        head.reset(new BinaryOperator(TokenType::kOpenSquareBracket));
+        std::unique_ptr<BinaryOperator> head (new BinaryOperator(TokenType::kOpenSquareBracket));
         head->setLeftChild(std::move(leftChild));
-        head->setRightChild(std::move(std::bind(&ASTParser::arithmeticExpressionAction, this)));
+        head->setRightChild(std::move(arithmeticExpressionAction()));
         expectImplicitTerminal(TokenType::kCloseSquareBracket);
     } else {
         // multiplicativeOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
     }
 
-    return std::move(objectAccessorAction(head));
+    return objectAccessorAction(std::move(head));
 }
 
 /**
@@ -318,7 +319,7 @@ std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
  *      | OPTIONAL
  */
 std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<Node> leftChild) {
-    std::unique_ptr<Node> head;
+    std::unique_ptr<BinaryOperator> head;
 
     if ((matchImplicitTerminal(TokenType::kMultiply))) {
         head.reset(new BinaryOperator(TokenType::kMultiply)); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
@@ -331,7 +332,7 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
 
     head->setLeftChild(std::move(leftChild));
     head->setRightChild(std::move(factorAction()));
-    return std::move(multiplicativeOperationAction(head));
+    return multiplicativeOperationAction(std::move(head));
 
 }
 
@@ -351,12 +352,12 @@ std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
  *      | OPTIONAL
  */
 std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node> leftChild) {
-    std::unique_ptr<Node> head;
+    std::unique_ptr<BinaryOperator> head;
 
     if ((matchImplicitTerminal(TokenType::kAdd))) {
         head.reset(new BinaryOperator(TokenType::kAdd)); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
     } else if ((matchImplicitTerminal(TokenType::kSubtract))) {
-       head.reset(new BinaryOperator>(TokenType::kSubtract));
+       head.reset(new BinaryOperator(TokenType::kSubtract));
     } else {
         // arithmeticOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -444,11 +445,11 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
     std::unique_ptr<Node> head;
 
     if (head = tryProductionMatch(std::bind(&ASTParser::ternaryOperationAction, this))) {
-        head->setLeftChild(leftChild);
+        (checked_cast<std::unique_ptr<TernaryOperator> >(head) )->setLeftChild(std::move(leftChild));
     } else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
         head.reset(new BinaryOperator(TokenType::kLogicalAnd));
-        head->setLeftChild(std::move(leftChild));
-        head->setRightChild(std::move(booleanExpressionAction())); 
+        (checked_cast<std::unique_ptr<TernaryOperator> >(head) )->setLeftChild(std::move(leftChild));
+        (checked_cast<std::unique_ptr<TernaryOperator> >(head) )->setRightChild(std::move(booleanExpressionAction()));
     } else if ((matchImplicitTerminal(TokenType::kLogicalOr))) {
         head.reset(new BinaryOperator(TokenType::kLogicalOr));
         head->setLeftChild(std::move(leftChild));
@@ -458,14 +459,14 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
         return leftChild;
     }
 
-    return std::move(booleanOperationAction(head));
+    return booleanOperationAction(std::move(head));
 }
 
 /**
  * ternaryOperation: 
  *        '?' booleanExpression ':' booleanExpression
  */
-std::unique_ptr<Node> ASTParser::ternaryOperationAction() { //TODO: should this be structured more like returnStatementAction?
+std::unique_ptr<Node> ASTParser::ternaryOperationAction(std::unique_ptr<Node> leftChild) { //TODO: should this be structured more like returnStatementAction?
     std::unique_ptr<Node> head(new TernaryOperator(TokenType::kQuestionMark));
     expectImplicitTerminal(TokenType::kQuestionMark);
     head->setMiddleChild(std::move(booleanExpressionAction()));

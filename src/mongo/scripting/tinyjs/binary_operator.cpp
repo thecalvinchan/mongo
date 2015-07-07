@@ -6,7 +6,7 @@ namespace tinyjs {
 BinaryOperator::BinaryOperator(TokenType type) : NonTerminalNode(type) {
 }
 
-std::vector<Node*>* getChildren() {
+std::vector<Node*>* const BinaryOperator::getChildren() {
     std::vector<Node* > children;
     children.push_back(leftChild.get());
     children.push_back(rightChild.get());

@@ -10,7 +10,7 @@ public:
     NonTerminalNode(TokenType type);
     virtual ~NonTerminalNode() = 0;
     //getValue and getChildren are only used for testing
-    virtual std::vector<Node*>* getChildren() = 0;
+    virtual std::vector<Node*>* getChildren() const = 0;
     Value* getValue() const;
     TokenType getType();
 private:

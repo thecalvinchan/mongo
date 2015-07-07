@@ -6,13 +6,13 @@ namespace tinyjs {
 UnaryOperator::UnaryOperator(TokenType type) : NonTerminalNode(type) {
 }
 
-std::vector<Node*>* getChildren() {
+std::vector<Node*>* const UnaryOperator::getChildren() {
     std::vector<Node*> children;
     children.push_back(child.get());
     return &children;
 }
 
-Node* getChild() {
+Node* UnaryOperator::getChild() {
     return child.get();
 }
 

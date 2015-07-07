@@ -38,7 +38,8 @@ class Node {
 public:
     Node();
     virtual ~Node() = 0;
-    virtual Value* getValue() const;
+    virtual Value* getValue() const = 0;
+    virtual std::vector<Node* >* getChildren() const = 0;
     virtual std::string getName() const = 0;
 };
 
