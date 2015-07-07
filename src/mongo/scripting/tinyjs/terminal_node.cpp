@@ -4,8 +4,26 @@
 namespace mongo {
 namespace tinyjs {
 
-TerminalNode::TerminalNode(Value val) {
-    value = val;
+TerminalNode(const NullLabeler&) : isIdentifier(false) {
+    value = Value(BSONNULL);
+}
+TerminalNode(const UndefinedLabeler&) : isIdentifier(false) {
+    value = Value(BSONUndefined);
+}
+TerminalNode(const int value&) : isIdentifier(false) {
+    value = Value(value);
+}
+TerminalNode(const float value&) : isIdentifier(false) {
+    value = Value(value);
+}
+TerminalNode(const bool value&) : isIdentifier(false) {
+    value = Value(value);
+}
+TerminalNode(const std::string value&) : isIdentifier(false) {
+    value = Value(value);
+}
+TerminalNode(const std::string value&, bool identifier) : isIdentifier(identifier) {
+    value = Value(value);
 }
 
 std::vector<std::unique_ptr<Node> >* TerminalNode::getChildren() {
@@ -17,7 +35,15 @@ Value* const TerminalNode::getValue() {
 }
 
 std::string const TerminalNode::getName() {
-    typeName(value.getType());
+    if (isIdentifier()) {
+        return "identifier";
+    } else {
+        return typeName(value.getType());
+    }
+}
+
+bool const TerminalNode::isIdentifier() {
+    return isIdentifier;
 }
 
 }

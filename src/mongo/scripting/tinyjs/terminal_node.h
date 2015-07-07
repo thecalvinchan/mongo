@@ -5,13 +5,21 @@ namespace tinyjs {
 
 class TerminalNode : public Node {
 public:
-    TerminalNode(Value val);
+    TerminalNode(const NullLabeler&);
+    TerminalNode(const UndefinedLabeler&);
+    TerminalNode(const int value&);
+    TerminalNode(const float value&);
+    TerminalNode(const bool value&);
+    TerminalNode(const std::string value&);
+    TerminalNode(const std::string value&, bool identifier);
     ~TerminalNode();
     std::vector<std::unique_ptr<Node> >* getChildren();
     Value* getValue() const;
     std::string getName() const;
+    bool isIdentifier() const;
 private:
     Value value;
+    bool isIdentifier;
 };
 
 }

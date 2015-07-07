@@ -100,8 +100,36 @@ std::unique_ptr<Node> ASTParser::matchNode(TokenType t) {
  * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
  * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier. It creates and returns a corresponding TerminalNode.
  */
-std::unique_ptr<TerminalNode> makeTerminalNode(TokenType type) {
-    //TODO
+std::unique_ptr<TerminalNode> makeTerminalNode(Token token) {
+    switch (token.type) {
+        case kNullLiteral:
+            std_unique_ptr<TerminalNode> node(new TerminalNode(BSONNULL));
+            break;
+        case kUndefinedLiteral:
+            std_unique_ptr<TerminalNode> node(new TerminalNode(BSONUndefined));
+            break;
+        case kIntegerLiteral:
+            std_unique_ptr<TerminalNode> node(new TerminalNode(std::stoi(token.value)));
+            break;
+        case kFloatLiteral:
+            std_unique_ptr<TerminalNode> node(new TerminalNode(std::stof(token.value)));
+            break;
+        case kBooleanLiteral:
+            bool boolValue = (token.value == "true");
+            std_unique_ptr<TerminalNode> node(new TerminalNode(boolValue));
+            break;
+        case kStringLiteral:
+            std_unique_ptr<TerminalNode> node(new TerminalNode(token.value));
+            break;
+        break;
+        case kIdentifier:
+            std_unique_ptr<TerminalNode> node(new TerminalNode(token.value, true));
+            break;
+        default:
+            return NULL;
+            break;
+    }
+    return node;
 }
 
 // Overloads acceptIf to search non-terminals
