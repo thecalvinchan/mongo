@@ -32,6 +32,7 @@
 
 #include "mongo/scripting/tinyjs/node.h"
 #include "mongo/scripting/tinyjs/clause.h"
+ #include "mongo/scripting/tinyjs/parse_exception.h"
 
 namespace mongo {
 namespace tinyjs {
