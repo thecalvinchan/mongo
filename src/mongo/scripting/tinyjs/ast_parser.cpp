@@ -31,7 +31,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
- #include <sstream>
+#include <sstream>
 #include <queue>
 
 #include "mongo/scripting/tinyjs/ast_parser.h"
@@ -244,6 +244,7 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> left
  *      | string
  *      | variable
  *      | boolean
+ *      | array
  */
 std::unique_ptr<Node> ASTParser::termAction() {
     std::unique_ptr<Node> head;
@@ -251,7 +252,8 @@ std::unique_ptr<Node> ASTParser::termAction() {
         (head = matchNodeTerminal(TokenType::kFloatLiteral)) ||
         (head = matchNodeTerminal(TokenType::kStringLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
-        (head = matchNodeTerminal(TokenType::kBooleanLiteral))) {
+        (head = matchNodeTerminal(TokenType::kBooleanLiteral)) || 
+        (head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
         ;
     } else {
         throw ParseException("term", currentToken);
@@ -265,15 +267,15 @@ std::unique_ptr<Node> ASTParser::termAction() {
  *      | [arrayElements]
  */
 std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
-    std::unique_ptr<Node> head(new ArrayLiteralNode());
+    std::unique_ptr<Node> head(new ArrayLiteral());
     std::unique_ptr<Node> child;
     if (matchImplicitTerminal(TokenType::kOpenSquareBracket)) {
         if (matchImplicitTerminal(TokenType::kCloseSquareBracket)) {
             ; // Case where array is empty
         } else {
             // At this point we can assume there is at least one element in the array
-            std::vector<std::unique_ptr<Node> > elements = arrayElements();
-            head.setChildren(elements);
+            std::vector<std::unique_ptr<Node> >* elements = arrayElements();
+            head.setChildren(*elements);
         }
     } else {
         throw ParseException("array literal", currentToken);
@@ -285,14 +287,14 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
  * arrayElements: 
  *        booleanExpression (',' booleanExpression)*
  */
-std::vector<std::unique_ptr<Node> > ASTParser::arrayElements() {
+std::vector<std::unique_ptr<Node> >* ASTParser::arrayElements() {
     std::vector<std::unique_ptr<Node> > elements;
-    elements.push_back(std::move(booleanExpressionAction()));
+    elements.push_back(booleanExpressionAction());
     while (!(matchImplicitTerminal(TokenType::kCloseSquareBracket))) {
         expectImplicitTerminal(TokenType::kComma);
-        elements.push_back(std::move(booleanExpressionAction()));
+        elements.push_back(booleanExpressionAction());
     }
-    return elements;
+    return &elements;
 }
 
 /**

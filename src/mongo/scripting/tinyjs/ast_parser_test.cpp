@@ -184,6 +184,18 @@ TEST(ParserTest, test9) {
     testParseTree(input, expected.str());
 }
 
+TEST(ParserTest, test10) {
+    string input = "return this.elements == ['cat', 'dog'];";
+
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "== " << std::endl;
+    expected << ". ] " << std::endl;
+    expected << "this elements 'cat' 'dog' " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
 
 TEST(ParserTest, ErrorBadOperator) {
     testSynaxError("return (x++1);");
