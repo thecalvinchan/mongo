@@ -1,4 +1,4 @@
-#include "mongo/scripting/tinyjs/ast_node.h"
+#include "mongo/scripting/tinyjs/node.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -9,7 +9,7 @@ public:
     virtual ~NonTerminalNode() = 0;
     //getValue and getChildren are only used for testing
     virtual std::vector<std::unique_ptr<Node> >* getChildren() = 0;
-    std::string getValue();
+    Value* getValue() const;
     TokenType getType();
 private:
     TokenType type;

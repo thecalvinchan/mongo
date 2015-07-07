@@ -28,28 +28,18 @@
 
 #pragma once
 
-#include <memory>
-#include <vector>
-#include <string>
-
 #include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/db/pipeline/value.h"
 
 namespace mongo {
 namespace tinyjs {
+
 class Node {
 public:
-    Node(std::string name);
+    Node();
     virtual ~Node() = 0;
-    Value *returnValue() const;
-    void addChild(std::unique_ptr<Node> child);
+    virtual Value* getValue() const;
     virtual std::string getName() = 0;
-    virtual std::string getValue() = 0;
-    std::vector<std::unique_ptr<Node> >* getChildren();
-protected:
-    std::string _name;
-private:
-    std::vector<std::unique_ptr<Node> > _children;
 };
 
 }

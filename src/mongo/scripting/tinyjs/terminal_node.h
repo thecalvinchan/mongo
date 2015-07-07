@@ -1,11 +1,17 @@
-#include "mongo/scripting/tinyjs/ast_node.h"
+#include "mongo/scripting/tinyjs/node.h"
 
 namespace mongo {
 namespace tinyjs {
 
 class TerminalNode : public Node {
-    TerminalNode();
-    virtual ~TerminalNode() = 0;
+public:
+    TerminalNode(Value val);
+    ~TerminalNode();
+    std::vector<std::unique_ptr<Node> >* getChildren();
+    Value* getValue() const;
+    std::string getName() const;
+private:
+    Value value;
 };
 
 }

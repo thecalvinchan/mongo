@@ -6,7 +6,7 @@ namespace tinyjs {
 NonTerminalNode::NonTerminalNode(TokenType type) : type(type) {
 }
 
-std::string NonTerminalNode::getValue() {
+Value* const NonTerminalNode::getValue() {
     std::string res = getName();
     std::vector<std::unique_ptr<Node> >* children = this->getChildren();
     for (std::vector<std::unique_ptr<Node> >::iterator it = children->begin();

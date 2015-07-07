@@ -33,37 +33,5 @@
 namespace mongo {
 namespace tinyjs {
 
-Node::Node(std::string name) {
-    _name = name;
-}
-
-Node::~Node() {
-    for (std::vector<std::unique_ptr<Node>>::iterator it = _children.begin();
-         it != _children.end(); it++) {
-        (*it).reset();
-    }
-    _children.clear();
-}
-
-void Node::addChild(std::unique_ptr<Node> child) {
-    if (child) {
-        _children.push_back(std::move(child));
-    }
-}
-
-std::string Node::getValue() {
-    std::string res = this->getName();
-    for (std::vector<std::unique_ptr<Node>>::const_iterator it = _children.begin();
-         it != _children.end(); it++) {
-        res += " ";
-        res += ((*it).get())->getValue();
-    }
-    return res;
-}
-
-std::vector<std::unique_ptr<Node> >* Node::getChildren() {
-    return &_children;
-}
-
 }
 }
