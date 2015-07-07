@@ -31,6 +31,7 @@
 #include <iostream>
 #include <cstdio>
 #include <string>
+#include <sstream>
 #include <vector>
 
 #include "mongo/unittest/unittest.h"
@@ -68,178 +69,119 @@ void testSynaxError(string input) {
 TEST(ParserTest, test1) {
     string input = "return this.a == 1;";
 
-    string expected =
-        "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
-        "RelationalExpressionNode "
-        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
-        "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
-        "SemiColon";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "== " << std::endl;
+    expected << ". 1 " << std::endl;
+    expected << "this a " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test2) {
     string input = "function() {return this.a === 1;}";
 
-    string expected =
-        "ClauseNode FunctionKeyword OpenParen CloseParen OpenCurlyBrace ReturnStatementNode "
-        "ReturnKeyword "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
-        "RelationalOperationNode ComparisonOperationNode TripleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
-        "SemiColon CloseCurlyBrace";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "=== " << std::endl;
+    expected << ". 1 " << std::endl;
+    expected << "this a " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test3) {
     string input = "function() {return this.a.b.c.d === 1;}";
 
-    string expected =
-        "ClauseNode FunctionKeyword OpenParen CloseParen OpenCurlyBrace ReturnStatementNode "
-        "ReturnKeyword "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
-        "ObjectAccessorNode Period Identifier ObjectAccessorNode Period Identifier "
-        "ObjectAccessorNode Period Identifier "
-        "RelationalOperationNode ComparisonOperationNode TripleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
-        "SemiColon CloseCurlyBrace";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "=== " << std::endl;
+    expected << ". 1 " << std::endl;
+    expected << ". d " << std::endl;
+    expected << ". c " << std::endl;
+    expected << ". b " << std::endl;
+    expected << "this a " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test4) {
     string input = "function() {return this['a'] === this.b;}";
 
-    string expected =
-        "ClauseNode FunctionKeyword OpenParen CloseParen OpenCurlyBrace ReturnStatementNode "
-        "ReturnKeyword "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode OpenSquareBracket "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode StringLiteral "
-        "CloseSquareBracket "
-        "RelationalOperationNode ComparisonOperationNode TripleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
-        "SemiColon CloseCurlyBrace";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "=== " << std::endl;
+    expected << "[ . " << std::endl;
+    expected << "this 'a' this b " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test5) {
     string input = "return this[3+3] == 90.1;";
 
-    string expected =
-        "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
-        "RelationalExpressionNode "
-        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode OpenSquareBracket "
-        "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral ArithmeticOperationNode "
-        "Add MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral CloseSquareBracket "
-        "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode FloatLiteral "
-        "SemiColon";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "== " << std::endl;
+    expected << "[ 90.1 " << std::endl;
+    expected << "this + " << std::endl;
+    expected << "3 3 " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test6) {
     string input = "return this.a[3].b[2].c == this.b[5].c.d;";
 
-    string expected =
-        "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
-        "RelationalExpressionNode "
-        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "TermNode VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
-        "ObjectAccessorNode OpenSquareBracket ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode "
-        "FactorNode TermNode IntegerLiteral CloseSquareBracket ObjectAccessorNode Period Identifier "
-        "ObjectAccessorNode OpenSquareBracket ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode "
-        "FactorNode TermNode IntegerLiteral CloseSquareBracket ObjectAccessorNode Period Identifier "
-        "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode VariableNode "
-        "ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier ObjectAccessorNode "
-        "OpenSquareBracket "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral "
-        "CloseSquareBracket ObjectAccessorNode Period Identifier ObjectAccessorNode Period "
-        "Identifier "
-        "SemiColon";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "== " << std::endl;
+    expected << ". . " << std::endl;
+    expected << "[ c . d " << std::endl;
+    expected << ". 2 [ c " << std::endl;
+    expected << "[ b . 5 " << std::endl;
+    expected << ". 3 this b " << std::endl;
+    expected << "this a " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test7) {
     string input = "return this.a == 3 ? (this.b > this.c): (this.d == this.e);";
 
-    string expected =
-        "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode "
-        "RelationalExpressionNode BooleanFactorNode ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode VariableNode ObjectNode ThisIdentifier "
-        "ObjectAccessorNode Period Identifier RelationalOperationNode ComparisonOperationNode "
-        "DoubleEquals BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode "
-        "FactorNode TermNode IntegerLiteral BooleanOperationNode TernaryOperationNode QuestionMark "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode OpenParen "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
-        "RelationalOperationNode ComparisonOperationNode GreaterThan BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier CloseParen "
-        "Colon BooleanExpressionNode RelationalExpressionNode BooleanFactorNode OpenParen "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier "
-        "RelationalOperationNode ComparisonOperationNode DoubleEquals BooleanFactorNode "
-        "ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "VariableNode ObjectNode ThisIdentifier ObjectAccessorNode Period Identifier CloseParen "
-        "SemiColon";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "? " << std::endl;
+    expected << "== > == " << std::endl;
+    expected << ". 3 . . . . " << std::endl;
+    expected << "this a this b this c this d this c " << std::endl;
 
-        testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test8) {
     string input = "function() {return x > (3 + 1);}";
 
-    string expected =
-        "ClauseNode FunctionKeyword OpenParen CloseParen OpenCurlyBrace ReturnStatementNode "
-        "ReturnKeyword "
-        "BooleanExpressionNode RelationalExpressionNode BooleanFactorNode "
-        "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode TermNode VariableNode Identifier "
-        "RelationalOperationNode ComparisonOperationNode GreaterThan BooleanFactorNode "
-        "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode OpenParen "
-        "ArithmeticExpressionNode "
-        "MultiplicativeExpressionNode FactorNode "
-        "TermNode IntegerLiteral ArithmeticOperationNode "
-        "Add "
-        "MultiplicativeExpressionNode FactorNode TermNode IntegerLiteral CloseParen SemiColon "
-        "CloseCurlyBrace";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "> " << std::endl;
+    expected << "x + " << std::endl;
+    expected << "3 1 " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test9) {
     string input = "return (3*4)/8 - y;";
 
-    string expected =
-        "ClauseNode ReturnStatementNode ReturnKeyword BooleanExpressionNode RelationalExpressionNode "
-        "BooleanFactorNode ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode "
-        "OpenParen ArithmeticExpressionNode MultiplicativeExpressionNode FactorNode TermNode "
-        "IntegerLiteral MultiplicativeOperationNode Multiply FactorNode TermNode IntegerLiteral CloseParen "
-        "MultiplicativeOperationNode Divide FactorNode TermNode IntegerLiteral ArithmeticOperationNode "
-        "Subtract MultiplicativeExpressionNode FactorNode TermNode VariableNode Identifier SemiColon";
+    std::stringstream expected;
+    expected << "return " << std::endl;
+    expected << "- " << std::endl;
+    expected << "/ y " << std::endl;
+    expected << "* 8 " << std::endl;
+    expected << "3 4 " << std::endl;
 
-    testParseTree(input, expected);
+    testParseTree(input, expected.str());
 }
 
 

@@ -31,6 +31,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+ #include <sstream>
 #include <queue>
 
 #include "mongo/scripting/tinyjs/ast_parser.h"
@@ -49,16 +50,26 @@ ASTParser::~ASTParser() {
 }
 
 std::string ASTParser::traverse() {
+    std::stringstream output;
     std::queue<Node *> nodes;
     nodes.push_back(head);
+    nodes.push_back(NULL); //marker that the level is finished; indicates an endl should be added
     while (!nodes.empty()) {
         Node* node = nodes.pop_front();
+        //case where level has ended, endl added
+        if (node == NULL) {
+            output << std::endl;
+            continue;
+        }
+        //otherwise, add the name of this node and add its children
+        output << node.getName() << " ";
         std::vector<Node *> children = node->getChildren();
         for (int i = 0; i<children.size(); i++) {
             nodes.push_back(children[i]);
         }
+        nodes.push_back(NULL); //marker that the level is finished; indicates an endl should be added
     }
-    return ""; //TODO
+    return output.str(); //TODO
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {
