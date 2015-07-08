@@ -27,7 +27,7 @@ TerminalNode::TerminalNode(const std::string &value, bool identifier) : _isIdent
 }
 
 std::vector<Node* > TerminalNode::getChildren() {
-    return NULL;
+    return std::vector<Node>();
 }
 
 Value* TerminalNode::getValue() const {
