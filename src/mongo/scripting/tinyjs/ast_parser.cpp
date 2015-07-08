@@ -52,6 +52,7 @@ ASTParser::~ASTParser() {
 
 std::string ASTParser::traverse() {
     std::stringstream output;
+    output << "TEST" << std::endl;
     std::queue<Node *> nodes;
     nodes.push(head.get());
     nodes.push(NULL); //marker that the level is finished; indicates an endl should be added
@@ -253,11 +254,11 @@ std::unique_ptr<Node> ASTParser::termAction() {
         (head = matchNodeTerminal(TokenType::kFloatLiteral)) ||
         (head = matchNodeTerminal(TokenType::kStringLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
-        (head = matchNodeTerminal(TokenType::kBooleanLiteral)) || 
-        (head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
+        (head = matchNodeTerminal(TokenType::kBooleanLiteral))) { //|| 
+        //(head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
         ;
     } else {
-        throw ParseException("term", currentToken);
+        throw ParseException(currentToken.value.rawData(), currentToken);
     }
     return head;
 }

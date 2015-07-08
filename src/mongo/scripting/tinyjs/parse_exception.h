@@ -51,7 +51,7 @@ public:
         errorMessage << "': ";
         errorMessage << _message;
         errorMessage << std::endl;
-        return errorMessage.str().c_str();
+        return _message.c_str();
     };
 
 private: 
