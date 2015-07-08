@@ -136,7 +136,7 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
             node.reset((new TerminalNode(std::stoi(token.value.rawData()))));
             break;
         case TokenType::kFloatLiteral:
-            node.reset((new TerminalNode(std::stof(token.value.rawData()))));
+            node.reset((new TerminalNode(std::stod(token.value.rawData()))));
             break;
         case TokenType::kBooleanLiteral: {
             bool boolValue = (token.value == "true");

@@ -10,7 +10,7 @@ public:
     TerminalNode(const NullLabeler &value);
     TerminalNode(const UndefinedLabeler &value);
     TerminalNode(const int &value);
-    TerminalNode(const float &value);
+    TerminalNode(const double &value);
     TerminalNode(const bool &value);
     TerminalNode(const std::string &value);
     TerminalNode(const std::string &value, bool identifier);

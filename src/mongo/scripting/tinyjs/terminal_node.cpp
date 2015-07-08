@@ -13,7 +13,7 @@ TerminalNode::TerminalNode(const UndefinedLabeler&) : _isIdentifierBool(false) {
 TerminalNode::TerminalNode(const int &value) : _isIdentifierBool(false) {
     _value = Value(value);
 }
-TerminalNode::TerminalNode(const float &value) : _isIdentifierBool(false) {
+TerminalNode::TerminalNode(const double &value) : _isIdentifierBool(false) {
     _value = Value(value);
 }
 TerminalNode::TerminalNode(const bool &value) : _isIdentifierBool(false) {
