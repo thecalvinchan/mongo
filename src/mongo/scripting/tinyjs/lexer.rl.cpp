@@ -259,6 +259,17 @@ void emitError(std::vector<int> *errorLocations, const char *ts, const char *eof
 }  // namespace
 
 /*
+ * This is the constructor for a Token. It takes in and stores the type, lexeme, start pointer, and
+ * end pointer of  the token.
+ */
+Token::Token(TokenType t, StringData v, const char* ts, const char* te) {
+    type = t;
+    value = v;
+    tokenStart = ts;
+    tokenEnd = te;
+};
+
+/*
  * This function uses the Ragel machine above to lex a line 
  * written in the tinyjs subset of Javascript.
  */
