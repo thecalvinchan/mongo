@@ -16,7 +16,7 @@ public:
     TokenType getType();
 private:
     TokenType _type;
-    static const std::map<TokenType, std::string> _values;
+    static std::map<TokenType, std::string> _values;
 };
 
 }

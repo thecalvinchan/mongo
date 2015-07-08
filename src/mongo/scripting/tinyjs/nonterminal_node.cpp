@@ -4,6 +4,8 @@ namespace mongo {
 namespace tinyjs {
 
 NonTerminalNode::NonTerminalNode(TokenType type) : _type(type) {
+    _values[TokenType::kPeriod] = ".";
+
     _values = {{TokenType::kPeriod, "."},
                {TokenType::kOpenSquareBracket, "["},
                {TokenType::kMultiply, "*"},
