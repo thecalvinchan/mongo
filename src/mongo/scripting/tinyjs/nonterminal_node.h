@@ -9,7 +9,7 @@ namespace tinyjs {
 class NonTerminalNode : public Node {
 public:
     NonTerminalNode(TokenType type);
-    virtual ~NonTerminalNode() = 0;
+    virtual ~NonTerminalNode() {};
     //getValue and getChildren are only used for testing
     virtual std::vector<Node*> getChildren() = 0;
     const Value* getValue() const;
@@ -18,7 +18,6 @@ public:
     const static std::string names[];
 private:
     TokenType _type;
-    static std::map<TokenType, std::string> _values;
 };
 
 }
