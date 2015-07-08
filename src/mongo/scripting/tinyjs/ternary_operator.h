@@ -8,7 +8,7 @@ namespace tinyjs {
 class TernaryOperator : public NonTerminalNode {
 public:
     TernaryOperator(TokenType type);
-    ~TernaryOperator();
+    ~TernaryOperator() {}
     std::vector<Node*> getChildren();
     Node* getLeftChild();
     Node* getMiddleChild();

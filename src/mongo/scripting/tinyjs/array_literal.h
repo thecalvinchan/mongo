@@ -9,7 +9,7 @@ namespace tinyjs {
 class ArrayLiteral : public NonTerminalNode {
 public:
     ArrayLiteral(TokenType type);
-    ~ArrayLiteral();
+    ~ArrayLiteral() {}
     std::vector<Node* > getChildren();
     void setChild(std::unique_ptr<Node>);
 private:

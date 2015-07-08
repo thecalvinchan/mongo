@@ -9,7 +9,7 @@ namespace tinyjs {
 class UnaryOperator : public NonTerminalNode {
 public:
     UnaryOperator(TokenType type);
-    ~UnaryOperator();
+    ~UnaryOperator() {}
     std::vector<Node*> getChildren();
     Node* getChild();
     void setChild(std::unique_ptr<Node> node);

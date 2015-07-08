@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mongo/scripting/tinyjs/node.h"
+#include "mongo/db/pipeline/value.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -14,7 +15,7 @@ public:
     TerminalNode(const bool &value);
     TerminalNode(const std::string &value);
     TerminalNode(const std::string &value, bool identifier);
-    ~TerminalNode();
+    ~TerminalNode() {}
     std::vector<Node* > getChildren();
     const Value* getValue() const;
     std::string getName() const;

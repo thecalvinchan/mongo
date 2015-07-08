@@ -12,7 +12,7 @@ env.Library(
         'nonterminal_node.cpp',
         'terminal_node.cpp',
         'ternary_operator.cpp',
-        'unary_operator.cpp'
+        'unary_operator.cpp',
     ],
     LIBDEPS=[
     ]

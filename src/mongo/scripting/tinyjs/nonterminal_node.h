@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mongo/scripting/tinyjs/node.h"
+#include "mongo/db/pipeline/value.h"
 
 namespace mongo {
 namespace tinyjs {
