@@ -14,6 +14,7 @@ public:
     Value* getValue() const;
     std::string getName() const;
     TokenType getType();
+    const static std::string names[];
 private:
     TokenType _type;
     static const std::map<TokenType, std::string> _values;
