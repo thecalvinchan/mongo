@@ -15,6 +15,7 @@ env.Library(
         'unary_operator.cpp',
     ],
     LIBDEPS=[
+        '$BUILD_DIR/mongo/db/pipeline/document_value'
     ]
 )
 
