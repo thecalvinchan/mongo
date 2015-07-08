@@ -4,26 +4,26 @@
 namespace mongo {
 namespace tinyjs {
 
-TerminalNode(const NullLabeler&) : isIdentifierBool(false) {
-    value = Value(BSONNULL);
+TerminalNode::TerminalNode(const NullLabeler&) : _isIdentifierBool(false) {
+    _value = Value(BSONNULL);
 }
-TerminalNode(const UndefinedLabeler&) : isIdentifierBool(false) {
-    value = Value(BSONUndefined);
+TerminalNode::TerminalNode(const UndefinedLabeler&) : _isIdentifierBool(false) {
+    _value = Value(BSONUndefined);
 }
-TerminalNode(const int value&) : isIdentifierBool(false) {
-    value = Value(value);
+TerminalNode::TerminalNode(const int &value) : _isIdentifierBool(false) {
+    _value = Value(value);
 }
-TerminalNode(const float value&) : isIdentifierBool(false) {
-    value = Value(value);
+TerminalNode::TerminalNode(const float &value) : _isIdentifierBool(false) {
+    _value = Value(value);
 }
-TerminalNode(const bool value&) : isIdentifierBool(false) {
-    value = Value(value);
+TerminalNode::TerminalNode(const bool &value) : _isIdentifierBool(false) {
+    _value = Value(value);
 }
-TerminalNode(const std::string value&) : isIdentifierBool(false) {
-    value = Value(value);
+TerminalNode::TerminalNode(const std::string &value) : _isIdentifierBool(false) {
+    _value = Value(value);
 }
-TerminalNode(const std::string value&, bool identifier) : isIdentifierBool(identifier) {
-    value = Value(value);
+TerminalNode::TerminalNode(const std::string &value, bool identifier) : _isIdentifierBool(identifier) {
+    _value = Value(value);
 }
 
 std::vector<Node* > TerminalNode::getChildren() {
@@ -31,19 +31,19 @@ std::vector<Node* > TerminalNode::getChildren() {
 }
 
 Value* TerminalNode::getValue() const {
-    return &value;
+    return &_value;
 }
 
 std::string TerminalNode::getName() const {
     if (isIdentifier()) {
         return "identifier";
     } else {
-        return typeName(value.getType());
+        return typeName(_value.getType());
     }
 }
 
 bool const TerminalNode::isIdentifier() {
-    return isIdentifierBool;
+    return _isIdentifierBool;
 }
 
 }

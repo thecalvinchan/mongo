@@ -20,8 +20,8 @@ public:
     std::string getName() const;
     bool isIdentifier() const;
 private:
-    Value value;
-    bool isIdentifierBool;
+    Value _value;
+    bool _isIdentifierBool;
 };
 
 }
