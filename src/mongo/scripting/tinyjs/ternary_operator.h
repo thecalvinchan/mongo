@@ -9,7 +9,7 @@ class TernaryOperator : public NonTerminalNode {
 public:
     TernaryOperator(TokenType type);
     ~TernaryOperator();
-    std::vector<Node* >* getChildren() const;
+    std::vector<Node*> getChildren();
     Node* getLeftChild();
     Node* getMiddleChild();
     Node* getRightChild();

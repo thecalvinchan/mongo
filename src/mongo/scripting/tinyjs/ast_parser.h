@@ -65,7 +65,7 @@ private:
     std::unique_ptr<Node> objectAccessorAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> termAction();
     std::unique_ptr<Node> arrayElementAction();
-    std::vector<std::unique_ptr<Node> > arrayElements();
+    //std::vector<std::unique_ptr<Node> > arrayElements();
     std::unique_ptr<Node> arrayLiteralAction();
     std::unique_ptr<Node> arrayTailAction();
     std::unique_ptr<Node> arrayIndexedAction();

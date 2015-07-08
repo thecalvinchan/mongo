@@ -26,15 +26,15 @@ TerminalNode(const std::string value&, bool identifier) : isIdentifierBool(ident
     value = Value(value);
 }
 
-std::vector<Node* >* const TerminalNode::getChildren() {
+std::vector<Node* > TerminalNode::getChildren() {
     return NULL;
 }
 
-Value* const TerminalNode::getValue() {
+Value* TerminalNode::getValue() const {
     return &value;
 }
 
-std::string const TerminalNode::getName() {
+std::string TerminalNode::getName() const {
     if (isIdentifier()) {
         return "identifier";
     } else {

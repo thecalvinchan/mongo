@@ -3,19 +3,35 @@
 namespace mongo {
 namespace tinyjs {
 
-NonTerminalNode::NonTerminalNode(TokenType type) : type(type) {
+NonTerminalNode::NonTerminalNode(TokenType type) : _type(type) {
+    _values = {{TokenType::kPeriod, "."},
+               {TokenType::kOpenSquareBracket, "["},
+               {TokenType::kMultiply, "*"},
+               {TokenType::kDivide, "/"},
+               {TokenType::kAdd, "+"},
+               {TokenType::kSubtract, "-"},
+               {TokenType::kTripleEquals, "==="},
+               {TokenType::kDoubleEquals, "=="},
+               {TokenType::kGreaterThan, ">"},
+               {TokenType::kGreaterThanEquals, ">="},
+               {TokenType::kLessThan, "<"},
+               {TokenType::kLessThanEquals, "<="},
+               {TokenType::kLogicalAnd, "&&"},
+               {TokenType::kLogicalOr, "||"},
+               {TokenType::kQuestionMark, "?"},
+               {TokenType::kReturnKeyword, "return"}};
 }
 
-Value* const NonTerminalNode::getValue() {
+Value* NonTerminalNode::getValue() const {
     return NULL;
 }
 
-std::string const NonTerminalNode::getName() {
-    return type.value;
+std::string NonTerminalNode::getName() const {
+    return _values[_type];
 }
 
 TokenType NonTerminalNode::getType() {
-    return type;
+    return _type;
 }
 
 }

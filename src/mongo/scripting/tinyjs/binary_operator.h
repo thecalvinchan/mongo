@@ -9,7 +9,7 @@ class BinaryOperator : public NonTerminalNode {
 public:
     BinaryOperator(TokenType type);
     ~BinaryOperator();
-    std::vector<Node*>* getChildren() const;
+    std::vector<Node*> getChildren();
     Node* getLeftChild();
     Node* getRightChild();
     void setLeftChild(std::unique_ptr<Node>);

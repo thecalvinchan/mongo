@@ -10,8 +10,8 @@ class ArrayLiteral : public NonTerminalNode {
 public:
     ArrayLiteral(TokenType type);
     ~ArrayLiteral();
-    std::vector<Node* >* getChildren() const;
-    void setChildren(std::vector<std::unique_ptr<Node> >);
+    std::vector<Node* > getChildren();
+    void setChild(std::unique_ptr<Node>);
 private:
     std::vector<std::unique_ptr<Node> > _children;
 };

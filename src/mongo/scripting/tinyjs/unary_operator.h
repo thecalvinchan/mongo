@@ -10,7 +10,7 @@ class UnaryOperator : public NonTerminalNode {
 public:
     UnaryOperator(TokenType type);
     ~UnaryOperator();
-    std::vector<Node*>* getChildren() const;
+    std::vector<Node*> getChildren();
     Node* getChild();
     void setChild(std::unique_ptr<Node> node);
 private:

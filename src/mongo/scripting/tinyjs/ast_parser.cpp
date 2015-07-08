@@ -64,7 +64,7 @@ std::string ASTParser::traverse() {
         }
         //otherwise, add the name of this node and add its children
         output << node->getName() << " ";
-        std::vector<Node *> children = *(node->getChildren());
+        std::vector<Node *> children = node->getChildren();
         for (size_t i = 0; i<children.size(); i++) {
             nodes.push(children[i]);
         }
@@ -276,7 +276,12 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
         } else {
             // At this point we can assume there is at least one element in the array
             //std::vector<std::unique_ptr<Node> > elements = arrayElements();
-            (checked_cast<ArrayLiteral*>(head.get()))->setChildren(std::move(arrayElements()));
+            //(checked_cast<ArrayLiteral*>(head.get()))->setChildren(std::move(arrayElements()));
+            (checked_cast<ArrayLiteral*>(head.get()))->setChild(booleanExpressionAction());
+            while (!(matchImplicitTerminal(TokenType::kCloseSquareBracket))) {
+                expectImplicitTerminal(TokenType::kComma);
+                (checked_cast<ArrayLiteral*>(head.get()))->setChild(booleanExpressionAction());
+            }
         }
     } else {
         throw ParseException("array literal", currentToken);
@@ -288,7 +293,7 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
  * arrayElements: 
  *        booleanExpression (',' booleanExpression)*
  */
-std::vector<std::unique_ptr<Node> > ASTParser::arrayElements() {
+/*std::vector<std::unique_ptr<Node> > ASTParser::arrayElements() {
     std::vector<std::unique_ptr<Node> > elements;
     elements.push_back(std::move(booleanExpressionAction()));
     while (!(matchImplicitTerminal(TokenType::kCloseSquareBracket))) {
@@ -296,7 +301,7 @@ std::vector<std::unique_ptr<Node> > ASTParser::arrayElements() {
         elements.push_back(std::move(booleanExpressionAction()));
     }
     return elements;
-}
+}*/
 
 /**
  * factor: 

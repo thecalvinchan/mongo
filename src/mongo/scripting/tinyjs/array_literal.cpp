@@ -7,12 +7,16 @@ namespace tinyjs {
 ArrayLiteral::ArrayLiteral(TokenType type) : NonTerminalNode(type) {
 }
 
-std::vector<Node *>* ArrayLiteral::getChildren() const {
-    return NULL;
+std::vector<Node *> ArrayLiteral::getChildren() {
+    std::vector<Node*> children;
+    for (std::size_t i = 0; i < _children.size(); i++) {
+        children.push_back(_children[i].get());
+    }
+    return children;
 }
 
-void ArrayLiteral::setChildren(std::vector<std::unique_ptr<Node> > children) {
-    _children = children;
+void ArrayLiteral::setChild(std::unique_ptr<Node> child) {
+    _children.push_back(std::move(child));
 }
 
 }

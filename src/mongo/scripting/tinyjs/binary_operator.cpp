@@ -6,11 +6,11 @@ namespace tinyjs {
 BinaryOperator::BinaryOperator(TokenType type) : NonTerminalNode(type) {
 }
 
-std::vector<Node*>* const BinaryOperator::getChildren() {
+std::vector<Node*> BinaryOperator::getChildren() {
     std::vector<Node* > children;
     children.push_back(leftChild.get());
     children.push_back(rightChild.get());
-    return &children;
+    return children;
 }
 
 Node* BinaryOperator::getLeftChild() {

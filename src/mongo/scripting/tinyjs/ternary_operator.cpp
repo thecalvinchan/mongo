@@ -6,12 +6,12 @@ namespace tinyjs {
 TernaryOperator::TernaryOperator(TokenType type) : NonTerminalNode(type) {
 }
 
-std::vector<Node*>* const TernaryOperator::getChildren() {
+std::vector<Node*> TernaryOperator::getChildren() {
     std::vector<Node* > children;
     children.push_back(leftChild.get());
     children.push_back(middleChild.get());
     children.push_back(rightChild.get());
-    return &children;
+    return children;
 }
 
 Node* TernaryOperator::getLeftChild() {
