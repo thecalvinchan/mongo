@@ -26,7 +26,7 @@ TerminalNode(const std::string value&, bool identifier) : isIdentifierBool(ident
     value = Value(value);
 }
 
-std::vector<std::unique_ptr<Node> >* TerminalNode::getChildren() {
+std::vector<Node* >* const TerminalNode::getChildren() {
     return NULL;
 }
 
