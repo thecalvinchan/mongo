@@ -6,7 +6,13 @@ env.Library(
     target='ast_parser',
     source=[
         'ast_parser.cpp',
-        'node.cpp'
+        'node.cpp',
+        'array_literal.cpp',
+        'binary_operator.cpp',
+        'nonterminal_node.cpp',
+        'terminal_node.cpp',
+        'ternary_operator.cpp',
+        'unary_operator.cpp'
     ],
     LIBDEPS=[
     ]
