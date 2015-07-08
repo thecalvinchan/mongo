@@ -164,7 +164,7 @@ std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_pt
     try {
         // std::unique_ptr<Node> subTreeHead = action();
         return action();
-    } catch (const std::invalid_argument &e) {
+    } catch (ParseException &e) {
         currentPosition = resetPosition;
         currentToken = tokens[currentPosition];
         return NULL;
@@ -211,7 +211,11 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
 std::unique_ptr<Node> ASTParser::variableAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(matchNodeTerminal(TokenType::kIdentifier));
-    return objectAccessorAction(std::move(leftChild));
+    std::cout << "just calculated variable left child" << (leftChild ? "not null" : "null") << std::endl;
+    std::cout << "in variable after left child; about to look at  in objAc " << currentToken.value << std::endl;
+    std::unique_ptr<Node> res =  objectAccessorAction(std::move(leftChild));
+    std::cout << "returning from variable res at " << (res ? "not null" : "null") << std::endl;
+    return res;
 }
 
 /**
@@ -221,22 +225,34 @@ std::unique_ptr<Node> ASTParser::variableAction() {
  *      | OPTIONAL
  */
 std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> leftChild) {
-
     if ((matchImplicitTerminal(TokenType::kPeriod))) {
-        std::unique_ptr<BinaryOperator> head (new BinaryOperator(TokenType::kPeriod));
+        std::unique_ptr<BinaryOperator> head(new BinaryOperator(TokenType::kPeriod));
         head->setLeftChild(std::move(leftChild));
+        std::cout << "objectAccessor right child " << currentToken.value << std::endl;
         head->setRightChild(std::move(matchNodeTerminal(TokenType::kIdentifier)));
+
+        std::cout << "recursive call to objAc head at " << (head ? "not null" : "null")
+                  << std::endl;
+        std::unique_ptr<Node> res = objectAccessorAction(std::move(head));
+        std::cout << "returning from objAc res at " << (res ? "not null" : "null") << std::endl;
+        return res;
+
     } else if ((matchImplicitTerminal(TokenType::kOpenSquareBracket))) {
-        std::unique_ptr<BinaryOperator> head (new BinaryOperator(TokenType::kOpenSquareBracket));
+        std::unique_ptr<BinaryOperator> head(new BinaryOperator(TokenType::kOpenSquareBracket));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(arithmeticExpressionAction()));
         expectImplicitTerminal(TokenType::kCloseSquareBracket);
+
+        std::cout << "recursive call to objAc head at " << (head ? "not null" : "null")
+                  << std::endl;
+        std::unique_ptr<Node> res = objectAccessorAction(std::move(head));
+        std::cout << "returning from objAc res at " << (res ? "not null" : "null") << std::endl;
+        return res;
     } else {
         // multiplicativeOperation is optional, so if it doesn't match, just return leftChild
+        std::cout << "returning left child; about to look at" << currentToken.value << std::endl;
         return leftChild;
     }
-
-    return objectAccessorAction(std::move(head));
 }
 
 /**
@@ -249,6 +265,7 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> left
  *      | array
  */
 std::unique_ptr<Node> ASTParser::termAction() {
+    std::cout << "in term, looking at" << currentToken.value << std::endl;
     std::unique_ptr<Node> head;
     if ((head = matchNodeTerminal(TokenType::kIntegerLiteral)) ||
         (head = matchNodeTerminal(TokenType::kFloatLiteral)) ||
@@ -256,10 +273,11 @@ std::unique_ptr<Node> ASTParser::termAction() {
         (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
         (head = matchNodeTerminal(TokenType::kBooleanLiteral))) { //|| 
         //(head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
-        ;
+        std::cout << "in the if block of term; about to look at" << currentToken.value << std::endl;
     } else {
         throw ParseException(currentToken.value.rawData(), currentToken);
     }
+    std::cout << "in term after left child; about to look at" << currentToken.value << std::endl;
     return head;
 }
 
@@ -312,7 +330,7 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
 std::unique_ptr<Node> ASTParser::factorAction() {
     std::unique_ptr<Node> head;
     if ((head = tryProductionMatch(std::bind(&ASTParser::termAction, this)))) {
-        ;
+        std::cout << "in factor after termAction; about to look at" << currentToken.value << std::endl;;
     } else if (matchImplicitTerminal(TokenType::kOpenParen)) {
         head = std::move(arithmeticExpressionAction());
         expectImplicitTerminal(TokenType::kCloseParen);
@@ -327,8 +345,10 @@ std::unique_ptr<Node> ASTParser::factorAction() {
  *        factor multiplicativeOperation
  */
 std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
+    std::cout << "in mult expression about to look at" << currentToken.value << std::endl;
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(factorAction());
+    std::cout << "in multiplicativeExpression after left child; about to look at" << currentToken.value << std::endl;
     return multiplicativeOperationAction(std::move(leftChild));
 }
 
@@ -362,7 +382,11 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
 std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(multiplicativeExpressionAction());
-    return arithmeticOperationAction(std::move(leftChild));
+    std::cout << "in arithmeticExpression after left child; about to look at" << currentToken.value << std::endl;
+    std::cout << "calling arithmeticOpAction leftChild at " << (leftChild ? "not null" : "null") << std::endl;
+    std::unique_ptr<Node> res = arithmeticOperationAction(std::move(leftChild));
+    std::cout << "returning from arithmeticExpressionAction res at " << (res ? "not null" : "null") << std::endl;
+    return res;
 }
 
 /**
@@ -395,12 +419,13 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node>
 std::unique_ptr<Node> ASTParser::booleanFactorAction() {
     std::unique_ptr<Node> head;
     if ((head = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
-        ;
+        std::cout << "boolean factor match to arithmeticExpression; about to look at " << currentToken.value << std::endl;;
     } else {
         expectImplicitTerminal(TokenType::kOpenParen);
         head = std::move(booleanExpressionAction());
         expectImplicitTerminal(TokenType::kCloseParen);
     }
+    std::cout << "returning from booleanFactor head at " << (head ? "not null" : "null") << std::endl;
     return head;
 }
 
@@ -409,9 +434,13 @@ std::unique_ptr<Node> ASTParser::booleanFactorAction() {
  *        booleanFactor relationalOperation
  */
 std::unique_ptr<Node> ASTParser::relationalExpressionAction() {
+    std::cout << "in relationalExpression; about to look at" << currentToken.value << std::endl;
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(booleanFactorAction());
-    return relationalOperationAction(std::move(leftChild));
+    std::cout << "in relationalExpression after left child; left child is " << (leftChild ? "not null" : "null") << std::endl;
+    std::unique_ptr<Node> res = relationalOperationAction(std::move(leftChild));
+    std::cout << "in relationalExpression about to return; res is " << (res ? "not null" : "null") << std::endl;
+    return res;
 }
 
 /**
@@ -451,7 +480,10 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
 std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(relationalExpressionAction());
-    return booleanOperationAction(std::move(leftChild));
+    std::cout << "in booleanExpression, relationalExpression has returned " << (leftChild ? "not null" : "null") << std::endl;
+    std::unique_ptr<Node> res = booleanOperationAction(std::move(leftChild));
+    std::cout << "returning from booleanExpression; res is " << (res ? "not null" : "null") << std::endl;
+    return res;
 }
 
 /**
@@ -461,12 +493,13 @@ std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
  *      | OPTIONAL
  */
 std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> leftChild) {
+    std::cout << "received left child in booleanOperation, left child is " << (leftChild ? "not null" : "null") << std::endl;
     std::unique_ptr<Node> head;
     std::function<std::unique_ptr<Node>()> fn =
         [this, &leftChild]() { return ternaryOperationAction(std::move(leftChild));  };
     if ((head = tryProductionMatch(fn))) {
         checked_cast<TernaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
-    } else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
+    } /*else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
         head.reset(new BinaryOperator(TokenType::kLogicalAnd));
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
         checked_cast<BinaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction()));
@@ -474,8 +507,9 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
         head.reset(new BinaryOperator(TokenType::kLogicalOr));
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
         checked_cast<BinaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction())); 
-    } else {
+    }*/ else {
         // booleanOperation is optional, so if it doesn't match, just return leftChild
+        std::cout << "returning left child from booleanOperation, left child is " << (leftChild ? "not null" : "null") << std::endl;
         return leftChild;
     }
 
@@ -487,11 +521,13 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
  *        '?' booleanExpression ':' booleanExpression
  */
 std::unique_ptr<Node> ASTParser::ternaryOperationAction(std::unique_ptr<Node> leftChild) { //TODO: should this be structured more like returnStatementAction?
+    std::cout << "received left child in ternaryOperationAction, left child is " << (leftChild ? "not null" : "null") << std::endl;
     std::unique_ptr<Node> head(new TernaryOperator(TokenType::kQuestionMark));
     expectImplicitTerminal(TokenType::kQuestionMark);
     checked_cast<TernaryOperator*>(head.get())->setMiddleChild(std::move(booleanExpressionAction()));
     expectImplicitTerminal(TokenType::kColon);
     checked_cast<TernaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction()));
+    std::cout << "returning in ter', left child is " << (leftChild ? "not null" : "null") << std::endl;
     return head;
 }
 
