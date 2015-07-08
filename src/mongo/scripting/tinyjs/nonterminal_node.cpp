@@ -5,7 +5,7 @@ namespace tinyjs {
 
 NonTerminalNode::NonTerminalNode(TokenType type) : _type(type) {}
 
-Value* NonTerminalNode::getValue() const {
+const Value* NonTerminalNode::getValue() const {
     return NULL;
 }
 

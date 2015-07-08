@@ -26,15 +26,15 @@ Node* TernaryOperator::getRightChild() {
     return rightChild.get();
 }
 
-void BinaryOperator::setLeftChild(std::unique_ptr<Node> node) {
+void TernaryOperator::setLeftChild(std::unique_ptr<Node> node) {
     leftChild = std::move(node);
 }
 
-void BinaryOperator::setMiddleChild(std::unique_ptr<Node> node) {
+void TernaryOperator::setMiddleChild(std::unique_ptr<Node> node) {
     middleChild = std::move(node);
 }
 
-void BinaryOperator::setRightChild(std::unique_ptr<Node> node) {
+void TernaryOperator::setRightChild(std::unique_ptr<Node> node) {
     rightChild = std::move(node);
 }
 

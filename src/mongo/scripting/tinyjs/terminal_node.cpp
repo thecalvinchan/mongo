@@ -4,33 +4,20 @@
 namespace mongo {
 namespace tinyjs {
 
-TerminalNode::TerminalNode(const NullLabeler&) : _isIdentifierBool(false) {
-    _value = Value(BSONNULL);
-}
-TerminalNode::TerminalNode(const UndefinedLabeler&) : _isIdentifierBool(false) {
-    _value = Value(BSONUndefined);
-}
-TerminalNode::TerminalNode(const int &value) : _isIdentifierBool(false) {
-    _value = Value(value);
-}
-TerminalNode::TerminalNode(const double &value) : _isIdentifierBool(false) {
-    _value = Value(value);
-}
-TerminalNode::TerminalNode(const bool &value) : _isIdentifierBool(false) {
-    _value = Value(value);
-}
-TerminalNode::TerminalNode(const std::string &value) : _isIdentifierBool(false) {
-    _value = Value(value);
-}
-TerminalNode::TerminalNode(const std::string &value, bool identifier) : _isIdentifierBool(identifier) {
-    _value = Value(value);
-}
+TerminalNode::TerminalNode(const NullLabeler&) :  _value(Value(BSONNULL)), _isIdentifierBool(false) {}
+TerminalNode::TerminalNode(const UndefinedLabeler&) : _value(Value(BSONUndefined)), _isIdentifierBool(false) {}
+TerminalNode::TerminalNode(const int &value) : _value(Value(value)), _isIdentifierBool(false) {}
+TerminalNode::TerminalNode(const double &value) : _value(Value(value)), _isIdentifierBool(false) {}
+TerminalNode::TerminalNode(const bool &value) : _value(Value(value)), _isIdentifierBool(false) {}
+TerminalNode::TerminalNode(const std::string &value) : _value(Value(value)), _isIdentifierBool(false) {}
+TerminalNode::TerminalNode(const std::string& value, bool identifier)
+    : _value(Value(value)), _isIdentifierBool(identifier) {}
 
 std::vector<Node* > TerminalNode::getChildren() {
-    return std::vector<Node>();
+    return std::vector<Node*>();
 }
 
-Value* TerminalNode::getValue() const {
+const Value* TerminalNode::getValue() const {
     return &_value;
 }
 
@@ -42,7 +29,7 @@ std::string TerminalNode::getName() const {
     }
 }
 
-bool const TerminalNode::isIdentifier() {
+bool TerminalNode::isIdentifier() const {
     return _isIdentifierBool;
 }
 

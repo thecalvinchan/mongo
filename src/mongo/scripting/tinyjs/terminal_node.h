@@ -16,7 +16,7 @@ public:
     TerminalNode(const std::string &value, bool identifier);
     ~TerminalNode();
     std::vector<Node* > getChildren();
-    Value* getValue() const;
+    const Value* getValue() const;
     std::string getName() const;
     bool isIdentifier() const;
 private:

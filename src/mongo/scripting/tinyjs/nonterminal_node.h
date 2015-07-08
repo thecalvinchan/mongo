@@ -11,7 +11,7 @@ public:
     virtual ~NonTerminalNode() = 0;
     //getValue and getChildren are only used for testing
     virtual std::vector<Node*> getChildren() = 0;
-    Value* getValue() const;
+    const Value* getValue() const;
     std::string getName() const;
     TokenType getType();
     const static std::string names[];
