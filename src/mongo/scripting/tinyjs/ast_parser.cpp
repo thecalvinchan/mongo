@@ -496,10 +496,10 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
     std::cout << "received left child in booleanOperation, left child is " << (leftChild ? "not null" : "null") << std::endl;
     std::unique_ptr<Node> head;
     std::function<std::unique_ptr<Node>()> fn =
-        [this, &leftChild]() { return ternaryOperationAction(std::move(leftChild));  };
+        [this, &leftChild]() { return ternaryOperationAction(leftChild.get());  };
     if ((head = tryProductionMatch(fn))) {
         checked_cast<TernaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
-    } /*else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
+    } else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
         head.reset(new BinaryOperator(TokenType::kLogicalAnd));
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
         checked_cast<BinaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction()));
@@ -507,7 +507,7 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
         head.reset(new BinaryOperator(TokenType::kLogicalOr));
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
         checked_cast<BinaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction())); 
-    }*/ else {
+    } else {
         // booleanOperation is optional, so if it doesn't match, just return leftChild
         std::cout << "returning left child from booleanOperation, left child is " << (leftChild ? "not null" : "null") << std::endl;
         return leftChild;
@@ -520,9 +520,11 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
  * ternaryOperation: 
  *        '?' booleanExpression ':' booleanExpression
  */
-std::unique_ptr<Node> ASTParser::ternaryOperationAction(std::unique_ptr<Node> leftChild) { //TODO: should this be structured more like returnStatementAction?
+std::unique_ptr<Node> ASTParser::ternaryOperationAction(Node* leftChild) { //TODO: should this be structured more like returnStatementAction?
     std::cout << "received left child in ternaryOperationAction, left child is " << (leftChild ? "not null" : "null") << std::endl;
     std::unique_ptr<Node> head(new TernaryOperator(TokenType::kQuestionMark));
+    std::unique_ptr<Node> leftChildUnique(leftChild);
+    checked_cast<TernaryOperator*>(head.get())->setLeftChild(std::move(leftChildUnique));
     expectImplicitTerminal(TokenType::kQuestionMark);
     checked_cast<TernaryOperator*>(head.get())->setMiddleChild(std::move(booleanExpressionAction()));
     expectImplicitTerminal(TokenType::kColon);
@@ -539,6 +541,7 @@ std::unique_ptr<Node> ASTParser::returnStatementAction() {
     std::unique_ptr<Node> head(new UnaryOperator(TokenType::kReturnKeyword));
     if (matchImplicitTerminal(TokenType::kReturnKeyword)) {
         checked_cast<UnaryOperator*>(head.get())->setChild(std::move(booleanExpressionAction()));
+        std::cout << "returned from booleanExpressionAction, head is " << (head ? "not null" : "null") << std::endl;
         expectImplicitTerminal(TokenType::kSemiColon);
     } else {
         throw ParseException("return statement", currentToken);
