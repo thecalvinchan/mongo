@@ -79,7 +79,7 @@ enum class TokenType {
 };
 
 /**
- * This struct contains the token type and lexeme for a given token.
+ * This struct contains the token type,lexeme, start pointer, and end pointer for a given token.
  */
 struct Token {
     TokenType type;

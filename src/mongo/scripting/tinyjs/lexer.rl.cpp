@@ -29,17 +29,18 @@
 #include "mongo/platform/basic.h"
 
 #include <iostream>
-#include <sstream>
 #include <cstdio>
 #include <string>
 #include <vector>
 
 #include "mongo/base/status_with.h"
 #include "mongo/base/string_data.h"
+#include "mongo/util/mongoutils/str.h"
 #include "mongo/scripting/tinyjs/lexer.h"
 
 namespace mongo {
 namespace tinyjs {
+
 namespace {
 
 /*
@@ -251,7 +252,7 @@ void emit(TokenType t, std::vector<Token> *tokenData, const char *ts, const char
  * This function inserts the location of an error, relative to the end of the input 
  * string, to the errorLocations vector.
  */
-void emitError(std::vector<int> *errorLocations, const char *ts, const char *eof) {
+void emitError(std::vector<std::size_t> *errorLocations, const char *ts, const char *eof) {
     int indexFromEnd = eof - ts;
     errorLocations->push_back(indexFromEnd);
 }
@@ -292,27 +293,24 @@ StatusWith<std::vector<Token>> lex(StringData input) {
     const char *eof = pe;
 
     std::vector<Token> tokenData;
-    std::vector<int> errorLocations;
+    std::vector<std::size_t> errorLocations;
 
     %%{
         write init;
         write exec;
     }%%
 
-        if (!errorLocations.empty()) {
+    if (!errorLocations.empty()) {
         int lastIndex = input.size();
         int errorIndex = lastIndex - errorLocations[0];
-        std::stringstream errorMessage;
-        errorMessage << "Could not parse input starting with character: " << input[errorIndex];
-        errorMessage << std::endl;
-        errorMessage << input;
-        errorMessage << std::endl;
-        errorMessage << std::string(errorIndex, ' ');
-        errorMessage << "^" << std::endl;
-        return StatusWith<std::vector<Token>>(ErrorCodes::FailedToParse, errorMessage.str());
+        return StatusWith<std::vector<Token>>(
+            ErrorCodes::FailedToParse,
+            str::stream() << "Could not parse input starting with character: " << input[errorIndex]
+                          << "\n" << input << "\n" << std::string(errorIndex, ' ') << "^"
+                          << "\n");
     }
 
-    return StatusWith<std::vector<Token>>(tokenData);
+    return tokenData;
 }
 
 }  // namespace tinyjs

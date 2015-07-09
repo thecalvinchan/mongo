@@ -46,11 +46,16 @@ ASTParser::ASTParser(std::vector<Token> tokenInput)
     parseTokens(tokens);
 }
 
+//TODO: linker error if we don't include destructor
 ASTParser::~ASTParser() {
     this->head.reset();
     this->tokens.clear();
 }
 
+/**
+ * This function walks the tree and returns a string of the node names separated by spaces in
+ * BFS-traversal order.
+ */
 std::string ASTParser::traverse() {
     str::stream output;
     std::queue<Node *> nodes;
@@ -164,6 +169,12 @@ std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_pt
     }
 }
 
+/**
+ * ExpectImplcitTerminal advances to the next token if the current token matches the input
+ * and throws an error otherwise. It only checks simple tokens that won't become nodes,
+ * because nodes are created by matchNodeTerminal or by calling an action. TODO why exactly don't we
+ * need an expect that returns a node?
+ */
 void ASTParser::expectImplicitTerminal(TokenType t) {
     if (!(matchImplicitTerminal(t))) {
         throw ParseException("expected different token", currentToken); //TODO better error message

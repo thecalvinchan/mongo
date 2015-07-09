@@ -10,7 +10,7 @@ const Value* NonTerminalNode::getValue() const {
 }
 
 StringData NonTerminalNode::getName() const {
-    return StringData(names[(int) _type]);
+    return StringData(names[(int)_type]);
 }
 
 TokenType NonTerminalNode::getType() {
