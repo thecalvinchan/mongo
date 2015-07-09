@@ -79,7 +79,7 @@ private:
     std::unique_ptr<Node> relationalOperationAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> booleanExpressionAction();
     std::unique_ptr<Node> booleanOperationAction(std::unique_ptr<Node> leftChild);
-    std::unique_ptr<Node> ternaryOperationAction(std::unique_ptr<Node> leftChild);
+    std::unique_ptr<Node> ternaryOperationAction(Node* leftChild);
     std::unique_ptr<Node> returnStatementAction();
 
     int currentPosition;
