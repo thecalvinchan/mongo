@@ -50,21 +50,18 @@ using std::string;
  */
 void testParseTree(string input, string expected) {
     std::vector<Token> tokenData = lex(input).getValue();
-    ASTParser* a = new ASTParser(tokenData);
-    std::cout << "finished building" << std::endl;
-    std::string res = a->traverse();
-    std::cout << res << std::endl;
-    ASSERT(res == expected);
-    delete a;
+    ASTParser a(std::move(tokenData));
+    std::string res = a.traverse();
+    ASSERT_EQ(res,expected);
 }
 
 /* 
  * This function takes in an input string, lexes it, and asserts 
  * that parsing it will result in a syntax error.
  */
-void testSynaxError(string input) {
+void testSyntaxError(string input) {
     std::vector<Token> tokenData = lex(input).getValue();
-    ASSERT_THROWS(new ASTParser(tokenData), std::exception);
+    ASSERT_THROWS(ASTParser(std::move(tokenData)), std::exception);
 }
 
 TEST(ParserTest, test1) {
@@ -197,29 +194,61 @@ TEST(ParserTest, test10) {
     testParseTree(input, expected.str());
 }
 
+TEST(ParserTest, test11) {
+    string input = "return true ? (1 > this.pets ? 'dog' : 'cat') : 'no pets';";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "? ";
+    expected << "true ? 'no pets' ";
+    expected << "> 'dog' 'cat' ";
+    expected << "1 . ";
+    expected << "this pets " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
+TEST(ParserTest, test12) {
+    string input = "return true ? 1 > this.pets ? 'dog' : 'cat' : 'no pets';";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "? ";
+    expected << "true ? 'no pets' ";
+    expected << "> 'dog' 'cat' ";
+    expected << "1 . ";
+    expected << "this pets " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
 
 TEST(ParserTest, ErrorBadOperator) {
-    testSynaxError("return (x++1);");
+    testSyntaxError("return (x++1);");
 }
 
 TEST(ParserTest, ErrorOperatorBeyondSubset) {
-    testSynaxError("return (x++);");
+    testSyntaxError("return (x++);");
 }
 
 TEST(ParserTest, ErrorNoReturn) {
-    testSynaxError("x > 1");
+    testSyntaxError("x > 1");
 }
 
 TEST(ParserTest, ErrorNoSemiColon) {
-    testSynaxError("return (x == 1)");
+    testSyntaxError("return (x == 1)");
+}
+
+TEST(ParserTest, ErrorNoOperator) {
+    testSyntaxError("return a b c");
 }
 
 TEST(ParserTest, ErrorTernaryTooShort) {
-    testSynaxError("return x ? 1 : ;");
+    testSyntaxError("return x ? 1 : ;");
 }
 
 TEST(ParserTest, ErrorFunctionArgumentsBeyondSubset) {
-    testSynaxError("function(a) {return (a == 1);}");
+    testSyntaxError("function(a) {return (a == 1);}");
 }
 
 }  // namespace tinyjs

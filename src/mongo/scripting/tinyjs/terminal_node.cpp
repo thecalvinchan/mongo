@@ -8,12 +8,8 @@ TerminalNode::TerminalNode(const NullLabeler&) :  _value(Value(BSONNULL)), _isId
 TerminalNode::TerminalNode(const UndefinedLabeler&) : _value(Value(BSONUndefined)), _isIdentifierBool(false) {}
 TerminalNode::TerminalNode(const int &value) : _value(Value(value)), _isIdentifierBool(false) {}
 TerminalNode::TerminalNode(const double &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const bool &value) : _value(Value(value)), _isIdentifierBool(false) {
-    std::cout << "boolean constructor " << std::endl;
-}
-TerminalNode::TerminalNode(const StringData &value) : _value(Value(value)), _isIdentifierBool(false) {
-    std::cout << "string constructor " << std::endl;
-}
+TerminalNode::TerminalNode(const bool &value) : _value(Value(value)), _isIdentifierBool(false) {}
+TerminalNode::TerminalNode(const StringData &value) : _value(Value(value)), _isIdentifierBool(false) {}
 TerminalNode::TerminalNode(const StringData &value, bool identifier)
     : _value(Value(value)), _isIdentifierBool(identifier) {}
 
@@ -34,9 +30,7 @@ StringData TerminalNode::getName() const {
             res.erase(res.size() - 1); // erase the last character
         }
     }
-    StringData ret = StringData(res);
-    std::cout << ret <<std::endl;
-    return ret;
+    return StringData(res);
 }
 
 bool TerminalNode::isIdentifier() const {

@@ -133,18 +133,15 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
             node.reset((new TerminalNode(std::stod(token.value.rawData()))));
             break;
         case TokenType::kBooleanLiteral: {
-            std::cout << "making bool " << token.value << std::endl;
             bool boolValue = (token.value == "true");
             node.reset((new TerminalNode(boolValue))); 
         }
             break;
         case TokenType::kStringLiteral:
-            std::cout << "making string " << token.value << std::endl;
             node.reset((new TerminalNode(token.value)));
             break;
         break;
         case TokenType::kIdentifier:
-            std::cout << "making identifier " << token.value << std::endl;
             node.reset((new TerminalNode(token.value, true)));
             break;
         default:
@@ -320,7 +317,7 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
     std::unique_ptr<BinaryOperator> head;
 
     if ((matchImplicitTerminal(TokenType::kMultiply))) {
-        head.reset(new BinaryOperator(TokenType::kMultiply)); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
+        head.reset(new BinaryOperator(TokenType::kMultiply));
     } else if ((matchImplicitTerminal(TokenType::kDivide))) {
         head.reset(new BinaryOperator(TokenType::kDivide));
     } else {
@@ -354,7 +351,7 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node>
     std::unique_ptr<BinaryOperator> head;
 
     if ((matchImplicitTerminal(TokenType::kAdd))) {
-        head.reset(new BinaryOperator(TokenType::kAdd)); //TODO make sure that this won't mess up precedence by having all the math ops Arithmetic
+        head.reset(new BinaryOperator(TokenType::kAdd));
     } else if ((matchImplicitTerminal(TokenType::kSubtract))) {
        head.reset(new BinaryOperator(TokenType::kSubtract));
     } else {
