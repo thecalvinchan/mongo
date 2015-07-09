@@ -155,7 +155,7 @@ TEST(ParserTest, test7) {
     expected << "? ";
     expected << "== > == ";
     expected << ". 3 . . . . ";
-    expected << "this a this b this c this d this c " << std::endl;
+    expected << "this a this b this c this d this e " << std::endl;
 
     testParseTree(input, expected.str());
 }
@@ -218,16 +218,8 @@ TEST(ParserTest, ErrorTernaryTooShort) {
     testSynaxError("return x ? 1 : ;");
 }
 
-TEST(ParserTest, ErrorObjectBeyondSubset) {
-    testSynaxError("function() {return object.a;}");
-}
-
 TEST(ParserTest, ErrorFunctionArgumentsBeyondSubset) {
     testSynaxError("function(a) {return (a == 1);}");
-}
-
-TEST(ParserTest, ErrorBadArrayIndex) {
-    testSynaxError("function() {return (arr['string'] == 1);}");
 }
 
 }  // namespace tinyjs

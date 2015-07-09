@@ -9,8 +9,8 @@ const Value* NonTerminalNode::getValue() const {
     return NULL;
 }
 
-std::string NonTerminalNode::getName() const {
-    return names[(int) _type];
+StringData NonTerminalNode::getName() const {
+    return StringData(names[(int) _type]);
 }
 
 TokenType NonTerminalNode::getType() {

@@ -19,7 +19,7 @@ public:
     ~TerminalNode() {}
     std::vector<Node* > getChildren(); //TODO const reference
     const Value* getValue() const;
-    std::string getName() const;
+    StringData getName() const;
     bool isIdentifier() const;
 private:
     Value _value;
