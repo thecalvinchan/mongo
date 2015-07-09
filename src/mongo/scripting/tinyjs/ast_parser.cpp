@@ -27,14 +27,14 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "mongo/base/checked_cast.h"
 
 #include <iostream>
 #include <memory>
+#include <queue>
 #include <stdexcept>
 #include <sstream>
-#include <queue>
 
+#include "mongo/base/checked_cast.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
 #include "mongo/util/mongoutils/str.h"
 
@@ -42,14 +42,14 @@ namespace mongo {
 namespace tinyjs {
 
 ASTParser::ASTParser(std::vector<Token> tokenInput)
-    : currentPosition(0), currentToken(tokenInput[0]), tokens(tokenInput) {
-    parseTokens(tokens);
+    : _currentPosition(0), _currentToken(tokenInput[0]), _tokens(tokenInput) {
+    parseTokens(_tokens);
 }
 
-//TODO: linker error if we don't include destructor
+// TODO: linker error if we don't include destructor
 ASTParser::~ASTParser() {
-    this->head.reset();
-    this->tokens.clear();
+    this->_head.reset();
+    this->_tokens.clear();
 }
 
 /**
@@ -58,13 +58,13 @@ ASTParser::~ASTParser() {
  */
 std::string ASTParser::traverse() {
     str::stream output;
-    std::queue<Node *> nodes;
-    nodes.push(head.get());
+    std::queue<Node*> nodes;
+    nodes.push(_head.get());
     while (!nodes.empty()) {
         Node* node = nodes.front();
         output << node->getName() << " ";
-        std::vector<Node *> children = node->getChildren();
-        for (size_t i = 0; i<children.size(); i++) {
+        std::vector<Node*> children = node->getChildren();
+        for (size_t i = 0; i < children.size(); i++) {
             nodes.push(children[i]);
         }
         nodes.pop();
@@ -74,12 +74,12 @@ std::string ASTParser::traverse() {
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {
-    this->head = clauseAction();
+    this->_head = clauseAction();
 }
 
 void ASTParser::nexttoken(void) {
-    currentPosition++;
-    currentToken = tokens[currentPosition];
+    _currentPosition++;
+    _currentToken = _tokens[_currentPosition];
 }
 
 /**
@@ -89,8 +89,8 @@ void ASTParser::nexttoken(void) {
  * returns false.
  */
 bool ASTParser::matchImplicitTerminal(TokenType t) {
-    if (currentToken.type == t) {
-        if (currentPosition < (int)tokens.size()) {
+    if (_currentToken.type == t) {
+        if (_currentPosition < (int)_tokens.size()) {
             nexttoken();
         }
         return true;
@@ -107,9 +107,9 @@ bool ASTParser::matchImplicitTerminal(TokenType t) {
  * returns NULL.
  */
 std::unique_ptr<Node> ASTParser::matchNodeTerminal(TokenType t) {
-    if (currentToken.type == t) {
-        std::unique_ptr<Node> leaf = std::move(makeTerminalNode(currentToken));
-        if (currentPosition < (int)tokens.size()) {
+    if (_currentToken.type == t) {
+        std::unique_ptr<Node> leaf = std::move(makeTerminalNode(_currentToken));
+        if (_currentPosition < (int)_tokens.size()) {
             nexttoken();
         }
         return leaf;
@@ -117,10 +117,11 @@ std::unique_ptr<Node> ASTParser::matchNodeTerminal(TokenType t) {
     return NULL;
 }
 
-/** 
+/**
  * This function takes in a TokenType which should be one of the types that does correspond
  * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
- * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier. It creates and returns a corresponding TerminalNode.
+ * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier. It creates and returns a
+ * corresponding TerminalNode.
  */
 std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
     std::unique_ptr<TerminalNode> node;
@@ -139,13 +140,12 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
             break;
         case TokenType::kBooleanLiteral: {
             bool boolValue = (token.value == "true");
-            node.reset((new TerminalNode(boolValue))); 
-        }
-            break;
+            node.reset((new TerminalNode(boolValue)));
+        } break;
         case TokenType::kStringLiteral:
             node.reset((new TerminalNode(token.value)));
             break;
-        break;
+            break;
         case TokenType::kIdentifier:
             node.reset((new TerminalNode(token.value, true)));
             break;
@@ -157,14 +157,14 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
 }
 
 // Overloads acceptIf to search non-terminals
-std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_ptr<Node> ()> action) {
-    int resetPosition = currentPosition;
+std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_ptr<Node>()> action) {
+    int resetPosition = _currentPosition;
     try {
         // std::unique_ptr<Node> subTreeHead = action();
         return action();
-    } catch (ParseException &e) {
-        currentPosition = resetPosition;
-        currentToken = tokens[currentPosition];
+    } catch (ParseException& e) {
+        _currentPosition = resetPosition;
+        _currentToken = _tokens[_currentPosition];
         return NULL;
     }
 }
@@ -177,17 +177,18 @@ std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_pt
  */
 void ASTParser::expectImplicitTerminal(TokenType t) {
     if (!(matchImplicitTerminal(t))) {
-        throw ParseException("expected different token", currentToken); //TODO better error message
+        throw ParseException("expected different token", _currentToken);  // TODO better error
+                                                                         // message
     }
 }
 
-/** 
+/**
  * Each of the following functions represents a production rule, described in its header comment.
- * TODO: more explanation of the functions 
+ * TODO: more explanation of the functions
  */
 
 /**
- * clause: 
+ * clause:
  *        'function() {' returnStatement '}'
  *      | returnStatement
  */
@@ -202,25 +203,25 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
     } else if ((head = tryProductionMatch(std::bind(&ASTParser::returnStatementAction, this)))) {
         ;
     } else {
-        throw ParseException("clause", currentToken);
+        throw ParseException("clause", _currentToken);
     }
     return head;
 }
 
 /**
- * variable: 
+ * variable:
  *        identifier
  *      | objectAccessor
  */
 std::unique_ptr<Node> ASTParser::variableAction() {
     std::unique_ptr<Node> leftChild;
     leftChild = std::move(matchNodeTerminal(TokenType::kIdentifier));
-    std::unique_ptr<Node> res =  objectAccessorAction(std::move(leftChild));
+    std::unique_ptr<Node> res = objectAccessorAction(std::move(leftChild));
     return res;
 }
 
 /**
- * objectAccessor: 
+ * objectAccessor:
  *        '.' identifier objectAccessor
  *      | '[' arithmeticExpression ']' objectAccessor
  *      | OPTIONAL
@@ -245,7 +246,7 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> left
 }
 
 /**
- * termAction: 
+ * termAction:
  *        integer
  *      | float
  *      | string
@@ -259,16 +260,16 @@ std::unique_ptr<Node> ASTParser::termAction() {
         (head = matchNodeTerminal(TokenType::kFloatLiteral)) ||
         (head = matchNodeTerminal(TokenType::kStringLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
-        (head = matchNodeTerminal(TokenType::kBooleanLiteral)) || 
-        (head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) { 
+        (head = matchNodeTerminal(TokenType::kBooleanLiteral)) ||
+        (head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
     } else {
-        throw ParseException(currentToken.value.rawData(), currentToken);
+        throw ParseException(_currentToken.value.rawData(), _currentToken);
     }
     return head;
 }
 
 /**
- * arrayLiteral: 
+ * arrayLiteral:
  *        []
  *      | [arrayElements]
  */
@@ -277,7 +278,7 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
     std::unique_ptr<Node> child;
     if (matchImplicitTerminal(TokenType::kOpenSquareBracket)) {
         if (matchImplicitTerminal(TokenType::kCloseSquareBracket)) {
-            ; // Case where array is empty
+            ;  // Case where array is empty
         } else {
             // At this point we can assume there is at least one element in the array
             (checked_cast<ArrayLiteral*>(head.get()))->setChild(booleanExpressionAction());
@@ -287,13 +288,13 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
             }
         }
     } else {
-        throw ParseException("array literal", currentToken);
+        throw ParseException("array literal", _currentToken);
     }
     return head;
 }
 
 /**
- * factor: 
+ * factor:
  *        term
  *      | '(' arithmeticExpression ')'
  */
@@ -304,13 +305,13 @@ std::unique_ptr<Node> ASTParser::factorAction() {
         head = std::move(arithmeticExpressionAction());
         expectImplicitTerminal(TokenType::kCloseParen);
     } else {
-        throw ParseException("factor", currentToken);
+        throw ParseException("factor", _currentToken);
     }
     return head;
 }
 
 /**
- * multiplicativeExpression: 
+ * multiplicativeExpression:
  *        factor multiplicativeOperation
  */
 std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
@@ -320,7 +321,7 @@ std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
 }
 
 /**
- * multiplicativeOperation: 
+ * multiplicativeOperation:
  *        ('*' | '/') factor multiplicativeOperation
  *      | OPTIONAL
  */
@@ -339,11 +340,10 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
     head->setLeftChild(std::move(leftChild));
     head->setRightChild(std::move(factorAction()));
     return multiplicativeOperationAction(std::move(head));
-
 }
 
 /**
- * arithmeticExpression: 
+ * arithmeticExpression:
  *        multiplicativeExpression arithmeticOperation
  */
 std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
@@ -354,7 +354,7 @@ std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
 }
 
 /**
- * arithmeticOperation: 
+ * arithmeticOperation:
  *        ('+' | '-') multiplicativeExpression arithmeticOperation
  *      | OPTIONAL
  */
@@ -364,7 +364,7 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node>
     if ((matchImplicitTerminal(TokenType::kAdd))) {
         head.reset(new BinaryOperator(TokenType::kAdd));
     } else if ((matchImplicitTerminal(TokenType::kSubtract))) {
-       head.reset(new BinaryOperator(TokenType::kSubtract));
+        head.reset(new BinaryOperator(TokenType::kSubtract));
     } else {
         // arithmeticOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -376,7 +376,7 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node>
 }
 
 /**
- * booleanFactor: 
+ * booleanFactor:
  *        arithmeticExpression
  *      | '(' booleanExpression ')'
  */
@@ -392,7 +392,7 @@ std::unique_ptr<Node> ASTParser::booleanFactorAction() {
 }
 
 /**
- * relationalExpression: 
+ * relationalExpression:
  *        booleanFactor relationalOperation
  */
 std::unique_ptr<Node> ASTParser::relationalExpressionAction() {
@@ -403,7 +403,7 @@ std::unique_ptr<Node> ASTParser::relationalExpressionAction() {
 }
 
 /**
- * relationalOperation: 
+ * relationalOperation:
  *        ('===' | '==' | '>' | '>=' | '<' | '>=') booleanFactor relationalOperation
  *      | OPTIONAL
  */
@@ -411,7 +411,7 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
     std::unique_ptr<Node> head;
 
     if ((matchImplicitTerminal(TokenType::kTripleEquals))) {
-        head.reset(new BinaryOperator(TokenType::kTripleEquals)); 
+        head.reset(new BinaryOperator(TokenType::kTripleEquals));
     } else if ((matchImplicitTerminal(TokenType::kDoubleEquals))) {
         head.reset(new BinaryOperator(TokenType::kDoubleEquals));
     } else if ((matchImplicitTerminal(TokenType::kGreaterThan))) {
@@ -433,7 +433,7 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
 }
 
 /**
- * booleanExpression: 
+ * booleanExpression:
  *        relationalExpression booleanOperation
  */
 std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
@@ -444,25 +444,26 @@ std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
 }
 
 /**
- * booleanOperation: 
+ * booleanOperation:
  *        ('&&' | '||') booleanExpression booleanOperation
         | ternaryOperation booleanOperation
  *      | OPTIONAL
  */
 std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> leftChild) {
     std::unique_ptr<Node> head;
-    std::function<std::unique_ptr<Node>()> fn =
-        [this]() { return ternaryOperationAction();  };
+    std::function<std::unique_ptr<Node>()> fn = [this]() { return ternaryOperationAction(); };
     if ((head = tryProductionMatch(fn))) {
         checked_cast<TernaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
     } else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
         head.reset(new BinaryOperator(TokenType::kLogicalAnd));
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
-        checked_cast<BinaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction()));
+        checked_cast<BinaryOperator*>(head.get())
+            ->setRightChild(std::move(booleanExpressionAction()));
     } else if ((matchImplicitTerminal(TokenType::kLogicalOr))) {
         head.reset(new BinaryOperator(TokenType::kLogicalOr));
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
-        checked_cast<BinaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction())); 
+        checked_cast<BinaryOperator*>(head.get())
+            ->setRightChild(std::move(booleanExpressionAction()));
     } else {
         // booleanOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -473,20 +474,22 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
 }
 
 /**
- * ternaryOperation: 
+ * ternaryOperation:
  *        '?' booleanExpression ':' booleanExpression
  */
-std::unique_ptr<Node> ASTParser::ternaryOperationAction() { //TODO: should this be structured more like returnStatementAction?
+std::unique_ptr<Node> ASTParser::ternaryOperationAction() {  // TODO: should this be structured more
+                                                             // like returnStatementAction?
     std::unique_ptr<Node> head(new TernaryOperator(TokenType::kQuestionMark));
     expectImplicitTerminal(TokenType::kQuestionMark);
-    checked_cast<TernaryOperator*>(head.get())->setMiddleChild(std::move(booleanExpressionAction()));
+    checked_cast<TernaryOperator*>(head.get())
+        ->setMiddleChild(std::move(booleanExpressionAction()));
     expectImplicitTerminal(TokenType::kColon);
     checked_cast<TernaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction()));
     return head;
 }
 
 /**
- * returnStatement: 
+ * returnStatement:
  *        'return' booleanExpression ';'
  */
 std::unique_ptr<Node> ASTParser::returnStatementAction() {
@@ -495,10 +498,9 @@ std::unique_ptr<Node> ASTParser::returnStatementAction() {
         checked_cast<UnaryOperator*>(head.get())->setChild(std::move(booleanExpressionAction()));
         expectImplicitTerminal(TokenType::kSemiColon);
     } else {
-        throw ParseException("return statement", currentToken);
+        throw ParseException("return statement", _currentToken);
     }
     return head;
 }
-
-}
-}
+} // namespace tinyjs
+} // namespace mongo

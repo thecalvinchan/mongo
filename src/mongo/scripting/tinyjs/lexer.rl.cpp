@@ -313,5 +313,5 @@ StatusWith<std::vector<Token>> lex(StringData input) {
     return tokenData;
 }
 
-}  // namespace tinyjs
-}  // namespace mongo
+} // namespace tinyjs
+} // namespace mongo

@@ -33,5 +33,5 @@
 namespace mongo {
 namespace tinyjs {
 
-}
-}
+} // namespace tinyjs
+} // namespace mongo

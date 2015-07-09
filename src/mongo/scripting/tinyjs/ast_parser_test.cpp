@@ -251,5 +251,5 @@ TEST(ParserTest, ErrorFunctionArgumentsBeyondSubset) {
     testSyntaxError("function(a) {return (a == 1);}");
 }
 
-}  // namespace tinyjs
-}  // namespace mongo
+} // namespace tinyjs
+} // namespace mongo

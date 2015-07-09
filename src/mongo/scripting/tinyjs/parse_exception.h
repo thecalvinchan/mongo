@@ -59,5 +59,5 @@ private:
     Token _token;
 };
 
-}
-}
+} // namespace tinyjs
+} // namespace mongo

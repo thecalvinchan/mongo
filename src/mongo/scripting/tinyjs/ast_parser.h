@@ -46,6 +46,10 @@ public:
     ASTParser(std::vector<Token> tokens);
     ~ASTParser();
     void printTree();
+    /**
+     * Traverse walks the tree and returns a string of the node names separated by spaces in
+     * BFS-traversal order.
+     */
     std::string traverse();
 
 private:
@@ -65,7 +69,6 @@ private:
     std::unique_ptr<Node> objectAccessorAction(std::unique_ptr<Node> leftChild);
     std::unique_ptr<Node> termAction();
     std::unique_ptr<Node> arrayElementAction();
-    //std::vector<std::unique_ptr<Node> > arrayElements();
     std::unique_ptr<Node> arrayLiteralAction();
     std::unique_ptr<Node> arrayTailAction();
     std::unique_ptr<Node> arrayIndexedAction();
@@ -82,10 +85,10 @@ private:
     std::unique_ptr<Node> ternaryOperationAction();
     std::unique_ptr<Node> returnStatementAction();
 
-    int currentPosition;
-    Token currentToken;
-    std::vector<Token> tokens;
-    std::unique_ptr<Node> head;
+    int _currentPosition;
+    Token _currentToken;
+    std::vector<Token> _tokens;
+    std::unique_ptr<Node> _head;
 };
-}
-}
+} // namespace tinyjs
+} // namespace mongo

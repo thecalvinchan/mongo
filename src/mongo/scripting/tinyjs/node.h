@@ -28,8 +28,8 @@
 
 #pragma once
 
-#include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/db/pipeline/value.h"
+#include "mongo/scripting/tinyjs/lexer.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -39,9 +39,9 @@ public:
     Node() {};
     virtual ~Node() {};
     virtual const Value* getValue() const = 0;
-    virtual std::vector<Node* > getChildren() = 0;
+    virtual std::vector<Node* > getChildren() const = 0;
     virtual StringData getName() const = 0;
 };
 
-}
-}
+} // namespace tinyjs
+} // namespace mongo
