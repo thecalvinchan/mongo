@@ -8,9 +8,13 @@ TerminalNode::TerminalNode(const NullLabeler&) :  _value(Value(BSONNULL)), _isId
 TerminalNode::TerminalNode(const UndefinedLabeler&) : _value(Value(BSONUndefined)), _isIdentifierBool(false) {}
 TerminalNode::TerminalNode(const int &value) : _value(Value(value)), _isIdentifierBool(false) {}
 TerminalNode::TerminalNode(const double &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const bool &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const std::string &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const std::string& value, bool identifier)
+TerminalNode::TerminalNode(const bool &value) : _value(Value(value)), _isIdentifierBool(false) {
+    std::cout << "boolean constructor " << std::endl;
+}
+TerminalNode::TerminalNode(const StringData &value) : _value(Value(value)), _isIdentifierBool(false) {
+    std::cout << "string constructor " << std::endl;
+}
+TerminalNode::TerminalNode(const StringData &value, bool identifier)
     : _value(Value(value)), _isIdentifierBool(identifier) {}
 
 std::vector<Node* > TerminalNode::getChildren() {
@@ -22,11 +26,8 @@ const Value* TerminalNode::getValue() const {
 }
 
 std::string TerminalNode::getName() const {
-    if (isIdentifier()) {
-        return "identifier";
-    } else {
-        return typeName(_value.getType());
-    }
+    if 
+    return _value.toString();
 }
 
 bool TerminalNode::isIdentifier() const {
