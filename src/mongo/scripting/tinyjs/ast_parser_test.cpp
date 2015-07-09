@@ -191,7 +191,7 @@ TEST(ParserTest, test10) {
     std::stringstream expected;
     expected << "return ";
     expected << "== ";
-    expected << ". ] ";
+    expected << ". [ ";
     expected << "this elements 'cat' 'dog' " << std::endl;
 
     testParseTree(input, expected.str());

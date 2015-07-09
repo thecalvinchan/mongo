@@ -36,6 +36,7 @@
 #include <queue>
 
 #include "mongo/scripting/tinyjs/ast_parser.h"
+#include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -51,7 +52,7 @@ ASTParser::~ASTParser() {
 }
 
 std::string ASTParser::traverse() {
-    std::stringstream output;
+    str::stream output;
     std::queue<Node *> nodes;
     nodes.push(head.get());
     while (!nodes.empty()) {
@@ -63,8 +64,8 @@ std::string ASTParser::traverse() {
         }
         nodes.pop();
     }
-    output << std::endl;
-    return output.str();
+    output << "\n";
+    return output;
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {

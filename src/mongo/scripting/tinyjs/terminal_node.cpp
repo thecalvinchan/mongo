@@ -30,9 +30,13 @@ StringData TerminalNode::getName() const {
     //TODO: figure out better way of dealing with the extra quotes around stringdata values
     if (res.front() == '"') {
         res.erase(0, 1); // erase the first character
-        res.erase(res.size() - 1); // erase the last character
+        if (res.back() == '"') {
+            res.erase(res.size() - 1); // erase the last character
+        }
     }
-    return StringData(res);
+    StringData ret = StringData(res);
+    std::cout << ret <<std::endl;
+    return ret;
 }
 
 bool TerminalNode::isIdentifier() const {
