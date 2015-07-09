@@ -70,7 +70,9 @@ std::string ASTParser::traverse() {
             nodes.push(children[i]);
         }
         nodes.pop();
-        nodes.push(NULL); //marker that the level is finished; indicates an endl should be added
+        if (!nodes.empty()) {
+            nodes.push(NULL); //marker that the level is finished; indicates an endl should be added
+        }
     }
     return output.str(); //TODO
 }
