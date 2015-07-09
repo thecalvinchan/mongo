@@ -2,6 +2,7 @@
 
 #include "mongo/scripting/tinyjs/node.h"
 #include "mongo/db/pipeline/value.h"
+#include "mongo/base/string_data.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -13,12 +14,12 @@ public:
     TerminalNode(const int &value);
     TerminalNode(const double &value);
     TerminalNode(const bool &value);
-    TerminalNode(const std::string &value);
-    TerminalNode(const std::string &value, bool identifier);
+    TerminalNode(const StringData &value);
+    TerminalNode(const StringData &value, bool identifier);
     ~TerminalNode() {}
     std::vector<Node* > getChildren(); //TODO const reference
     const Value* getValue() const;
-    std::string getName() const;
+    StringData getName() const;
     bool isIdentifier() const;
 private:
     Value _value;

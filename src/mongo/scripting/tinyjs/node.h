@@ -40,7 +40,7 @@ public:
     virtual ~Node() {};
     virtual const Value* getValue() const = 0;
     virtual std::vector<Node* > getChildren() = 0;
-    virtual std::string getName() const = 0;
+    virtual StringData getName() const = 0;
 };
 
 }

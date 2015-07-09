@@ -71,9 +71,9 @@ TEST(ParserTest, test1) {
     string input = "return this.a == 1;";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "== " << std::endl;
-    expected << ". 1 " << std::endl;
+    expected << "return ";
+    expected << "== ";
+    expected << ". 1 ";
     expected << "this a " << std::endl;
 
     testParseTree(input, expected.str());
@@ -83,9 +83,9 @@ TEST(ParserTest, test2) {
     string input = "function() {return this.a === 1;}";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "=== " << std::endl;
-    expected << ". 1 " << std::endl;
+    expected << "return ";
+    expected << "=== ";
+    expected << ". 1 ";
     expected << "this a " << std::endl;
 
     testParseTree(input, expected.str());
@@ -95,25 +95,25 @@ TEST(ParserTest, test3) {
     string input = "function() {return this.a.b.c.d === 1;}";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "=== " << std::endl;
-    expected << ". 1 " << std::endl;
-    expected << ". d " << std::endl;
-    expected << ". c " << std::endl;
-    expected << ". b " << std::endl;
+    expected << "return ";
+    expected << "=== ";
+    expected << ". 1 ";
+    expected << ". d ";
+    expected << ". c ";
+    expected << ". b ";
     expected << "this a " << std::endl;
 
     testParseTree(input, expected.str());
 }
 
 TEST(ParserTest, test4) {
-    string input = "function() {return this['a'] === this.b;}";
+    string input = "function() {return this['a'] === true;}";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "=== " << std::endl;
-    expected << "[ . " << std::endl;
-    expected << "this 'a' this b " << std::endl;
+    expected << "return ";
+    expected << "=== ";
+    expected << "[ true ";
+    expected << "this 'a' " << std::endl;
 
     testParseTree(input, expected.str());
 }
@@ -122,10 +122,10 @@ TEST(ParserTest, test5) {
     string input = "return this[3+3] == 90.1;";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "== " << std::endl;
-    expected << "[ 90.1 " << std::endl;
-    expected << "this + " << std::endl;
+    expected << "return ";
+    expected << "== ";
+    expected << "[ 90.1 ";
+    expected << "this + ";
     expected << "3 3 " << std::endl;
 
     testParseTree(input, expected.str());
@@ -135,13 +135,13 @@ TEST(ParserTest, test6) {
     string input = "return this.a[3].b[2].c == this.b[5].c.d;";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "== " << std::endl;
-    expected << ". . " << std::endl;
-    expected << "[ c . d " << std::endl;
-    expected << ". 2 [ c " << std::endl;
-    expected << "[ b . 5 " << std::endl;
-    expected << ". 3 this b " << std::endl;
+    expected << "return ";
+    expected << "== ";
+    expected << ". . ";
+    expected << "[ c . d ";
+    expected << ". 2 [ c ";
+    expected << "[ b . 5 ";
+    expected << ". 3 this b ";
     expected << "this a " << std::endl;
 
     testParseTree(input, expected.str());
@@ -151,11 +151,11 @@ TEST(ParserTest, test7) {
     string input = "return this.a == 3 ? (this.b > this.c): (this.d == this.e);";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "? " << std::endl;
-    expected << "== > == " << std::endl;
-    expected << ". 3 . . . . " << std::endl;
-    expected << "this a this b this c this d this c " << std::endl;
+    expected << "return ";
+    expected << "? ";
+    expected << "== > == ";
+    expected << ". 3 . . . . ";
+    expected << "this a this b this c this d this e " << std::endl;
 
     testParseTree(input, expected.str());
 }
@@ -164,9 +164,9 @@ TEST(ParserTest, test8) {
     string input = "function() {return x > (3 + 1);}";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "> " << std::endl;
-    expected << "x + " << std::endl;
+    expected << "return ";
+    expected << "> ";
+    expected << "x + ";
     expected << "3 1 " << std::endl;
 
     testParseTree(input, expected.str());
@@ -176,10 +176,10 @@ TEST(ParserTest, test9) {
     string input = "return (3*4)/8 - y;";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "- " << std::endl;
-    expected << "/ y " << std::endl;
-    expected << "* 8 " << std::endl;
+    expected << "return ";
+    expected << "- ";
+    expected << "/ y ";
+    expected << "* 8 ";
     expected << "3 4 " << std::endl;
 
     testParseTree(input, expected.str());
@@ -189,9 +189,9 @@ TEST(ParserTest, test10) {
     string input = "return this.elements == ['cat', 'dog'];";
 
     std::stringstream expected;
-    expected << "return " << std::endl;
-    expected << "== " << std::endl;
-    expected << ". ] " << std::endl;
+    expected << "return ";
+    expected << "== ";
+    expected << ". [ ";
     expected << "this elements 'cat' 'dog' " << std::endl;
 
     testParseTree(input, expected.str());
@@ -218,16 +218,8 @@ TEST(ParserTest, ErrorTernaryTooShort) {
     testSynaxError("return x ? 1 : ;");
 }
 
-TEST(ParserTest, ErrorObjectBeyondSubset) {
-    testSynaxError("function() {return object.a;}");
-}
-
 TEST(ParserTest, ErrorFunctionArgumentsBeyondSubset) {
     testSynaxError("function(a) {return (a == 1);}");
-}
-
-TEST(ParserTest, ErrorBadArrayIndex) {
-    testSynaxError("function() {return (arr['string'] == 1);}");
 }
 
 }  // namespace tinyjs

@@ -2,6 +2,7 @@
 
 #include "mongo/scripting/tinyjs/node.h"
 #include "mongo/db/pipeline/value.h"
+#include "mongo/base/string_data.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -13,7 +14,7 @@ public:
     //getValue and getChildren are only used for testing
     virtual std::vector<Node*> getChildren() = 0;
     const Value* getValue() const;
-    std::string getName() const;
+    StringData getName() const;
     TokenType getType();
     const static std::string names[];
 private:
