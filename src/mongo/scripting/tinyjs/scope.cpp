@@ -26,28 +26,48 @@
  * then also delete it in the license file.
  */
 
-#pragma once
+#include "mongo/platform/basic.h"
 
-#include "mongo/base/string_data.h"
-#include "mongo/db/pipeline/value.h"
-#include "mongo/scripting/tinyjs/node.h"
+#include "mongo/scripting/tinyjs/scope.h"
 
 namespace mongo {
 namespace tinyjs {
 
-class NonTerminalNode : public Node {
-public:
-    NonTerminalNode(TokenType type);
-    virtual ~NonTerminalNode() {};
-    //evaluate and getChildren are only used for testing
-    virtual std::vector<Node*> getChildren() const = 0;
-    const Value* evaluate(Scope* scope) const;
-    StringData getName() const;
-    TokenType getType();
-    const static std::string names[];
-private:
-    TokenType _type;
-};
+Scope::Scope(){}
 
-} // namespace tinyjs
-} // namespace mongo
+Scope::Scope(Scope* parent) : _parent(parent) {}
+
+void put(StringData variableName, Value* value) {
+    _variables[variableName] = value;
+}
+
+Value* get(StringData variableName) {
+    map<StringData, Value*>::iterator it = _variables.find(variableName);
+    if (it != _variables.end()) {
+        // Case where variableName is found in this scope
+        return it->second;
+    } else if (_parent) {
+        // Recursively check in the parent scope, if a parent scope exists
+        return _parent->get(variableName);
+    } else {
+        // variable is out of scope
+        return NULL; 
+    }
+}
+
+bool isInScope(StringData variableName) {
+    // Count the occurrences of the variable name in the scope. If it exists, this will evaluate to
+    // true. If no occurrences are found, it will evaluate to false.
+    return _variables.count(variableName);
+}
+
+void setParent(Scope* parent) {
+    _parent = parent;
+}
+
+Scope* getParent() {
+    return _parent;
+}
+
+}  // namespace tinyjs
+}  // namespace mongo

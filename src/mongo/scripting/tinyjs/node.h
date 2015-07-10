@@ -30,6 +30,7 @@
 
 #include "mongo/db/pipeline/value.h"
 #include "mongo/scripting/tinyjs/lexer.h"
+#include "mongo/scripting/tinyjs/scope.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -38,7 +39,7 @@ class Node {
 public:
     Node() {};
     virtual ~Node() {};
-    virtual const Value* getValue() const = 0;
+    virtual const Value* evaluate(Scope* scope) const = 0;
     virtual std::vector<Node* > getChildren() const = 0;
     virtual StringData getName() const = 0;
 };

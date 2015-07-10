@@ -68,5 +68,9 @@ void TernaryOperator::setRightChild(std::unique_ptr<Node> node) {
     _rightChild = std::move(node);
 }
 
+const Value* TernaryOperator::evaluate(Scope* scope) const {
+    return NULL;
+}
+
 } // namespace tinyjs
 } // namespace mongo

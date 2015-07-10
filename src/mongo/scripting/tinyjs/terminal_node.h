@@ -46,7 +46,7 @@ public:
     TerminalNode(const StringData &value, bool identifier);
     ~TerminalNode() {}
     std::vector<Node* > getChildren() const;
-    const Value* getValue() const;
+    const Value* evaluate(Scope* scope) const;
     StringData getName() const;
     bool isIdentifier() const;
 private:

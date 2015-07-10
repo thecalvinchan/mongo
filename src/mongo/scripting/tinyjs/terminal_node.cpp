@@ -48,7 +48,7 @@ std::vector<Node* > TerminalNode::getChildren() const {
     return std::vector<Node*>();
 }
 
-const Value* TerminalNode::getValue() const {
+const Value* TerminalNode::evaluate(Scope* scope) const {
     return &_value;
 }
 

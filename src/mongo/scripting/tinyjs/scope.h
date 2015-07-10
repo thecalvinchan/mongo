@@ -28,25 +28,24 @@
 
 #pragma once
 
-#include "mongo/base/string_data.h"
-#include "mongo/db/pipeline/value.h"
-#include "mongo/scripting/tinyjs/node.h"
-
 namespace mongo {
 namespace tinyjs {
 
-class NonTerminalNode : public Node {
+class Scope {
 public:
-    NonTerminalNode(TokenType type);
-    virtual ~NonTerminalNode() {};
-    //evaluate and getChildren are only used for testing
-    virtual std::vector<Node*> getChildren() const = 0;
-    const Value* evaluate(Scope* scope) const;
-    StringData getName() const;
-    TokenType getType();
-    const static std::string names[];
+    Scope();
+    Scope(Scope* parent);
+    /* 
+     * This function inserts a variableName and value pair into the scope, regardless of whether that variableName was already in scope.
+     */
+    void put(StringData variableName, Value* value);
+    Value* get(StringData variableName);
+    bool isInScope(StringData variableName);
+    void setParent(Scope* parent);
+    Scope* getParent();
 private:
-    TokenType _type;
+    Scope* _parent;
+    std::map<StringData, Value*> _variables;
 };
 
 } // namespace tinyjs

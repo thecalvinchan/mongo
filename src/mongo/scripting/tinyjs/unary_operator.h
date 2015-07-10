@@ -42,6 +42,7 @@ public:
     std::vector<Node*> getChildren() const;
     Node* getChild();
     void setChild(std::unique_ptr<Node> node);
+    const Value* evaluate(Scope* scope) const;
 private:
     std::unique_ptr<Node> _child;
 };

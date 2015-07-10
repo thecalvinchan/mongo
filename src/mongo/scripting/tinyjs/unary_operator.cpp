@@ -50,5 +50,9 @@ void UnaryOperator::setChild(std::unique_ptr<Node> node) {
     _child = std::move(node);
 }
 
+const Value* UnaryOperator::evaluate(Scope* scope) const {
+    return NULL;
+}
+
 } // namespace tinyjs
 } // namespace mongo
