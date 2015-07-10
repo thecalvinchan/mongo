@@ -51,7 +51,20 @@ void UnaryOperator::setChild(std::unique_ptr<Node> node) {
 }
 
 const Value* UnaryOperator::evaluate(Scope* scope) const {
-    return NULL;
+    const Value* res;
+    switch (this->getType()) {
+        case TokenType::kReturnKeyword:
+            res = evaluateReturn(scope);
+            break;
+        default:
+            res = NULL; //TODO: error?
+            break;
+    }
+    return res;
+}
+
+const Value* UnaryOperator::evaluateReturn(Scope* scope) const {
+    return (_child->evaluate(scope));
 }
 
 } // namespace tinyjs

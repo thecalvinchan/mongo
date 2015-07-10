@@ -14,7 +14,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * As a special exception, the copyright holders give permission to link the
- * code of portions of this program with the OpenSSL library under certain
  * conditions as described in each individual source file and distribute
  * linked combinations including the program with the OpenSSL library. You
  * must comply with the GNU Affero General Public License in all respects
@@ -28,6 +27,7 @@
 
 #include "mongo/platform/basic.h"
 
+#include "mongo/bson/bsontypes.h"
 #include "mongo/scripting/tinyjs/binary_operator.h"
 
 namespace mongo {
@@ -43,11 +43,11 @@ std::vector<Node*> BinaryOperator::getChildren() const {
     return children;
 }
 
-Node* BinaryOperator::getLeftChild() {
+Node* BinaryOperator::getLeftChild() const {
     return _leftChild.get();
 }
 
-Node* BinaryOperator::getRightChild() {
+Node* BinaryOperator::getRightChild() const {
     return _rightChild.get();
 }
 
@@ -60,7 +60,93 @@ void BinaryOperator::setRightChild(std::unique_ptr<Node> node) {
 }
 
 const Value* BinaryOperator::evaluate(Scope* scope) const {
+
+    switch (this->getType()) {
+        case TokenType::kPeriod:
+            break;
+        case TokenType::kOpenSquareBracket:
+            break;
+        case TokenType::kMultiply:
+            break;
+        case TokenType::kDivide:
+            break;
+        case TokenType::kAdd:
+            break;
+        case TokenType::kSubtract:
+            break;
+        case TokenType::kTripleEquals:
+            break;
+        case TokenType::kDoubleEquals:
+            break;
+        case TokenType::kGreaterThan: 
+            return evaluateGreaterThan(scope);
+        case TokenType::kGreaterThanEquals:
+            return evaluateGreaterThanEquals(scope);
+        case TokenType::kLessThan:
+            return evaluateLessThan(scope);
+        case TokenType::kLessThanEquals:
+            return evaluateLessThanEquals(scope);
+        case TokenType::kNotEquals:
+            break;
+        case TokenType::kDoubleNotEquals:
+            break;
+        case TokenType::kLogicalAnd:
+            break;
+        case TokenType::kLogicalOr:
+            break;
+        default:
+            break;
+        
+    }
+
     return NULL;
+}
+
+/*const Value* BinaryOperator::evaluatePeriod(Scope* scope) const {
+
+    if (!this->getLeftChild()->isIdentifier()) {
+        // TODO throw error
+    }
+
+    if (!this->getRightChild()->isIdentifier()) {
+        // TODO throw error
+    }
+
+    StringData objectName(this->getLeftChild()->evaluate(scope)->getString());
+    Value* objectValue = scope->get(objectName);
+    if (!objectValue) {
+        // TODO throw error 
+    }
+
+}*/
+
+/*
+ * The following are comparison helper functions. For now they are using value::compare. We need to
+ * look for edge cases in Javascript that this might not cover.
+ */
+
+const Value* BinaryOperator::evaluateGreaterThan(Scope* scope) const {
+    const Value* leftValue = this->getLeftChild()->evaluate(scope);
+    const Value* rightValue = this->getRightChild()->evaluate(scope);
+    return (Value::compare(*leftValue, *rightValue) > 0);
+}
+
+const Value* BinaryOperator::evaluateGreaterThanEquals(Scope* scope) const {
+    const Value* leftValue = this->getLeftChild()->evaluate(scope);
+    const Value* rightValue = this->getRightChild()->evaluate(scope);
+    return (Value::compare(*leftValue, *rightValue) >= 0);
+}
+
+const Value* BinaryOperator::evaluateLessThan(Scope* scope) const {
+    const Value* leftValue = this->getLeftChild()->evaluate(scope);
+    const Value* rightValue = this->getRightChild()->evaluate(scope);
+    return (Value::compare(*leftValue, *rightValue) < 0);
+}
+
+const Value* BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
+    const Value* leftValue = this->getLeftChild()->evaluate(scope);
+    const Value* rightValue = this->getRightChild()->evaluate(scope);
+    return (Value::compare(*leftValue, *rightValue) <= 0);
 }
 
 }  // namespace tinyjs

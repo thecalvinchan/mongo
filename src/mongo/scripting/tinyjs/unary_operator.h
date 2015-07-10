@@ -45,6 +45,7 @@ public:
     const Value* evaluate(Scope* scope) const;
 private:
     std::unique_ptr<Node> _child;
+    const Value* evaluateReturn(Scope* scope) const;
 };
 
 } // namespace tinyjs

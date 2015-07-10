@@ -44,15 +44,15 @@ std::vector<Node*> TernaryOperator::getChildren() const {
     return children;
 }
 
-Node* TernaryOperator::getLeftChild() {
+Node* TernaryOperator::getLeftChild() const {
     return _leftChild.get();
 }
 
-Node* TernaryOperator::getMiddleChild() {
+Node* TernaryOperator::getMiddleChild() const {
     return _middleChild.get();
 }
 
-Node* TernaryOperator::getRightChild() {
+Node* TernaryOperator::getRightChild() const {
     return _rightChild.get();
 }
 
@@ -69,7 +69,20 @@ void TernaryOperator::setRightChild(std::unique_ptr<Node> node) {
 }
 
 const Value* TernaryOperator::evaluate(Scope* scope) const {
-    return NULL;
+    
+    const Value* condition = this->getLeftChild()->evaluate(scope);
+
+    if (condition->getType() != Bool) { // TODO how does it understand the BSON types?
+        //TODO throw error
+    }
+
+    if (condition->getBool()) {
+        // Evaluate the first branch
+        return this->getMiddleChild()->evaluate(scope);
+    } else {
+        // Evaluate the second branch
+        return this->getRightChild()->evaluate(scope);
+    }
 }
 
 } // namespace tinyjs
