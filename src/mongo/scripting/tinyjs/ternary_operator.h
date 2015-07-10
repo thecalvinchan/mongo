@@ -38,9 +38,9 @@ public:
     TernaryOperator(TokenType type);
     ~TernaryOperator() {}
     std::vector<Node*> getChildren() const;
-    Node* getLeftChild();
-    Node* getMiddleChild();
-    Node* getRightChild();
+    Node* getLeftChild() const;
+    Node* getMiddleChild() const;
+    Node* getRightChild() const;
     void setLeftChild(std::unique_ptr<Node> node);
     void setMiddleChild(std::unique_ptr<Node> node);
     void setRightChild(std::unique_ptr<Node> node);

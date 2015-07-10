@@ -442,6 +442,10 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
         head.reset(new BinaryOperator(TokenType::kLessThan));
     } else if ((matchImplicitTerminal(TokenType::kLessThanEquals))) {
         head.reset(new BinaryOperator(TokenType::kLessThanEquals));
+    } else if ((matchImplicitTerminal(TokenType::kNotEquals))) {
+        head.reset(new BinaryOperator(TokenType::kNotEquals));
+    } else if ((matchImplicitTerminal(TokenType::kDoubleNotEquals))) {
+        head.reset(new BinaryOperator(TokenType::kDoubleNotEquals));
     } else {
         // relationalOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;

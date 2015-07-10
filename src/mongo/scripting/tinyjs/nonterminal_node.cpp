@@ -43,7 +43,7 @@ StringData NonTerminalNode::getName() const {
     return StringData(names[(int)_type]);
 }
 
-TokenType NonTerminalNode::getType() {
+TokenType NonTerminalNode::getType() const {
     return _type;
 }
 

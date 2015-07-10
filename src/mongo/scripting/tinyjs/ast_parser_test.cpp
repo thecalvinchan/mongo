@@ -237,6 +237,30 @@ TEST(ParserTest, test13) {
     testParseTree(input, expected.str());
 }
 
+TEST(ParserTest, test13) {
+    string input = "return this.a != 1;";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "!= ";
+    expected << ". 1 ";
+    expected << "this a " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
+TEST(ParserTest, test14) {
+    string input = "return this.a !== 1;";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "!== ";
+    expected << ". 1 ";
+    expected << "this a " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
 
 TEST(ParserTest, ErrorBadOperator) {
     testSyntaxError("return (x++1);");
