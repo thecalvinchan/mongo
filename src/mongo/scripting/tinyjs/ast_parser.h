@@ -44,10 +44,9 @@ namespace tinyjs {
 class ASTParser {
 public:
     ASTParser(std::vector<Token> tokens);
-    ~ASTParser();
     void printTree();
     /**
-     * Traverse walks the tree and returns a string of the node names separated by spaces in
+     * This function walks the tree and returns a string of the node names separated by spaces in
      * BFS-traversal order.
      */
     std::string traverse();
@@ -56,13 +55,47 @@ private:
     void parseTokens(std::vector<Token> tokens);
     void nexttoken(void);
     void error(const char msg[]);
-
+    /**
+     * This function takes in a TokenType which should be one of the types that does not correspond
+     * to a node in the abstract syntax tree - for example, parentheses, semicolons, "return", etc.
+     * If the current token matches the input, it calls nexttoken() and returns true. Otherwise, it
+     * returns false.
+     */
     bool matchImplicitTerminal(TokenType t);
+    /**
+     * This function takes in a TokenType which should be one of the types that does correspond
+     * to a node in the abstract syntax tree: knullptrLiteral, kUndefinedLiteral, kIntegerLiteral,
+     * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier
+     * If the current token matches the input, it calls nexttoken() and returns a node corresponding to
+     * the token. Otherwise, it
+     * returns nullptr.
+     */
     std::unique_ptr<Node> matchNodeTerminal(TokenType t);
+    /**
+     * This function takes in a TokenType which should be one of the types that corresponds
+     * to a node in the abstract syntax tree: knullptrLiteral, kUndefinedLiteral, kIntegerLiteral,
+     * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier. It creates and returns a
+     * corresponding TerminalNode. If the type of the token is not valid, an error is thrown.
+     */
     std::unique_ptr<TerminalNode> makeTerminalNode(Token token);
+    /** 
+     * This function attempts to apply the specified production rule to the input. If there is a match, 
+     * it returns the resulting node in the AST. Otherwise, it returns nullptr.
+     */
     std::unique_ptr<Node> tryProductionMatch(std::function<std::unique_ptr<Node>(void)> action);
+    /**
+     * ExpectImplcitTerminal advances to the next token if the current token matches the input
+     * and throws an error otherwise. It only checks simple tokens that won't become nodes,
+     * because nodes are created by matchNodeTerminal or by calling an action. TODO why exactly don't we
+     * need an expect that returns a node?
+     */
     void expectImplicitTerminal(TokenType t);
 
+
+    /**
+     * Each of the following functions represents a production rule, described in its header comment.
+     * TODO: more explanation of the functions
+     */
     std::unique_ptr<Node> clauseAction();
     std::unique_ptr<Node> variableAction();
     std::unique_ptr<Node> objectAction();

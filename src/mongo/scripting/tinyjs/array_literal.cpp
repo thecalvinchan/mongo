@@ -29,7 +29,6 @@
 #include "mongo/platform/basic.h"
 
 #include "mongo/scripting/tinyjs/array_literal.h"
-#include "mongo/base/checked_cast.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -50,7 +49,7 @@ void ArrayLiteral::setChild(std::unique_ptr<Node> child) {
 }
 
 const Value* ArrayLiteral::evaluate(Scope* scope) const {
-    return NULL;
+    return nullptr;
 }
 
 } // namespace tinyjs

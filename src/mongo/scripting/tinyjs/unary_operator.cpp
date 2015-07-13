@@ -57,7 +57,7 @@ const Value* UnaryOperator::evaluate(Scope* scope) const {
             res = evaluateReturn(scope);
             break;
         default:
-            res = NULL; //TODO: error?
+            res = nullptr; //TODO: error?
             break;
     }
     return res;

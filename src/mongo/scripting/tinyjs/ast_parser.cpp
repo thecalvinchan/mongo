@@ -36,6 +36,7 @@
 
 #include "mongo/base/checked_cast.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
@@ -46,16 +47,6 @@ ASTParser::ASTParser(std::vector<Token> tokenInput)
     parseTokens(_tokens);
 }
 
-// TODO: linker error if we don't include destructor
-ASTParser::~ASTParser() {
-    this->_head.reset();
-    this->_tokens.clear();
-}
-
-/**
- * This function walks the tree and returns a string of the node names separated by spaces in
- * BFS-traversal order.
- */
 std::string ASTParser::traverse() {
     str::stream output;
     std::queue<Node*> nodes;
@@ -77,17 +68,11 @@ void ASTParser::parseTokens(std::vector<Token> tokens) {
     this->_head = clauseAction();
 }
 
-void ASTParser::nexttoken(void) {
+void ASTParser::nexttoken() {
     _currentPosition++;
     _currentToken = _tokens[_currentPosition];
 }
 
-/**
- * This function takes in a TokenType which should be one of the types that does not correspond
- * to a node in the abstract syntax tree - for example, parentheses, semicolons, "return", etc.
- * If the current token matches the input, it calls nexttoken() and returns true. Otherwise, it
- * returns false.
- */
 bool ASTParser::matchImplicitTerminal(TokenType t) {
     if (_currentToken.type == t) {
         if (_currentPosition < (int)_tokens.size()) {
@@ -98,31 +83,17 @@ bool ASTParser::matchImplicitTerminal(TokenType t) {
     return false;
 }
 
-/**
- * This function takes in a TokenType which should be one of the types that does correspond
- * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
- * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier
- * If the current token matches the input, it calls nexttoken() and returns a node corresponding to
- * the token. Otherwise, it
- * returns NULL.
- */
 std::unique_ptr<Node> ASTParser::matchNodeTerminal(TokenType t) {
     if (_currentToken.type == t) {
-        std::unique_ptr<Node> leaf = std::move(makeTerminalNode(_currentToken));
+        std::unique_ptr<Node> leaf = makeTerminalNode(_currentToken);
         if (_currentPosition < (int)_tokens.size()) {
             nexttoken();
         }
         return leaf;
     }
-    return NULL;
+    return nullptr;
 }
 
-/**
- * This function takes in a TokenType which should be one of the types that does correspond
- * to a node in the abstract syntax tree: kNullLiteral, kUndefinedLiteral, kIntegerLiteral,
- * kFloatLiteral, kBooleanLiteral, kStringLiteral, kIdentifier. It creates and returns a
- * corresponding TerminalNode.
- */
 std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
     std::unique_ptr<TerminalNode> node;
     switch (token.type) {
@@ -141,16 +112,16 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
         case TokenType::kBooleanLiteral: {
             bool boolValue = (token.value == "true");
             node.reset((new TerminalNode(boolValue)));
-        } break;
+            break;
+        } 
         case TokenType::kStringLiteral:
             node.reset((new TerminalNode(token.value)));
-            break;
             break;
         case TokenType::kIdentifier:
             node.reset((new TerminalNode(token.value, true)));
             break;
         default:
-            return NULL;
+            throw ParseException("making terminal node for invalid terminal ", token); 
             break;
     }
     return node;
@@ -159,32 +130,20 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
 std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_ptr<Node>()> action) {
     int resetPosition = _currentPosition;
     try {
-        // std::unique_ptr<Node> subTreeHead = action();
         return action();
     } catch (ParseException& e) {
         _currentPosition = resetPosition;
         _currentToken = _tokens[_currentPosition];
-        return NULL;
+        return nullptr;
     }
 }
 
-/**
- * ExpectImplcitTerminal advances to the next token if the current token matches the input
- * and throws an error otherwise. It only checks simple tokens that won't become nodes,
- * because nodes are created by matchNodeTerminal or by calling an action. TODO why exactly don't we
- * need an expect that returns a node?
- */
 void ASTParser::expectImplicitTerminal(TokenType t) {
     if (!(matchImplicitTerminal(t))) {
         throw ParseException("expected different token", _currentToken);  // TODO better error
                                                                          // message
     }
 }
-
-/**
- * Each of the following functions represents a production rule, described in its header comment.
- * TODO: more explanation of the functions
- */
 
 /**
  * clause:
@@ -197,7 +156,7 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
         expectImplicitTerminal(TokenType::kOpenParen);
         expectImplicitTerminal(TokenType::kCloseParen);
         expectImplicitTerminal(TokenType::kOpenCurlyBrace);
-        head = std::move(returnStatementAction());
+        head = returnStatementAction();
         expectImplicitTerminal(TokenType::kCloseCurlyBrace);
     } else if ((head = tryProductionMatch(std::bind(&ASTParser::returnStatementAction, this)))) {
         ;
@@ -214,7 +173,7 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
  */
 std::unique_ptr<Node> ASTParser::variableAction() {
     std::unique_ptr<Node> leftChild;
-    leftChild = std::move(matchNodeTerminal(TokenType::kIdentifier));
+    leftChild = matchNodeTerminal(TokenType::kIdentifier);
     std::unique_ptr<Node> res = objectAccessorAction(std::move(leftChild));
     return res;
 }
@@ -322,7 +281,7 @@ std::unique_ptr<Node> ASTParser::factorAction() {
     std::unique_ptr<Node> head;
     if ((head = tryProductionMatch(std::bind(&ASTParser::termAction, this)))) {
     } else if (matchImplicitTerminal(TokenType::kOpenParen)) {
-        head = std::move(arithmeticExpressionAction());
+        head = arithmeticExpressionAction();
         expectImplicitTerminal(TokenType::kCloseParen);
     } else {
         throw ParseException("factor", _currentToken);
@@ -336,7 +295,7 @@ std::unique_ptr<Node> ASTParser::factorAction() {
  */
 std::unique_ptr<Node> ASTParser::multiplicativeExpressionAction() {
     std::unique_ptr<Node> leftChild;
-    leftChild = std::move(factorAction());
+    leftChild = factorAction();
     return multiplicativeOperationAction(std::move(leftChild));
 }
 
@@ -368,7 +327,7 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
  */
 std::unique_ptr<Node> ASTParser::arithmeticExpressionAction() {
     std::unique_ptr<Node> leftChild;
-    leftChild = std::move(multiplicativeExpressionAction());
+    leftChild = multiplicativeExpressionAction();
     std::unique_ptr<Node> res = arithmeticOperationAction(std::move(leftChild));
     return res;
 }
@@ -405,7 +364,7 @@ std::unique_ptr<Node> ASTParser::booleanFactorAction() {
     if ((head = tryProductionMatch(std::bind(&ASTParser::arithmeticExpressionAction, this)))) {
     } else {
         expectImplicitTerminal(TokenType::kOpenParen);
-        head = std::move(booleanExpressionAction());
+        head = booleanExpressionAction();
         expectImplicitTerminal(TokenType::kCloseParen);
     }
     return head;
@@ -417,7 +376,7 @@ std::unique_ptr<Node> ASTParser::booleanFactorAction() {
  */
 std::unique_ptr<Node> ASTParser::relationalExpressionAction() {
     std::unique_ptr<Node> leftChild;
-    leftChild = std::move(booleanFactorAction());
+    leftChild = booleanFactorAction();
     std::unique_ptr<Node> res = relationalOperationAction(std::move(leftChild));
     return res;
 }
@@ -462,7 +421,7 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
  */
 std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
     std::unique_ptr<Node> leftChild;
-    leftChild = std::move(relationalExpressionAction());
+    leftChild = relationalExpressionAction();
     std::unique_ptr<Node> res = booleanOperationAction(std::move(leftChild));
     return res;
 }
@@ -474,6 +433,7 @@ std::unique_ptr<Node> ASTParser::booleanExpressionAction() {
  *      | OPTIONAL
  */
 std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> leftChild) {
+    // TODO: can we do this without checked_cast?
     std::unique_ptr<Node> head;
     std::function<std::unique_ptr<Node>()> fn = [this]() { return ternaryOperationAction(); };
     if ((head = tryProductionMatch(fn))) {
@@ -503,13 +463,14 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
  */
 std::unique_ptr<Node> ASTParser::ternaryOperationAction() {  // TODO: should this be structured more
                                                              // like returnStatementAction?
-    std::unique_ptr<Node> head(new TernaryOperator(TokenType::kQuestionMark));
+
+    auto head = stdx::make_unique<TernaryOperator>(TokenType::kQuestionMark);
     expectImplicitTerminal(TokenType::kQuestionMark);
-    checked_cast<TernaryOperator*>(head.get())
-        ->setMiddleChild(std::move(booleanExpressionAction()));
+    head->setMiddleChild(std::move(booleanExpressionAction()));
     expectImplicitTerminal(TokenType::kColon);
-    checked_cast<TernaryOperator*>(head.get())->setRightChild(std::move(booleanExpressionAction()));
-    return head;
+    head->setRightChild(std::move(booleanExpressionAction()));
+    return std::unique_ptr<Node>(head.release());
+
 }
 
 /**
@@ -517,14 +478,14 @@ std::unique_ptr<Node> ASTParser::ternaryOperationAction() {  // TODO: should thi
  *        'return' booleanExpression ';'
  */
 std::unique_ptr<Node> ASTParser::returnStatementAction() {
-    std::unique_ptr<Node> head(new UnaryOperator(TokenType::kReturnKeyword));
+    auto head = stdx::make_unique<UnaryOperator>(TokenType::kReturnKeyword);
     if (matchImplicitTerminal(TokenType::kReturnKeyword)) {
-        checked_cast<UnaryOperator*>(head.get())->setChild(std::move(booleanExpressionAction()));
+        head->setChild(std::move(booleanExpressionAction()));
         expectImplicitTerminal(TokenType::kSemiColon);
     } else {
         throw ParseException("return statement", _currentToken);
     }
-    return head;
+    return std::unique_ptr<Node>(head.release());
 }
 } // namespace tinyjs
 } // namespace mongo
