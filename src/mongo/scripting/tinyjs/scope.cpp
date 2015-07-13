@@ -51,7 +51,7 @@ Value* get(StringData variableName) {
         return _parent->get(variableName);
     } else {
         // variable is out of scope
-        return NULL; 
+        return nullptr; 
     }
 }
 

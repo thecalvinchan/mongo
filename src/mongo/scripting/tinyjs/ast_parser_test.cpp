@@ -246,6 +246,31 @@ TEST(ParserTest, test14) {
     testParseTree(input, expected.str());
 }
 
+TEST(ParserTest, test15) {
+    string input = "return this.a[this.b] == 3;";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "== ";
+    expected << "[ 3 ";
+    expected << ". . ";
+    expected << "this a this b " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
+TEST(ParserTest, test16) {
+    string input = "return this.a[this.b] == this.c[\"foo\"];";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "== ";
+    expected << "[ [ ";
+    expected << ". . . \"foo\" ";
+    expected << "this a this b this c " << std::endl;
+
+    testParseTree(input, expected.str());
+}
 
 TEST(ParserTest, ErrorBadOperator) {
     testSyntaxError("return (x++1);");

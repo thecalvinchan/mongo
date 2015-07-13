@@ -99,7 +99,7 @@ const Value* BinaryOperator::evaluate(Scope* scope) const {
         
     }
 
-    return NULL;
+    return nullptr;
 }
 
 /*const Value* BinaryOperator::evaluatePeriod(Scope* scope) const {
@@ -128,25 +128,25 @@ const Value* BinaryOperator::evaluate(Scope* scope) const {
 const Value* BinaryOperator::evaluateGreaterThan(Scope* scope) const {
     const Value* leftValue = this->getLeftChild()->evaluate(scope);
     const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return (Value::compare(*leftValue, *rightValue) > 0);
+    return new Value(Value::compare(*leftValue, *rightValue) > 0);
 }
 
 const Value* BinaryOperator::evaluateGreaterThanEquals(Scope* scope) const {
     const Value* leftValue = this->getLeftChild()->evaluate(scope);
     const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return (Value::compare(*leftValue, *rightValue) >= 0);
+    return new Value(Value::compare(*leftValue, *rightValue) >= 0);
 }
 
 const Value* BinaryOperator::evaluateLessThan(Scope* scope) const {
     const Value* leftValue = this->getLeftChild()->evaluate(scope);
     const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return (Value::compare(*leftValue, *rightValue) < 0);
+    return new Value(Value::compare(*leftValue, *rightValue) < 0);
 }
 
 const Value* BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
     const Value* leftValue = this->getLeftChild()->evaluate(scope);
     const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return (Value::compare(*leftValue, *rightValue) <= 0);
+    return new Value(Value::compare(*leftValue, *rightValue) <= 0);
 }
 
 }  // namespace tinyjs
