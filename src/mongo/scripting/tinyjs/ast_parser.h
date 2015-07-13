@@ -33,6 +33,7 @@
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/node.h"
 #include "mongo/scripting/tinyjs/terminal_node.h"
+ #include "mongo/scripting/tinyjs/identifier.h"
 #include "mongo/scripting/tinyjs/ternary_operator.h"
 #include "mongo/scripting/tinyjs/parse_exception.h"
 #include "mongo/scripting/tinyjs/unary_operator.h"

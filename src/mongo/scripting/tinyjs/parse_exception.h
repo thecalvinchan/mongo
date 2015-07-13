@@ -34,30 +34,21 @@
 namespace mongo {
 namespace tinyjs {
 
-class ParseException: public std::exception {
+class ParseException : public std::exception {
 public:
-
-    /** 
+    /**
      * Constructor
      */
-    ParseException(std::string message, Token token) : _message(message), _token(token)
-    {
-    }
+    ParseException(std::string message, Token token) : _message(message), _token(token) {}
 
-    virtual const char* what() const throw (){
-        std::stringstream errorMessage;
-        errorMessage << "Error parsing token '";
-        errorMessage << _token.value.rawData();
-        errorMessage << "': ";
-        errorMessage << _message;
-        errorMessage << std::endl;
+    virtual const char* what() const throw() {
         return _message.c_str();
     };
 
-private: 
+private:
     std::string _message;
     Token _token;
 };
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

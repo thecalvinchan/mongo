@@ -28,6 +28,9 @@
 
 #pragma once
 
+#include "mongo/base/string_data.h"
+#include "mongo/db/pipeline/value.h"
+
 namespace mongo {
 namespace tinyjs {
 
@@ -38,14 +41,12 @@ public:
     /* 
      * This function inserts a variableName and value pair into the scope, regardless of whether that variableName was already in scope.
      */
-    void put(StringData variableName, Value* value);
-    Value* get(StringData variableName);
-    bool isInScope(StringData variableName);
-    void setParent(Scope* parent);
-    Scope* getParent();
+    void put(StringData variableName, Value value);
+    Value get(StringData variableName) const;
+    const Scope* getParent() const;
 private:
-    Scope* _parent;
-    std::map<StringData, Value*> _variables;
+    const Scope* _parent;
+    std::map<StringData, Value> _variables;
 };
 
 } // namespace tinyjs

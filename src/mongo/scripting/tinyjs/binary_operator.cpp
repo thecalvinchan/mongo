@@ -33,11 +33,10 @@
 namespace mongo {
 namespace tinyjs {
 
-BinaryOperator::BinaryOperator(TokenType type) : NonTerminalNode(type) {
-}
+BinaryOperator::BinaryOperator(TokenType type) : NonTerminalNode(type) {}
 
 std::vector<Node*> BinaryOperator::getChildren() const {
-    std::vector<Node* > children;
+    std::vector<Node*> children;
     children.push_back(_leftChild.get());
     children.push_back(_rightChild.get());
     return children;
@@ -59,17 +58,16 @@ void BinaryOperator::setRightChild(std::unique_ptr<Node> node) {
     _rightChild = std::move(node);
 }
 
-const Value* BinaryOperator::evaluate(Scope* scope) const {
-
+const Value BinaryOperator::evaluate(Scope* scope) const {
     switch (this->getType()) {
         case TokenType::kPeriod:
             break;
         case TokenType::kOpenSquareBracket:
             break;
         case TokenType::kMultiply:
-            break;
+            return evaluateMultiply(scope);
         case TokenType::kDivide:
-            break;
+            return evaluateDivide(scope);
         case TokenType::kAdd:
             break;
         case TokenType::kSubtract:
@@ -78,7 +76,7 @@ const Value* BinaryOperator::evaluate(Scope* scope) const {
             break;
         case TokenType::kDoubleEquals:
             break;
-        case TokenType::kGreaterThan: 
+        case TokenType::kGreaterThan:
             return evaluateGreaterThan(scope);
         case TokenType::kGreaterThanEquals:
             return evaluateGreaterThanEquals(scope);
@@ -96,10 +94,9 @@ const Value* BinaryOperator::evaluate(Scope* scope) const {
             break;
         default:
             break;
-        
     }
 
-    return nullptr;
+    return Value();
 }
 
 /*const Value* BinaryOperator::evaluatePeriod(Scope* scope) const {
@@ -115,38 +112,205 @@ const Value* BinaryOperator::evaluate(Scope* scope) const {
     StringData objectName(this->getLeftChild()->evaluate(scope)->getString());
     Value* objectValue = scope->get(objectName);
     if (!objectValue) {
-        // TODO throw error 
+        // TODO throw error
     }
 
 }*/
+
+const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    if (leftValue.getType() == NumberDouble) {
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getDouble() * rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getDouble() * rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getDouble() * rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(0);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getDouble() * rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == NumberInt) {
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getInt() * rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getInt() * rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getInt() * rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(0);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getInt() * rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == NumberLong) {
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getLong() * rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getLong() * rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getLong() * rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(0);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getLong() * rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if ((leftValue.getType() == jstNULL) && rightValue.numeric()) {
+        return Value(0);
+    } else if (leftValue.getType() == Bool) {
+        int leftOperand = rightValue.getBool() ? 1 : 0;
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftOperand * rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftOperand * rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftOperand * rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(0);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftOperand * rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else {
+        throw std::runtime_error("NaN");
+    }
+}
+
+bool isZero(Value value) {
+    return (((value.numeric() && (value.coerceToInt() == 0)) ||
+             value.getType() == jstNULL) ||
+            ((value.getType() == Bool) && value.getBool() == false));
+}
+
+const Value BinaryOperator::evaluateDivide(Scope* scope) const {
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+
+    if (leftValue.getType() == NumberDouble) {
+        if (isZero(rightValue)) {
+            throw std::runtime_error(
+                "Divide by 0");  // TODO: doesn't match JS behavior, should give infinity
+        }
+
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getDouble() / rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getDouble() / rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getDouble() / rightValue.getLong());
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getDouble() / rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+
+    } else if (leftValue.getType() == NumberInt) {
+        if (isZero(rightValue)) {
+            throw std::runtime_error(
+                "Divide by 0");  // TODO: doesn't match JS behavior, should give infinity
+        }
+
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getInt() / rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getInt() / rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getInt() / rightValue.getLong());
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getInt() / rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+
+    } else if (leftValue.getType() == NumberLong) {
+        if (isZero(rightValue)) {
+            throw std::runtime_error(
+                "Divide by 0");  // TODO: doesn't match JS behavior, should give infinity
+        }
+
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getLong() / rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getLong() / rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getLong() / rightValue.getLong());
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getLong() / rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if ((leftValue.getType() == jstNULL) && rightValue.numeric()) {
+        if (isZero(rightValue)) {
+            throw std::runtime_error("Divide 0/0: NaN");
+        }
+
+        return Value(0);
+
+    } else if (leftValue.getType() == Bool) {
+        if (isZero(rightValue)) {
+            throw std::runtime_error("Divide 0/0: NaN");
+        }
+
+        int leftOperand = rightValue.getBool() ? 1 : 0;
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftOperand / rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftOperand / rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftOperand / rightValue.getLong());
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftOperand / rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else {
+        throw std::runtime_error("NaN");
+    }
+}
 
 /*
  * The following are comparison helper functions. For now they are using value::compare. We need to
  * look for edge cases in Javascript that this might not cover.
  */
 
-const Value* BinaryOperator::evaluateGreaterThan(Scope* scope) const {
-    const Value* leftValue = this->getLeftChild()->evaluate(scope);
-    const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return new Value(Value::compare(*leftValue, *rightValue) > 0);
+const Value BinaryOperator::evaluateGreaterThan(Scope* scope) const {
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    return Value(Value::compare(leftValue, rightValue) > 0);
 }
 
-const Value* BinaryOperator::evaluateGreaterThanEquals(Scope* scope) const {
-    const Value* leftValue = this->getLeftChild()->evaluate(scope);
-    const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return new Value(Value::compare(*leftValue, *rightValue) >= 0);
+const Value BinaryOperator::evaluateGreaterThanEquals(Scope* scope) const {
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    return Value(Value::compare(leftValue, rightValue) >= 0);
 }
 
-const Value* BinaryOperator::evaluateLessThan(Scope* scope) const {
-    const Value* leftValue = this->getLeftChild()->evaluate(scope);
-    const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return new Value(Value::compare(*leftValue, *rightValue) < 0);
+const Value BinaryOperator::evaluateLessThan(Scope* scope) const {
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    return Value(Value::compare(leftValue, rightValue) < 0);
 }
 
-const Value* BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
-    const Value* leftValue = this->getLeftChild()->evaluate(scope);
-    const Value* rightValue = this->getRightChild()->evaluate(scope);
-    return new Value(Value::compare(*leftValue, *rightValue) <= 0);
+const Value BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    return Value(Value::compare(leftValue, rightValue) <= 0);
 }
 
 }  // namespace tinyjs

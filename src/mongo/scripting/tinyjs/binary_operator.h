@@ -42,14 +42,16 @@ public:
     Node* getRightChild() const;
     void setLeftChild(std::unique_ptr<Node>);
     void setRightChild(std::unique_ptr<Node>);
-    const Value* evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope) const;
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _rightChild;
-    const Value* evaluateGreaterThan(Scope* scope) const;
-    const Value* evaluateGreaterThanEquals(Scope* scope) const;
-    const Value* evaluateLessThan(Scope* scope) const;
-    const Value* evaluateLessThanEquals(Scope* scope) const;
+    const Value evaluateMultiply(Scope* scope) const;
+    const Value evaluateDivide(Scope* scope) const;
+    const Value evaluateGreaterThan(Scope* scope) const;
+    const Value evaluateGreaterThanEquals(Scope* scope) const;
+    const Value evaluateLessThan(Scope* scope) const;
+    const Value evaluateLessThanEquals(Scope* scope) const;
 };
 
 } // namespace tinyjs

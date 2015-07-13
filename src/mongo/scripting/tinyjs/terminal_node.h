@@ -43,15 +43,14 @@ public:
     TerminalNode(const double &value);
     TerminalNode(const bool &value);
     TerminalNode(const StringData &value);
-    TerminalNode(const StringData &value, bool identifier);
     ~TerminalNode() {}
     std::vector<Node* > getChildren() const;
-    const Value* evaluate(Scope* scope) const;
+    virtual const Value evaluate(Scope* scope) const;
     StringData getName() const;
     bool isIdentifier() const;
 private:
     Value _value;
-    bool _isIdentifierBool;
+    bool _isIdentifier;
 };
 
 } // namespace tinyjs

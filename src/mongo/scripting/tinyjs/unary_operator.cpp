@@ -50,20 +50,17 @@ void UnaryOperator::setChild(std::unique_ptr<Node> node) {
     _child = std::move(node);
 }
 
-const Value* UnaryOperator::evaluate(Scope* scope) const {
-    const Value* res;
+const Value UnaryOperator::evaluate(Scope* scope) const {
     switch (this->getType()) {
-        case TokenType::kReturnKeyword:
-            res = evaluateReturn(scope);
-            break;
+        case TokenType::kReturnKeyword: {
+            return evaluateReturn(scope);
+        }   
         default:
-            res = nullptr; //TODO: error?
-            break;
+            return Value(); //TODO: error?
     }
-    return res;
 }
 
-const Value* UnaryOperator::evaluateReturn(Scope* scope) const {
+const Value UnaryOperator::evaluateReturn(Scope* scope) const {
     return (_child->evaluate(scope));
 }
 

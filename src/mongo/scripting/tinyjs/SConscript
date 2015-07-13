@@ -6,11 +6,12 @@ env.Library(
     target='ast_parser',
     source=[
         'ast_parser.cpp',
-        'node.cpp',
         'array_literal.cpp',
         'binary_operator.cpp',
         'nonterminal_node.cpp',
         'terminal_node.cpp',
+        'identifier.cpp',
+        'scope.cpp',
         'ternary_operator.cpp',
         'unary_operator.cpp',
     ],

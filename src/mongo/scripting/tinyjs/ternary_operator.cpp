@@ -68,15 +68,15 @@ void TernaryOperator::setRightChild(std::unique_ptr<Node> node) {
     _rightChild = std::move(node);
 }
 
-const Value* TernaryOperator::evaluate(Scope* scope) const {
+const Value TernaryOperator::evaluate(Scope* scope) const {
     
-    const Value* condition = this->getLeftChild()->evaluate(scope);
+    const Value condition = this->getLeftChild()->evaluate(scope);
 
-    if (condition->getType() != Bool) { // TODO how does it understand the BSON types?
+    if (condition.getType() != Bool) { // TODO how does it understand the BSON types?
         //TODO throw error
     }
 
-    if (condition->getBool()) {
+    if (condition.getBool()) {
         // Evaluate the first branch
         return this->getMiddleChild()->evaluate(scope);
     } else {

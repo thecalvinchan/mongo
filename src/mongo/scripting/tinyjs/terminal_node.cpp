@@ -35,38 +35,28 @@
 namespace mongo {
 namespace tinyjs {
 
-TerminalNode::TerminalNode(const NullLabeler&) :  _value(Value(BSONNULL)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const UndefinedLabeler&) : _value(Value(BSONUndefined)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const int &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const double &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const bool &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const StringData &value) : _value(Value(value)), _isIdentifierBool(false) {}
-TerminalNode::TerminalNode(const StringData &value, bool identifier)
-    : _value(Value(value)), _isIdentifierBool(identifier) {}
+TerminalNode::TerminalNode(const NullLabeler&) : _value(Value(BSONNULL)) {}
+TerminalNode::TerminalNode(const UndefinedLabeler&) : _value(Value(BSONUndefined)) {}
+TerminalNode::TerminalNode(const int& value) : _value(Value(value)) {}
+TerminalNode::TerminalNode(const double& value) : _value(Value(value)) {}
+TerminalNode::TerminalNode(const bool& value) : _value(Value(value)) {}
+TerminalNode::TerminalNode(const StringData& value) : _value(Value(value)) {}
 
-std::vector<Node* > TerminalNode::getChildren() const {
+std::vector<Node*> TerminalNode::getChildren() const {
     return std::vector<Node*>();
 }
 
-const Value* TerminalNode::evaluate(Scope* scope) const {
-    return &_value;
+const Value TerminalNode::evaluate(Scope* scope) const {
+    return _value;
 }
 
 StringData TerminalNode::getName() const {
     std::string res = _value.toString();
-    //TODO: figure out better way of dealing with the extra quotes around stringdata values
     if (res.front() == '"') {
-        res.erase(0, 1); // erase the first character
-        if (res.back() == '"') {
-            res.erase(res.size() - 1); // erase the last character
-        }
+        return StringData(res.substr(1, res.size() - 2));
     }
     return StringData(res);
 }
 
-bool TerminalNode::isIdentifier() const {
-    return _isIdentifierBool;
-}
-
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

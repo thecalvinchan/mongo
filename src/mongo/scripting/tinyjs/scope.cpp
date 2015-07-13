@@ -37,12 +37,12 @@ Scope::Scope(){}
 
 Scope::Scope(Scope* parent) : _parent(parent) {}
 
-void put(StringData variableName, Value* value) {
+void Scope::put(StringData variableName, Value value) {
     _variables[variableName] = value;
 }
 
-Value* get(StringData variableName) {
-    map<StringData, Value*>::iterator it = _variables.find(variableName);
+Value Scope::get(StringData variableName) const {
+    std::map<StringData, Value>::const_iterator it = _variables.find(variableName);
     if (it != _variables.end()) {
         // Case where variableName is found in this scope
         return it->second;
@@ -51,21 +51,11 @@ Value* get(StringData variableName) {
         return _parent->get(variableName);
     } else {
         // variable is out of scope
-        return nullptr; 
+        return Value(BSONUndefined); 
     }
 }
 
-bool isInScope(StringData variableName) {
-    // Count the occurrences of the variable name in the scope. If it exists, this will evaluate to
-    // true. If no occurrences are found, it will evaluate to false.
-    return _variables.count(variableName);
-}
-
-void setParent(Scope* parent) {
-    _parent = parent;
-}
-
-Scope* getParent() {
+const Scope* Scope::getParent() const {
     return _parent;
 }
 

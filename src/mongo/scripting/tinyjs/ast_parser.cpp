@@ -118,7 +118,7 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
             node.reset((new TerminalNode(token.value)));
             break;
         case TokenType::kIdentifier:
-            node.reset((new TerminalNode(token.value, true)));
+            node.reset((new Identifier(token.value)));
             break;
         default:
             throw ParseException("making terminal node for invalid terminal ", token); 
