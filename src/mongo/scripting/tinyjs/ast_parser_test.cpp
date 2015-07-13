@@ -224,20 +224,6 @@ TEST(ParserTest, test12) {
 }
 
 TEST(ParserTest, test13) {
-    string input = "return (-3*4)/8 - y;";
-
-    std::stringstream expected;
-    expected << "return ";
-    expected << "- ";
-    expected << "/ y ";
-    expected << "* 8 ";
-    expected << "- 4 ";
-    expected << "3 " << std::endl;
-
-    testParseTree(input, expected.str());
-}
-
-TEST(ParserTest, test13) {
     string input = "return this.a != 1;";
 
     std::stringstream expected;
@@ -283,6 +269,20 @@ TEST(ParserTest, test16) {
     expected << "[ [ ";
     expected << ". . . \"foo\" ";
     expected << "this a this b this c " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
+TEST(ParserTest, test17) {
+    string input = "return (-3*4)/8 - y;";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "- ";
+    expected << "/ y ";
+    expected << "* 8 ";
+    expected << "- 4 ";
+    expected << "3 " << std::endl;
 
     testParseTree(input, expected.str());
 }
