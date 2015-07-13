@@ -48,6 +48,8 @@ private:
     std::unique_ptr<Node> _rightChild;
     const Value evaluateMultiply(Scope* scope) const;
     const Value evaluateDivide(Scope* scope) const;
+    const Value evaluateAdd(Scope* scope) const;
+    const Value evaluateSubtract(Scope* scope) const;
     const Value evaluateGreaterThan(Scope* scope) const;
     const Value evaluateGreaterThanEquals(Scope* scope) const;
     const Value evaluateLessThan(Scope* scope) const;

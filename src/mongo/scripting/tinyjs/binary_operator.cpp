@@ -189,8 +189,7 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
 }
 
 bool isZero(Value value) {
-    return (((value.numeric() && (value.coerceToInt() == 0)) ||
-             value.getType() == jstNULL) ||
+    return (((value.numeric() && (value.coerceToInt() == 0)) || value.getType() == jstNULL) ||
             ((value.getType() == Bool) && value.getBool() == false));
 }
 
@@ -282,6 +281,103 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
     } else {
         throw std::runtime_error("NaN");
     }
+}
+
+std::string makeString(Value value) {
+    if ((value.getType() == String) || value.numeric()){
+        return value.coerceToString();
+    } else if (value.getType() == jstNULL) {
+        return "null";
+    } else if (value.getType() == Undefined) {
+        return "undefined";
+    } else if (value.getType() == Array) {
+        std::string res = "";
+        bool first = true;
+        for (Value v : value.getArray()) {
+            if (!first) {
+                res += ",";
+            } else {
+                first = false;
+            }
+            res += makeString(v);
+        }
+        return res;
+    } else {
+        return value.coerceToString(); // TODO
+    }
+}
+
+Value evaluateAddNumeric(Value leftValue, Value rightValue) {
+
+    if (leftValue.getType() == NumberDouble) {
+        // TODO: refactor to share code with multiplication?
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getDouble() + rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getDouble() + rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getDouble() + rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return leftValue;
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getDouble() + rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == NumberInt) {
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getInt() + rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getInt() + rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getInt() + rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return leftValue;
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getInt() + rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == NumberLong) {
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getLong() + rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getLong() + rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getLong() + rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return leftValue;
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getLong() + rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else {
+        throw std::runtime_error("NaN");
+    }
+}
+
+const Value BinaryOperator::evaluateAdd(Scope* scope) const {
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    if (leftValue.getType() == String) {
+        return Value(leftValue.getString() + makeString(rightValue));
+    } else if (rightValue.getType() == String) {
+        return Value(makeString(leftValue) + rightValue.getString());
+    } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
+        return Value(makeString(leftValue) + makeString(rightValue));
+    } else if (leftValue.numeric()) {
+        return evaluateAddNumeric(leftValue, rightValue);
+    } else {
+        throw std::runtime_error("NaN");
+    }
+}
+
+const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
+    return Value();
 }
 
 /*
