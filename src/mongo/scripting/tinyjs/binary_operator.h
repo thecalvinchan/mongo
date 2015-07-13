@@ -46,10 +46,10 @@ public:
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _rightChild;
-    /*const Value* evaluateGreaterThan(Scope* scope) const;
+    const Value* evaluateGreaterThan(Scope* scope) const;
     const Value* evaluateGreaterThanEquals(Scope* scope) const;
     const Value* evaluateLessThan(Scope* scope) const;
-    const Value* evaluateLessThanEquals(Scope* scope) const;*/
+    const Value* evaluateLessThanEquals(Scope* scope) const;
 };
 
 } // namespace tinyjs
