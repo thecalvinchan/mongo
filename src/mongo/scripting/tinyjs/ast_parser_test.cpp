@@ -52,6 +52,7 @@ void testParseTree(string input, string expected) {
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser a(std::move(tokenData));
     std::string res = a.traverse();
+    std::cout << res << std::endl;
     ASSERT_EQ(res,expected);
 }
 
@@ -218,6 +219,20 @@ TEST(ParserTest, test12) {
     expected << "> 'dog' 'cat' ";
     expected << "1 . ";
     expected << "this pets " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
+TEST(ParserTest, test13) {
+    string input = "return (-3*4)/8 - y;";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "- ";
+    expected << "/ y ";
+    expected << "* 8 ";
+    expected << "- 4 ";
+    expected << "3 " << std::endl;
 
     testParseTree(input, expected.str());
 }

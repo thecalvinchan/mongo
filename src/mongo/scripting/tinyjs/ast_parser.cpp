@@ -156,7 +156,6 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
     return node;
 }
 
-// Overloads acceptIf to search non-terminals
 std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_ptr<Node>()> action) {
     int resetPosition = _currentPosition;
     try {
@@ -232,7 +231,6 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> left
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(matchNodeTerminal(TokenType::kIdentifier)));
         return objectAccessorAction(std::move(head));
-
     } else if ((matchImplicitTerminal(TokenType::kOpenSquareBracket))) {
         std::unique_ptr<BinaryOperator> head(new BinaryOperator(TokenType::kOpenSquareBracket));
         head->setLeftChild(std::move(leftChild));
@@ -256,12 +254,34 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> left
  */
 std::unique_ptr<Node> ASTParser::termAction() {
     std::unique_ptr<Node> head;
-    if ((head = matchNodeTerminal(TokenType::kIntegerLiteral)) ||
-        (head = matchNodeTerminal(TokenType::kFloatLiteral)) ||
+    if ((head = tryProductionMatch(std::bind(&ASTParser::numberAction, this))) ||
         (head = matchNodeTerminal(TokenType::kStringLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
         (head = matchNodeTerminal(TokenType::kBooleanLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
+    } else {
+        throw ParseException(_currentToken.value.rawData(), _currentToken);
+    }
+    return head;
+}
+
+/**
+ * numberAction:
+ *        - integer
+ *      | - float
+ *      | integer
+ *      | float
+ */
+std::unique_ptr<Node> ASTParser::numberAction() {
+    std::unique_ptr<Node> head;
+    bool isNegative = matchImplicitTerminal(TokenType::kSubtract);
+    if ((head = matchNodeTerminal(TokenType::kIntegerLiteral)) ||
+        (head = matchNodeTerminal(TokenType::kFloatLiteral)))  {
+        if (isNegative) {
+            UnaryOperator *negative_head = new UnaryOperator(TokenType::kSubtract);
+            negative_head->setChild(std::move(head));
+            return std::unique_ptr<Node>(negative_head);
+        }
     } else {
         throw ParseException(_currentToken.value.rawData(), _currentToken);
     }
