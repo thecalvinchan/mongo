@@ -49,10 +49,12 @@ using std::string;
  * and compares the result of evaluation to the expected output. 
  * It assumes that the lexing will not return with an error.
  */
-void testEvaluation(string input, Value expected) {
+void testEvaluation(string input, Value expected, Scope* s = NULL) {
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser a(std::move(tokenData));
-    Scope* s = new Scope();
+    if (s == NULL) {
+        s = new Scope();
+    }
     Value res = a.evaluate(s);
     ASSERT_EQ(res,expected);
     delete s;
@@ -69,7 +71,19 @@ void testEvaluationError(string input) {
     ASSERT_THROWS(a.evaluate(s), std::exception);
 }
 
-
+TEST(EvaluationTest, objectAccessor) {
+    string input = "return this.x;";
+    Scope* s = new Scope();
+    mutablebson::Document doc;
+    mutablebson::Element root = doc.root();
+    root.pushBack(doc.makeElementInt("x", 42));
+    BSONObjBuilder builder;
+    doc.writeTo(&builder);
+    BSONObj result = builder.obj();
+    Value object = Value(result);
+    scope.put(StringData("this"),object);
+    testEvaluation(input, Value(42), s);
+}
 
 TEST(EvaluationTest, simple) {
     string input = "return 1;";
