@@ -453,17 +453,28 @@ const Value BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
 }
 /*
 const Value BinaryOperator::evaluateObjectAccessor(Scope* scope) const {
+    // objectPathString = objectName.propertyA.propertyB.propertyC
+    std::string objectPathString = BinaryOperator::generateNestedField(this, scope);  
+    int rootObjIndex = objectPathString.find_first_of('.');
+    // fieldPathString = propertyA.propertyB.propertyC
+    // objectString = objectName
+    std::string fieldPathString = objectPathString.substr(rootObjIndex+1),
+                objectString = objectPathString.substr(0, rootObjIndex);
+    FieldPath fieldPath = FieldPath(fieldPathString);
+    Value object = scope->get(StringData(objectString));
+    Document doc = object->getDocument(); 
+    return doc->getNestedField(fieldPath);
 }
 
-std::string generateNestedField(Node *head, Scope* scope) {
+static std::string BinaryOperator::generateNestedField(Node *head, Scope* scope) {
     std::string cur = head->getName();
     std::string leftNestedField, rightNestedField;
     if (cur = '.') {
-        leftNestedField = generateNestedField(head->getLeftChild());
-        rightNestedField = generateNestedField(head->getRightChild());
+        leftNestedField = BinaryOperator::generateNestedField(head->getLeftChild(), scope);
+        rightNestedField = BinaryOperator::generateNestedField(head->getRightChild(), scope);
     } else if (cur = '[') {
         cur = '.';
-        leftNestedField = generateNestedField(head->getLeftChild());
+        leftNestedField = BinaryOperator::generateNestedField(head->getLeftChild(), scope);
         Value rightChildValue = head->getRightChild()->evaluate(scope);
         rightNestedField = rightChildValue->coerceToString();
     } else {
