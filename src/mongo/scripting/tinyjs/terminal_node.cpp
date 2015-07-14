@@ -52,7 +52,8 @@ const Value TerminalNode::evaluate(Scope* scope) const {
 
 StringData TerminalNode::getName() const {
     std::string res = _value.toString();
-    if (res.front() == '"') {
+    if (((res.front() == '"') && (res.back() == '"')) ||
+        ((res.front() == '\'') && (res.back() == '\''))) {
         return StringData(res.substr(1, res.size() - 2));
     }
     return StringData(res);

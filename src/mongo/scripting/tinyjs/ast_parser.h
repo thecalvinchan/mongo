@@ -51,7 +51,7 @@ public:
      * BFS-traversal order.
      */
     std::string traverse();
-
+    Value evaluate(Scope* s);
 private:
     void parseTokens(std::vector<Token> tokens);
     void nexttoken(void);

@@ -303,6 +303,17 @@ TEST(ParserTest, test18) {
     testParseTree(input, expected.str());
 }
 
+TEST(ParserTest, test19) {
+    string input = "return 1;";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "1 " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
+
 TEST(ParserTest, ErrorBadOperator) {
     testSyntaxError("return (x++1);");
 }

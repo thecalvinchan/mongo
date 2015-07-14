@@ -64,6 +64,10 @@ std::string ASTParser::traverse() {
     return output;
 }
 
+Value ASTParser::evaluate(Scope* s) {
+    return this->_head->evaluate(s);
+}
+
 void ASTParser::parseTokens(std::vector<Token> tokens) {
     this->_head = clauseAction();
 }
@@ -217,6 +221,8 @@ std::unique_ptr<Node> ASTParser::termAction() {
         (head = matchNodeTerminal(TokenType::kStringLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
         (head = matchNodeTerminal(TokenType::kBooleanLiteral)) ||
+        (head = matchNodeTerminal(TokenType::kNullLiteral)) ||
+        (head = matchNodeTerminal(TokenType::kUndefinedLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
     } else {
         throw ParseException(_currentToken.value.rawData(), _currentToken);

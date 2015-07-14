@@ -69,7 +69,7 @@ const Value BinaryOperator::evaluate(Scope* scope) const {
         case TokenType::kDivide:
             return evaluateDivide(scope);
         case TokenType::kAdd:
-            break;
+            return evaluateAdd(scope);
         case TokenType::kSubtract:
             break;
         case TokenType::kTripleEquals:
@@ -283,8 +283,22 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
     }
 }
 
+std::string stripDoubleQuotes(std::string s) {
+    if (((s.front() == '"') && (s.back() == '"')) || 
+            ((s.front() == '\'') && (s.back() == '\''))) {
+        s = s.substr(1, s.size() - 2);
+    }
+    if (((s.front() == '"') && (s.back() == '"')) ||
+           ((s.front() == '\'') && (s.back() == '\''))) {
+        s = s.substr(1, s.size() - 2);
+    }
+    return s;
+}
+
 std::string makeString(Value value) {
-    if ((value.getType() == String) || value.numeric()){
+    if (value.getType() == String) {
+        return stripDoubleQuotes(value.toString());
+    } else if (value.numeric()) {
         return value.coerceToString();
     } else if (value.getType() == jstNULL) {
         return "null";
@@ -303,12 +317,11 @@ std::string makeString(Value value) {
         }
         return res;
     } else {
-        return value.coerceToString(); // TODO
+        return value.coerceToString();  // TODO
     }
 }
 
 Value evaluateAddNumeric(Value leftValue, Value rightValue) {
-
     if (leftValue.getType() == NumberDouble) {
         // TODO: refactor to share code with multiplication?
         if (rightValue.getType() == NumberDouble) {
@@ -355,6 +368,38 @@ Value evaluateAddNumeric(Value leftValue, Value rightValue) {
         } else {
             throw std::runtime_error("NaN");
         }
+    } else if (leftValue.getType() == Bool) {
+        int leftOperand = leftValue.getBool() ? 1 : 0;
+         if (rightValue.getType() == NumberDouble) {
+            return Value(leftOperand + rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftOperand + rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftOperand + rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(leftOperand);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftOperand + rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == jstNULL) { //TODO CLEAN UP
+        int leftOperand = 0;
+         if (rightValue.getType() == NumberDouble) {
+            return Value(leftOperand + rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftOperand + rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftOperand + rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(leftOperand);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftOperand + rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
     } else {
         throw std::runtime_error("NaN");
     }
@@ -364,15 +409,13 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
     const Value leftValue = this->getLeftChild()->evaluate(scope);
     const Value rightValue = this->getRightChild()->evaluate(scope);
     if (leftValue.getType() == String) {
-        return Value(leftValue.getString() + makeString(rightValue));
+        return Value(makeString(leftValue) + makeString(rightValue));
     } else if (rightValue.getType() == String) {
-        return Value(makeString(leftValue) + rightValue.getString());
+        return Value(makeString(leftValue) + makeString(rightValue));
     } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
         return Value(makeString(leftValue) + makeString(rightValue));
-    } else if (leftValue.numeric()) {
-        return evaluateAddNumeric(leftValue, rightValue);
     } else {
-        throw std::runtime_error("NaN");
+        return evaluateAddNumeric(leftValue, rightValue);
     }
 }
 

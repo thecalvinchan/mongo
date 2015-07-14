@@ -47,3 +47,14 @@ env.CppUnitTest(
         'lexer'
     ]
 )
+
+env.CppUnitTest(
+    target='evaluation_test',
+    source=[
+        'evaluation_test.cpp'
+    ], 
+    LIBDEPS=[
+        'ast_parser', 
+        'lexer'
+    ]
+)

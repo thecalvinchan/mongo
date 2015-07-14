@@ -108,6 +108,10 @@ TEST(LexerTest, kIntegerLiteral) {
     testSingleToken("12345", TokenType::kIntegerLiteral);
 }
 
+TEST(LexerTest, kIntegerLiteral0) {
+    testSingleToken("0", TokenType::kIntegerLiteral);
+}
+
 TEST(LexerTest, invalidIntegerLeadingZero) {
     testInvalidLine("012345", 0, '0');
 }
