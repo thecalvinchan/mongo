@@ -55,7 +55,7 @@ private:
     const Value evaluateLessThan(Scope* scope) const;
     const Value evaluateLessThanEquals(Scope* scope) const;
     const Value evaluateObjectAccessor(Scope* scope) const;
-    static std::string generateNestedField(Node *head, Scope* scope);
+    static std::string generateNestedField(const Node *head, Scope* scope);
 };
 
 } // namespace tinyjs
