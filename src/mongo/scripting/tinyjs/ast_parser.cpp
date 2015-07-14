@@ -110,9 +110,14 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
         case TokenType::kIntegerLiteral:
             node.reset((new TerminalNode(std::stoi(token.value.rawData()))));
             break;
-        case TokenType::kFloatLiteral:
-            node.reset((new TerminalNode(std::stod(token.value.rawData()))));
+        case TokenType::kFloatLiteral: {
+            if ((token.value.toString() == "NaN") || (token.value.toString() == "Infinity")) {
+                node.reset((new TerminalNode(token.value)));
+            } else {
+                node.reset((new TerminalNode(std::stod(token.value.rawData()))));
+            }
             break;
+        }
         case TokenType::kBooleanLiteral: {
             bool boolValue = (token.value == "true");
             node.reset((new TerminalNode(boolValue)));
