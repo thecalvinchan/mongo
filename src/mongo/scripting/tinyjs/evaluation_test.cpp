@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "mongo/unittest/unittest.h"
+#include "mongo/bson/mutable/document.h"
 #include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
 #include "mongo/scripting/tinyjs/scope.h"
@@ -81,7 +82,7 @@ TEST(EvaluationTest, objectAccessor) {
     doc.writeTo(&builder);
     BSONObj result = builder.obj();
     Value object = Value(result);
-    scope.put(StringData("this"),object);
+    s->put(StringData("this"),object);
     testEvaluation(input, Value(42), s);
 }
 

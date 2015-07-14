@@ -63,6 +63,7 @@ void BinaryOperator::setRightChild(std::unique_ptr<Node> node) {
 const Value BinaryOperator::evaluate(Scope* scope) const {
     switch (this->getType()) {
         case TokenType::kPeriod:
+            return evaluateObjectAccessor(scope);
             break;
         case TokenType::kOpenSquareBracket:
             break;
