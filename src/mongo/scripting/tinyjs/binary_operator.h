@@ -46,7 +46,6 @@ public:
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _rightChild;
-    const Value evaluateObjectAccessor(Scope* scope) const;
     const Value evaluateMultiply(Scope* scope) const;
     const Value evaluateDivide(Scope* scope) const;
     const Value evaluateAdd(Scope* scope) const;
