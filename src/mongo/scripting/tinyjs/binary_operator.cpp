@@ -347,11 +347,7 @@ Value evaluateAddNumeric(Value leftValue, Value rightValue) {
         if (makeString(rightValue) == "Infinity") {
             return Value("Infinity");
         } else if (rightValue.toString() == "-Infinity") {
-            if ((leftValue.getType() == String) && (makeString(leftValue) == "Infinity")) {
-                throw std::runtime_error("NaN");
-            } else {
-                return Value("-Infinity");
-            }
+            return Value("-Infinity");
         } else {
             throw std::runtime_error("NaN");  // TODO should be unreachable
         }
@@ -455,8 +451,12 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
         return Value(makeString(leftValue) + makeString(rightValue));
     } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
         return Value(makeString(leftValue) + makeString(rightValue));
-    } else {
+    } else if ((leftValue.numeric() || (leftValue.getType() == String)) ||
+               (rightValue.numeric() || (rightValue.getType() == String))) {
+        std::cout << "going into add numeric" << std::endl;
         return evaluateAddNumeric(leftValue, rightValue);
+    } else {
+        throw std::runtime_error("NaN");
     }
 }
 

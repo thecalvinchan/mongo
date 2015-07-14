@@ -104,9 +104,11 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
         case TokenType::kNullLiteral:
             node.reset((new TerminalNode(BSONNULL)));
             break;
-        case TokenType::kUndefinedLiteral:
+        case TokenType::kUndefinedLiteral: {
+            std::cout << "making undefined terminal" << std::endl;
             node.reset((new TerminalNode(BSONUndefined)));
             break;
+        }
         case TokenType::kIntegerLiteral:
             node.reset((new TerminalNode(std::stoi(token.value.rawData()))));
             break;

@@ -385,21 +385,36 @@ TEST(EvaluationTest, addition61) {
 }
 
 TEST(EvaluationTest, addition62) {
+    string input = "return Infinity + -Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, addition63) {
+    string input = "return -Infinity + Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, addition64) {
+    string input = "return -Infinity + -Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, addition65) {
     string input = "return Infinity + null;";
     testEvaluation(input, Value("Infinity"));
 }
 
-TEST(EvaluationTest, addition63) {
+TEST(EvaluationTest, addition66) {
     string input = "return null + Infinity;";
     testEvaluation(input, Value("Infinity"));
 }
 
-TEST(EvaluationTest, addition64) {
+TEST(EvaluationTest, addition67) {
     string input = "return true + null;";
     testEvaluation(input, Value(1));
 }
 
-TEST(EvaluationTest, addition65) {
+TEST(EvaluationTest, addition68) {
     string input = "return null + false;";
     testEvaluation(input, Value(0));
 }
