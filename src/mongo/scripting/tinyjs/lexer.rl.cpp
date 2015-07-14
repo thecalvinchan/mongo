@@ -53,7 +53,7 @@ namespace {
     kNullLiteral         = 'null';
     kUndefinedLiteral    = 'undefined';
     kFunctionKeyword     = 'function';
-    kIntegerLiteral      = 0 | ([1-9][0-9]*);
+    kIntegerLiteral      = ([1-9][0-9]*) | '0' ;
     kFloatLiteral        = [0-9]*'.'[0-9]+ | 'NaN' | 'Infinity';
     kBooleanLiteral      = 'true' | 'false';
     kStringLiteral       = "'"[^\']*"'" 
