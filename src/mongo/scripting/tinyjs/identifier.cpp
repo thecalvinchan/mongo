@@ -26,36 +26,19 @@
  * then also delete it in the license file.
  */
 
-#pragma once
+#include "mongo/platform/basic.h"
 
-#include "mongo/scripting/tinyjs/nonterminal_node.h"
+#include "mongo/scripting/tinyjs/identifier.h"
+
 
 namespace mongo {
 namespace tinyjs {
 
-class BinaryOperator : public NonTerminalNode {
-public:
-    BinaryOperator(TokenType type);
-    ~BinaryOperator() {}
-    std::vector<Node*> getChildren() const;
-    Node* getLeftChild() const;
-    Node* getRightChild() const;
-    void setLeftChild(std::unique_ptr<Node>);
-    void setRightChild(std::unique_ptr<Node>);
-    const Value evaluate(Scope* scope) const;
-private:
-    std::unique_ptr<Node> _leftChild;
-    std::unique_ptr<Node> _rightChild;
-    const Value evaluateObjectAccessor(Scope* scope) const;
-    const Value evaluateMultiply(Scope* scope) const;
-    const Value evaluateDivide(Scope* scope) const;
-    const Value evaluateAdd(Scope* scope) const;
-    const Value evaluateSubtract(Scope* scope) const;
-    const Value evaluateGreaterThan(Scope* scope) const;
-    const Value evaluateGreaterThanEquals(Scope* scope) const;
-    const Value evaluateLessThan(Scope* scope) const;
-    const Value evaluateLessThanEquals(Scope* scope) const;
-};
+Identifier::Identifier(const StringData& value) : TerminalNode(value) {}
 
-} // namespace tinyjs
-} // namespace mongo
+const Value Identifier::evaluate(Scope* scope) const {
+    return scope->get(StringData(_value.toString()));
+}
+
+}  // namespace tinyjs
+}  // namespace mongo

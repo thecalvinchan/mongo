@@ -451,7 +451,7 @@ const Value BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
     const Value rightValue = this->getRightChild()->evaluate(scope);
     return Value(Value::compare(leftValue, rightValue) <= 0);
 }
-
+/*
 const Value BinaryOperator::evaluateObjectAccessor(Scope* scope) const {
 }
 
@@ -472,6 +472,6 @@ std::string generateNestedField(Node *head, Scope* scope) {
     }
     return leftNestedField + cur + rightNestedField;
 }
-
+*/
 }  // namespace tinyjs
 }  // namespace mongo

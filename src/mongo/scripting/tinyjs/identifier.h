@@ -28,33 +28,20 @@
 
 #pragma once
 
-#include "mongo/scripting/tinyjs/nonterminal_node.h"
+#include "mongo/base/string_data.h"
+#include "mongo/db/pipeline/value.h"
+#include "mongo/scripting/tinyjs/terminal_node.h"
+ #include "mongo/scripting/tinyjs/scope.h"
 
 namespace mongo {
 namespace tinyjs {
 
-class BinaryOperator : public NonTerminalNode {
+class Identifier : public TerminalNode {
 public:
-    BinaryOperator(TokenType type);
-    ~BinaryOperator() {}
-    std::vector<Node*> getChildren() const;
-    Node* getLeftChild() const;
-    Node* getRightChild() const;
-    void setLeftChild(std::unique_ptr<Node>);
-    void setRightChild(std::unique_ptr<Node>);
+    Identifier(const StringData &value);
     const Value evaluate(Scope* scope) const;
 private:
-    std::unique_ptr<Node> _leftChild;
-    std::unique_ptr<Node> _rightChild;
-    const Value evaluateObjectAccessor(Scope* scope) const;
-    const Value evaluateMultiply(Scope* scope) const;
-    const Value evaluateDivide(Scope* scope) const;
-    const Value evaluateAdd(Scope* scope) const;
-    const Value evaluateSubtract(Scope* scope) const;
-    const Value evaluateGreaterThan(Scope* scope) const;
-    const Value evaluateGreaterThanEquals(Scope* scope) const;
-    const Value evaluateLessThan(Scope* scope) const;
-    const Value evaluateLessThanEquals(Scope* scope) const;
+    Value _value;
 };
 
 } // namespace tinyjs
