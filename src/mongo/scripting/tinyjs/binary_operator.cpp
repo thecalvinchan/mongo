@@ -442,6 +442,10 @@ bool isString(Value v) {
     return (((s != "NaN") && (s != "Infinity")) && (s != "-Infinity"));
 }
 
+bool countsAsNumber(Value v) {
+    return ((v.numeric() || (v.getType() == String)) || ((v.getType() == Bool) || (v.getType() == jstNULL)));
+}
+
 const Value BinaryOperator::evaluateAdd(Scope* scope) const {
     const Value leftValue = this->getLeftChild()->evaluate(scope);
     const Value rightValue = this->getRightChild()->evaluate(scope);
@@ -451,8 +455,7 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
         return Value(makeString(leftValue) + makeString(rightValue));
     } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
         return Value(makeString(leftValue) + makeString(rightValue));
-    } else if ((leftValue.numeric() || (leftValue.getType() == String)) ||
-               (rightValue.numeric() || (rightValue.getType() == String))) {
+    } else if (countsAsNumber(leftValue) && countsAsNumber(rightValue)) {
         std::cout << "going into add numeric" << std::endl;
         return evaluateAddNumeric(leftValue, rightValue);
     } else {

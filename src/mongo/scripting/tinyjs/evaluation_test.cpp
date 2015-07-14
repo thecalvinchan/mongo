@@ -71,7 +71,7 @@ void testEvaluationError(string input) {
     ASSERT_THROWS(a.evaluate(s), std::exception);
 }
 
-TEST(EvaluationTest, objectAccessor) {
+/*TEST(EvaluationTest, objectAccessor) {
     string input = "return this.x;";
     Scope* s = new Scope();
     mutablebson::Document doc;
@@ -83,7 +83,7 @@ TEST(EvaluationTest, objectAccessor) {
     Value object = Value(result);
     scope.put(StringData("this"),object);
     testEvaluation(input, Value(42), s);
-}
+}*/
 
 TEST(EvaluationTest, simple) {
     string input = "return 1;";
