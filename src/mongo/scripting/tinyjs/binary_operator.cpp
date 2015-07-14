@@ -452,5 +452,26 @@ const Value BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
     return Value(Value::compare(leftValue, rightValue) <= 0);
 }
 
+const Value BinaryOperator::evaluateObjectAccessor(Scope* scope) const {
+}
+
+std::string generateNestedField(Node *head, Scope* scope) {
+    std::string cur = head->getName();
+    std::string leftNestedField, rightNestedField;
+    if (cur = '.') {
+        leftNestedField = generateNestedField(head->getLeftChild());
+        rightNestedField = generateNestedField(head->getRightChild());
+    } else if (cur = '[') {
+        cur = '.';
+        leftNestedField = generateNestedField(head->getLeftChild());
+        Value rightChildValue = head->getRightChild()->evaluate(scope);
+        rightNestedField = rightChildValue->coerceToString();
+    } else {
+        leftNestedField = "";
+        rightNestedField = "";
+    }
+    return leftNestedField + cur + rightNestedField;
+}
+
 }  // namespace tinyjs
 }  // namespace mongo
