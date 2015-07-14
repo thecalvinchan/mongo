@@ -72,7 +72,7 @@ void testEvaluationError(string input) {
     ASSERT_THROWS(a.evaluate(s), std::exception);
 }
 
-TEST(EvaluationTest, objectAccessor) {
+/*TEST(EvaluationTest, objectAccessor) {
     string input = "return this.x;";
     Scope* s = new Scope();
     mutablebson::Document doc;
@@ -84,7 +84,7 @@ TEST(EvaluationTest, objectAccessor) {
     Value object = Value(result);
     s->put(StringData("this"),object);
     testEvaluation(input, Value(42), s);
-}
+}*/
 
 TEST(EvaluationTest, simple) {
     string input = "return 1;";
@@ -400,21 +400,36 @@ TEST(EvaluationTest, addition61) {
 }
 
 TEST(EvaluationTest, addition62) {
+    string input = "return Infinity + -Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, addition63) {
+    string input = "return -Infinity + Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, addition64) {
+    string input = "return -Infinity + -Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, addition65) {
     string input = "return Infinity + null;";
     testEvaluation(input, Value("Infinity"));
 }
 
-TEST(EvaluationTest, addition63) {
+TEST(EvaluationTest, addition66) {
     string input = "return null + Infinity;";
     testEvaluation(input, Value("Infinity"));
 }
 
-TEST(EvaluationTest, addition64) {
+TEST(EvaluationTest, addition67) {
     string input = "return true + null;";
     testEvaluation(input, Value(1));
 }
 
-TEST(EvaluationTest, addition65) {
+TEST(EvaluationTest, addition68) {
     string input = "return null + false;";
     testEvaluation(input, Value(0));
 }

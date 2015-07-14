@@ -287,12 +287,10 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
 }
 
 std::string stripDoubleQuotes(std::string s) {
-    if (((s.front() == '"') && (s.back() == '"')) || 
-            ((s.front() == '\'') && (s.back() == '\''))) {
+    if (((s.front() == '"') && (s.back() == '"')) || ((s.front() == '\'') && (s.back() == '\''))) {
         s = s.substr(1, s.size() - 2);
     }
-    if (((s.front() == '"') && (s.back() == '"')) ||
-           ((s.front() == '\'') && (s.back() == '\''))) {
+    if (((s.front() == '"') && (s.back() == '"')) || ((s.front() == '\'') && (s.back() == '\''))) {
         s = s.substr(1, s.size() - 2);
     }
     return s;
@@ -319,13 +317,42 @@ std::string makeString(Value value) {
             res += makeString(v);
         }
         return res;
+    } else if (value.getType() == Bool) {
+        return (value.getBool() ? "true" : "false");
     } else {
         return value.coerceToString();  // TODO
     }
 }
 
 Value evaluateAddNumeric(Value leftValue, Value rightValue) {
-    if (leftValue.getType() == NumberDouble) {
+    if ((leftValue.getType() == String && (makeString(leftValue) == "NaN")) ||
+        (rightValue.getType() == String && (makeString(rightValue) == "NaN"))) {
+        throw std::runtime_error("NaN");
+    } else if (leftValue.getType() == String) {
+        if (makeString(leftValue) == "Infinity") {
+            if ((rightValue.getType() == String) && (makeString(rightValue) == "-Infinity")) {
+                throw std::runtime_error("NaN");
+            } else {
+                return Value("Infinity");
+            }
+        } else if (makeString(leftValue) == "-Infinity") {
+            if ((rightValue.getType() == String) && (makeString(rightValue) == "Infinity")) {
+                throw std::runtime_error("NaN");
+            } else {
+                return Value("-Infinity");
+            }
+        } else {
+            throw std::runtime_error("NaN");  // TODO should be unreachable
+        }
+    } else if (rightValue.getType() == String) {
+        if (makeString(rightValue) == "Infinity") {
+            return Value("Infinity");
+        } else if (rightValue.toString() == "-Infinity") {
+            return Value("-Infinity");
+        } else {
+            throw std::runtime_error("NaN");  // TODO should be unreachable
+        }
+    } else if (leftValue.getType() == NumberDouble) {
         // TODO: refactor to share code with multiplication?
         if (rightValue.getType() == NumberDouble) {
             return Value(leftValue.getDouble() + rightValue.getDouble());
@@ -373,7 +400,7 @@ Value evaluateAddNumeric(Value leftValue, Value rightValue) {
         }
     } else if (leftValue.getType() == Bool) {
         int leftOperand = leftValue.getBool() ? 1 : 0;
-         if (rightValue.getType() == NumberDouble) {
+        if (rightValue.getType() == NumberDouble) {
             return Value(leftOperand + rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
             return Value(leftOperand + rightValue.getInt());
@@ -387,9 +414,9 @@ Value evaluateAddNumeric(Value leftValue, Value rightValue) {
         } else {
             throw std::runtime_error("NaN");
         }
-    } else if (leftValue.getType() == jstNULL) { //TODO CLEAN UP
+    } else if (leftValue.getType() == jstNULL) {  // TODO CLEAN UP
         int leftOperand = 0;
-         if (rightValue.getType() == NumberDouble) {
+        if (rightValue.getType() == NumberDouble) {
             return Value(leftOperand + rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
             return Value(leftOperand + rightValue.getInt());
@@ -408,17 +435,32 @@ Value evaluateAddNumeric(Value leftValue, Value rightValue) {
     }
 }
 
+bool isString(Value v) {
+    if (v.getType() != String) {
+        return false;
+    }
+    std::string s = makeString(v);
+    return (((s != "NaN") && (s != "Infinity")) && (s != "-Infinity"));
+}
+
+bool countsAsNumber(Value v) {
+    return ((v.numeric() || (v.getType() == String)) || ((v.getType() == Bool) || (v.getType() == jstNULL)));
+}
+
 const Value BinaryOperator::evaluateAdd(Scope* scope) const {
     const Value leftValue = this->getLeftChild()->evaluate(scope);
     const Value rightValue = this->getRightChild()->evaluate(scope);
-    if (leftValue.getType() == String) {
+    if (isString(leftValue)) {
         return Value(makeString(leftValue) + makeString(rightValue));
-    } else if (rightValue.getType() == String) {
+    } else if (isString(rightValue)) {
         return Value(makeString(leftValue) + makeString(rightValue));
     } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
         return Value(makeString(leftValue) + makeString(rightValue));
-    } else {
+    } else if (countsAsNumber(leftValue) && countsAsNumber(rightValue)) {
+        std::cout << "going into add numeric" << std::endl;
         return evaluateAddNumeric(leftValue, rightValue);
+    } else {
+        throw std::runtime_error("NaN");
     }
 }
 
@@ -456,26 +498,30 @@ const Value BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
 }
 
 const Value BinaryOperator::evaluateObjectAccessor(Scope* scope) const {
-    std::string objectPathString = BinaryOperator::generateNestedField(this, scope);  
+    std::string objectPathString = BinaryOperator::generateNestedField(this, scope);
     int rootObjIndex = objectPathString.find_first_of('.');
-    std::string fieldPathString = objectPathString.substr(rootObjIndex+1),
+    std::string fieldPathString = objectPathString.substr(rootObjIndex + 1),
                 objectString = objectPathString.substr(0, rootObjIndex);
     FieldPath fieldPath = FieldPath(fieldPathString);
     Value object = scope->get(StringData(objectString));
-    Document doc = object.getDocument(); 
+    Document doc = object.getDocument();
     return doc.getNestedField(fieldPath);
 }
 
-std::string BinaryOperator::generateNestedField(const Node *head, Scope* scope) {
+std::string BinaryOperator::generateNestedField(const Node* head, Scope* scope) {
     std::string cur = (head->getName()).rawData();
     std::string leftNestedField, rightNestedField;
     if (cur == ".") {
-        leftNestedField = BinaryOperator::generateNestedField((checked_cast<const BinaryOperator *>(head))->getLeftChild(), scope);
-        rightNestedField = BinaryOperator::generateNestedField((checked_cast<const BinaryOperator *>(head))->getRightChild(), scope);
+        leftNestedField = BinaryOperator::generateNestedField(
+            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
+        rightNestedField = BinaryOperator::generateNestedField(
+            (checked_cast<const BinaryOperator*>(head))->getRightChild(), scope);
     } else if (cur == "[") {
         cur = ".";
-        leftNestedField = BinaryOperator::generateNestedField((checked_cast<const BinaryOperator *>(head))->getLeftChild(), scope);
-        Value rightChildValue = (checked_cast<const BinaryOperator *>(head))->getRightChild()->evaluate(scope);
+        leftNestedField = BinaryOperator::generateNestedField(
+            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
+        Value rightChildValue =
+            (checked_cast<const BinaryOperator*>(head))->getRightChild()->evaluate(scope);
         rightNestedField = rightChildValue.coerceToString();
     } else {
         leftNestedField = "";
