@@ -46,7 +46,6 @@ public:
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _rightChild;
-    const Value evaluateObjectAccessor(Scope* scope) const;
     const Value evaluateMultiply(Scope* scope) const;
     const Value evaluateDivide(Scope* scope) const;
     const Value evaluateAdd(Scope* scope) const;
@@ -56,7 +55,7 @@ private:
     const Value evaluateLessThan(Scope* scope) const;
     const Value evaluateLessThanEquals(Scope* scope) const;
     const Value evaluateObjectAccessor(Scope* scope) const;
-    static std::string generateNestedField(Node *head, Scope* scope);
+    static std::string generateNestedField(const Node *head, Scope* scope);
 };
 
 } // namespace tinyjs

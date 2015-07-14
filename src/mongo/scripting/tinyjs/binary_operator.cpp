@@ -26,8 +26,10 @@
  */
 
 #include "mongo/platform/basic.h"
-
 #include "mongo/bson/bsontypes.h"
+#include "mongo/base/checked_cast.h"
+#include "mongo/db/pipeline/field_path.h"
+#include "mongo/db/pipeline/document.h"
 #include "mongo/scripting/tinyjs/binary_operator.h"
 
 namespace mongo {
@@ -451,38 +453,35 @@ const Value BinaryOperator::evaluateLessThanEquals(Scope* scope) const {
     const Value rightValue = this->getRightChild()->evaluate(scope);
     return Value(Value::compare(leftValue, rightValue) <= 0);
 }
-/*
+
 const Value BinaryOperator::evaluateObjectAccessor(Scope* scope) const {
-    // objectPathString = objectName.propertyA.propertyB.propertyC
     std::string objectPathString = BinaryOperator::generateNestedField(this, scope);  
     int rootObjIndex = objectPathString.find_first_of('.');
-    // fieldPathString = propertyA.propertyB.propertyC
-    // objectString = objectName
     std::string fieldPathString = objectPathString.substr(rootObjIndex+1),
                 objectString = objectPathString.substr(0, rootObjIndex);
     FieldPath fieldPath = FieldPath(fieldPathString);
     Value object = scope->get(StringData(objectString));
-    Document doc = object->getDocument(); 
-    return doc->getNestedField(fieldPath);
+    Document doc = object.getDocument(); 
+    return doc.getNestedField(fieldPath);
 }
 
-static std::string BinaryOperator::generateNestedField(Node *head, Scope* scope) {
-    std::string cur = head->getName();
+std::string BinaryOperator::generateNestedField(const Node *head, Scope* scope) {
+    std::string cur = (head->getName()).rawData();
     std::string leftNestedField, rightNestedField;
-    if (cur = '.') {
-        leftNestedField = BinaryOperator::generateNestedField(head->getLeftChild(), scope);
-        rightNestedField = BinaryOperator::generateNestedField(head->getRightChild(), scope);
-    } else if (cur = '[') {
-        cur = '.';
-        leftNestedField = BinaryOperator::generateNestedField(head->getLeftChild(), scope);
-        Value rightChildValue = head->getRightChild()->evaluate(scope);
-        rightNestedField = rightChildValue->coerceToString();
+    if (cur == ".") {
+        leftNestedField = BinaryOperator::generateNestedField((checked_cast<const BinaryOperator *>(head))->getLeftChild(), scope);
+        rightNestedField = BinaryOperator::generateNestedField((checked_cast<const BinaryOperator *>(head))->getRightChild(), scope);
+    } else if (cur == "[") {
+        cur = ".";
+        leftNestedField = BinaryOperator::generateNestedField((checked_cast<const BinaryOperator *>(head))->getLeftChild(), scope);
+        Value rightChildValue = (checked_cast<const BinaryOperator *>(head))->getRightChild()->evaluate(scope);
+        rightNestedField = rightChildValue.coerceToString();
     } else {
         leftNestedField = "";
         rightNestedField = "";
     }
     return leftNestedField + cur + rightNestedField;
 }
-*/
+
 }  // namespace tinyjs
 }  // namespace mongo
