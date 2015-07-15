@@ -90,6 +90,10 @@ TEST(EvaluationTest, simple) {
     testEvaluation(input, Value(1));
 }
 
+/*
+ * Addition tests
+ */
+
 TEST(EvaluationTest, addition1) {
     string input = "return 1 + 1;";
     testEvaluation(input, Value(2));
@@ -432,6 +436,701 @@ TEST(EvaluationTest, addition68) {
     string input = "return null + false;";
     testEvaluation(input, Value(0));
 }
+
+/*
+ * Multiplication tests
+ */
+
+ TEST(EvaluationTest, multiplication1) {
+    string input = "return 1 * 1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, multiplication2) {
+    string input = "return 1 * \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication3) {
+    string input = "return \"dog\" * 1;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication4) {
+    string input = "return \"dog\" * \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication5) {
+    string input = "return true * 1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, multiplication6) {
+    string input = "return 3 * false;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, multiplication7) {
+    string input = "return false * null;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, multiplication8) {
+    string input = "return null * true;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, multiplication9) {
+    string input = "return 1.5 * 1.5;";
+    testEvaluation(input, Value(2.25));
+}
+
+TEST(EvaluationTest, multiplication10) {
+    string input = "return 1 * 1.5;";
+    testEvaluation(input, Value(1.5));
+}
+
+TEST(EvaluationTest, multiplication11) {
+    string input = "return 1.5 * 1;";
+    testEvaluation(input, Value(1.5));
+}
+
+TEST(EvaluationTest, multiplication12) {
+    string input = "return 0 * 0;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, multiplication13) {
+    string input = "return 0 * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication14) {
+    string input = "return undefined * 5;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication15) {
+    string input = "return NaN * 5;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication16) {
+    string input = "return 5 * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication17) {
+    string input = "return 3 * Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, multiplication18) {
+    string input = "return Infinity * 10;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, multiplication19) {
+    string input = "return [1, 2, 3] * 1;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication20) {
+    string input = "return 5 * [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication21) {
+    string input = "return [1, 2, 3] * true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication22) {
+    string input = "return false * [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication23) {
+    string input = "return [1, 2, 3] * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication24) {
+    string input = "return undefined * [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication25) {
+    string input = "return [1, 2, 3] * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication26) {
+    string input = "return NaN * [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication27) {
+    string input = "return [1, 2, 3] * Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication28) {
+    string input = "return Infinity * [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication29) {
+    string input = "return [\"cat\", \"dog\"] * null;";
+    testEvaluationError(input);
+}
+
+
+TEST(EvaluationTest, multiplication30) {
+    string input = "return null * [\"cat\", \"dog\"];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication31) {
+    string input = "return [1, 2, 3] * \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication32) {
+    string input = "return \"cat\" * [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+
+TEST(EvaluationTest, multiplication33) {
+    string input = "return undefined * \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication34) {
+    string input = "return \"cat\" * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication35) {
+    string input = "return NaN * \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication36) {
+    string input = "return \"cat\" * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication37) {
+    string input = "return Infinity * \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication38) {
+    string input = "return \"cat\" * Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication39) {
+    string input = "return true * \"cat\";";
+    testEvaluationError(input);
+}
+
+
+TEST(EvaluationTest, multiplication40) {
+    string input = "return \"cat\" * \"false\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication41) {
+    string input = "return null * \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication42) {
+    string input = "return \"cat\" * null;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication43) {
+    string input = "return NaN * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication44) {
+    string input = "return undefined * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication45) {
+    string input = "return NaN * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication46) {
+    string input = "return true * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication47) {
+    string input = "return NaN * true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication48) {
+    string input = "return null * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication49) {
+    string input = "return NaN * null;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication50) {
+    string input = "return Infinity * NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication51) {
+    string input = "return NaN * Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication52) {
+    string input = "return undefined * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication53) {
+    string input = "return undefined * Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication54) {
+    string input = "return Infinity * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication55) {
+    string input = "return undefined * true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication56) {
+    string input = "return false * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication57) {
+    string input = "return undefined * null;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication58) {
+    string input = "return null * undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication59) {
+    string input = "return Infinity * true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication60) {
+    string input = "return false * Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication61) {
+    string input = "return Infinity * Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, multiplication62) {
+    string input = "return Infinity * -Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, multiplication63) {
+    string input = "return -Infinity * Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, multiplication64) {
+    string input = "return -Infinity * -Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, multiplication65) {
+    string input = "return Infinity * null;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication66) {
+    string input = "return null * Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, multiplication67) {
+    string input = "return true * null;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, multiplication68) {
+    string input = "return null * false;";
+    testEvaluation(input, Value(0));
+}
+
+/* 
+ * Subtraction tests
+ */
+
+TEST(EvaluationTest, subtraction1) {
+    string input = "return 1 - 1;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, subtraction2) {
+    string input = "return 1 - \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction3) {
+    string input = "return \"dog\" - 1;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction4) {
+    string input = "return \"dog\" - \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction5) {
+    string input = "return true - 1;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, subtraction6) {
+    string input = "return 3 - false;";
+    testEvaluation(input, Value(3));
+}
+
+TEST(EvaluationTest, subtraction7) {
+    string input = "return false - null;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, subtraction8) {
+    string input = "return null - true;";
+    testEvaluation(input, Value(-1));
+}
+
+TEST(EvaluationTest, subtraction9) {
+    string input = "return 1.5 - 1.5;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, subtraction10) {
+    string input = "return 1 - 1.5;";
+    testEvaluation(input, Value(-0.5));
+}
+
+TEST(EvaluationTest, subtraction11) {
+    string input = "return 1.5 - 1;";
+    testEvaluation(input, Value(.5));
+}
+
+TEST(EvaluationTest, subtraction12) {
+    string input = "return 0 - 0;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, subtraction13) {
+    string input = "return 0 - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction14) {
+    string input = "return undefined - 5;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction15) {
+    string input = "return NaN - 5;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction16) {
+    string input = "return 5 - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction17) {
+    string input = "return 3 - Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, subtraction18) {
+    string input = "return Infinity - 10;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, subtraction19) {
+    string input = "return [1, 2, 3] - 1;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction20) {
+    string input = "return 5 - [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction21) {
+    string input = "return [1, 2, 3] - true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction22) {
+    string input = "return false - [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction23) {
+    string input = "return [1, 2, 3] - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction24) {
+    string input = "return undefined - [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction25) {
+    string input = "return [1, 2, 3] - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction26) {
+    string input = "return NaN - [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction27) {
+    string input = "return [1, 2, 3] - Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction28) {
+    string input = "return Infinity - [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction29) {
+    string input = "return [\"cat\", \"dog\"] - null;";
+    testEvaluationError(input);
+}
+
+
+TEST(EvaluationTest, subtraction30) {
+    string input = "return null - [\"cat\", \"dog\"];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction31) {
+    string input = "return [1, 2, 3] - \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction32) {
+    string input = "return \"cat\" - [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+
+TEST(EvaluationTest, subtraction33) {
+    string input = "return undefined - \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction34) {
+    string input = "return \"cat\" - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction35) {
+    string input = "return NaN - \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction36) {
+    string input = "return \"cat\" - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction37) {
+    string input = "return Infinity - \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction38) {
+    string input = "return \"cat\" - Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction39) {
+    string input = "return true - \"cat\";";
+    testEvaluationError(input);
+}
+
+
+TEST(EvaluationTest, subtraction40) {
+    string input = "return \"cat\" - \"false\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction41) {
+    string input = "return null - \"cat\";";
+    testEvaluation(input, Value("nullcat"));
+}
+
+TEST(EvaluationTest, subtraction42) {
+    string input = "return \"cat\" - null;";
+    testEvaluation(input, Value("catnull"));
+}
+
+TEST(EvaluationTest, subtraction43) {
+    string input = "return NaN - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction44) {
+    string input = "return undefined - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction45) {
+    string input = "return NaN - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction46) {
+    string input = "return true - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction47) {
+    string input = "return NaN - true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction48) {
+    string input = "return null - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction49) {
+    string input = "return NaN - null;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction50) {
+    string input = "return Infinity - NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction51) {
+    string input = "return NaN - Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction52) {
+    string input = "return undefined - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction53) {
+    string input = "return undefined - Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction54) {
+    string input = "return Infinity - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction55) {
+    string input = "return undefined - true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction56) {
+    string input = "return false - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction57) {
+    string input = "return undefined - null;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction58) {
+    string input = "return null - undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction59) {
+    string input = "return Infinity - true;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, subtraction60) {
+    string input = "return false - Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, subtraction61) {
+    string input = "return Infinity - Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, subtraction62) {
+    string input = "return Infinity - -Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction63) {
+    string input = "return -Infinity - Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, subtraction64) {
+    string input = "return -Infinity - -Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, subtraction65) {
+    string input = "return Infinity - null;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, subtraction66) {
+    string input = "return null - Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, subtraction67) {
+    string input = "return true - null;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, subtraction68) {
+    string input = "return null - false;";
+    testEvaluation(input, Value(0));
+}
+
 
 } // namespace tinyjs
 } // namespace mongo
