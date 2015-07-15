@@ -66,6 +66,7 @@ const Value BinaryOperator::evaluate(Scope* scope) const {
             return evaluateObjectAccessor(scope);
             break;
         case TokenType::kOpenSquareBracket:
+            return evaluateObjectAccessor(scope);
             break;
         case TokenType::kMultiply:
             return evaluateMultiply(scope);

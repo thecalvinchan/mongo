@@ -36,6 +36,7 @@
 
 #include "mongo/unittest/unittest.h"
 #include "mongo/bson/mutable/document.h"
+#include "mongo/bson/json.h"
 #include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
 #include "mongo/scripting/tinyjs/scope.h"
@@ -72,23 +73,71 @@ void testEvaluationError(string input) {
     ASSERT_THROWS(a.evaluate(s), std::exception);
 }
 
-/*TEST(EvaluationTest, objectAccessor) {
-    string input = "return this.x;";
+Scope* generateScope() {
     Scope* s = new Scope();
-    mutablebson::Document doc;
-    mutablebson::Element root = doc.root();
-    root.pushBack(doc.makeElementInt("x", 42));
-    BSONObjBuilder builder;
-    doc.writeTo(&builder);
-    BSONObj result = builder.obj();
+
+    const char json[] = 
+    "{"
+        "x: 42,"
+        "y: {"
+            "a: 3.14,"
+            "b: 31.4,"
+            "c: 314.0,"
+            "d: {"
+                "h: 'webscale',"
+                "i: 'cloud',"
+                "j: [1,2,3],"
+                "k: 'mangoDB'"
+            "}"
+        "},"
+        "z: 'a'"
+    "}";
+
+    BSONObj result = fromjson(json);
+
     Value object = Value(result);
     s->put(StringData("this"),object);
+    return s;
+}
+
+TEST(EvaluationTest, simpleObjectAccessor) {
+    string input = "return this.x;";
+    Scope* s = generateScope();
     testEvaluation(input, Value(42), s);
-}*/
+}
+
+TEST(EvaluationTest, nestedObjectAccessor) {
+    string input = "return this.y.a;";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(3.14), s);
+}
+
+TEST(EvaluationTest, nestedObjectAccessor2) {
+    string input = "return this.y[\"a\"];";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(3.14), s);
+}
+
+TEST(EvaluationTest, doublyNestedObjectAccessor) {
+    string input = "return this.y[this.z];";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(3.14), s);
+}
+
+TEST(EvaluationTest, superNestedObjectAccessor) {
+    string input = "return this.y[\"d\"].k;";
+    Scope* s = generateScope();
+    testEvaluation(input, Value("mangoDB"), s);
+}
 
 TEST(EvaluationTest, simple) {
     string input = "return 1;";
     testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, simpleNegation) {
+    string input = "return -1;";
+    testEvaluation(input, Value(-1));
 }
 
 /*
@@ -1135,7 +1184,6 @@ TEST(EvaluationTest, subtraction68) {
 /* 
  * Division tests
  */
-
 
 TEST(EvaluationTest, division1) {
     string input = "return 1 / 1;";

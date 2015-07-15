@@ -42,7 +42,7 @@ std::vector<Node*> UnaryOperator::getChildren() const {
     return children;
 }
 
-Node* UnaryOperator::getChild() {
+Node* UnaryOperator::getChild() const {
     return _child.get();
 }
 
@@ -52,9 +52,12 @@ void UnaryOperator::setChild(std::unique_ptr<Node> node) {
 
 const Value UnaryOperator::evaluate(Scope* scope) const {
     switch (this->getType()) {
-        case TokenType::kReturnKeyword: {
+        case TokenType::kReturnKeyword: 
             return evaluateReturn(scope);
-        }   
+            break;
+        case TokenType::kSubtract: 
+            return evaluateNegativeOperator(scope);
+            break;
         default:
             return Value(); //TODO: error?
     }
@@ -62,6 +65,34 @@ const Value UnaryOperator::evaluate(Scope* scope) const {
 
 const Value UnaryOperator::evaluateReturn(Scope* scope) const {
     return (_child->evaluate(scope));
+}
+
+const Value UnaryOperator::evaluateNegativeOperator(Scope* scope) const {
+    const Value childValue = getChild()->evaluate(scope);
+    switch (childValue.getType()) {
+        case NumberDouble: {
+            double val = -1 * childValue.getDouble();
+            return Value(val);
+            break;
+        }
+        case NumberInt: {
+            int val = -1 * childValue.getInt();
+            return Value(val);
+            break;
+        }
+        case NumberLong: {
+            long long val = -1 * childValue.getLong();
+            return Value(val);
+            break;
+        }
+        case Bool: {
+            return childValue.getBool() ? Value(-1) : Value(-0);
+        }
+        default: {
+            // Actual behavior
+            throw std::runtime_error("NaN");
+        }
+    }
 }
 
 } // namespace tinyjs
