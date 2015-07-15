@@ -72,29 +72,55 @@ void testEvaluationError(string input) {
     ASSERT_THROWS(a.evaluate(s), std::exception);
 }
 
-/*TEST(EvaluationTest, objectAccessor) {
-    string input = "return this.x;";
+Scope* generateScope() {
     Scope* s = new Scope();
     mutablebson::Document doc;
     mutablebson::Element root = doc.root();
+
     root.pushBack(doc.makeElementInt("x", 42));
+    mutablebson::Element subDoc = doc.makeElementObject("y");
+    root.pushBack(subDoc);
+    subDoc.pushBack(doc.makeElementDouble("a", 3.14));
+    subDoc.pushBack(doc.makeElementDouble("b", 31.4));
+    subDoc.pushBack(doc.makeElementDouble("c", 314.0));
+    root.pushBack(doc.makeElementString("z","mangoDB"));
+
     BSONObjBuilder builder;
     doc.writeTo(&builder);
     BSONObj result = builder.obj();
     Value object = Value(result);
     s->put(StringData("this"),object);
-    testEvaluation(input, Value(42), s);
-}*/
+    return s;
+}
 
+TEST(EvaluationTest, simpleObjectAccessor) {
+    string input = "return this.x;";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(42), s);
+}
+
+TEST(EvaluationTest, nestedObjectAccessor) {
+    string input = "return this.y.a;";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(3.14), s);
+}
+
+TEST(EvaluationTest, nestedObjectAccessor2) {
+    string input = "return this.y[\"a\"];";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(3.14), s);
+}
+
+/**
 TEST(EvaluationTest, simple) {
     string input = "return 1;";
     testEvaluation(input, Value(1));
-}
+}**/
 
 /*
  * Addition tests
  */
-
+/**
 TEST(EvaluationTest, addition1) {
     string input = "return 1 + 1;";
     testEvaluation(input, Value(2));
@@ -437,11 +463,11 @@ TEST(EvaluationTest, addition68) {
     string input = "return null + false;";
     testEvaluation(input, Value(0));
 }
-
+**/
 /*
  * Multiplication tests
  */
-
+/**
  TEST(EvaluationTest, multiplication1) {
     string input = "return 1 * 1;";
     testEvaluation(input, Value(1));
@@ -784,11 +810,11 @@ TEST(EvaluationTest, multiplication68) {
     string input = "return null * false;";
     testEvaluation(input, Value(0));
 }
-
+**/
 /* 
  * Subtraction tests
  */
-
+/**
 TEST(EvaluationTest, subtraction1) {
     string input = "return 1 - 1;";
     testEvaluation(input, Value(0));
@@ -1131,7 +1157,7 @@ TEST(EvaluationTest, subtraction68) {
     string input = "return null - false;";
     testEvaluation(input, Value(0));
 }
-
+**/
 
 } // namespace tinyjs
 } // namespace mongo
