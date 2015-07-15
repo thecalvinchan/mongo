@@ -70,7 +70,9 @@ void testEvaluationError(string input) {
     std::vector<Token> tokenData = lex(input).getValue();
     Scope* s = new Scope();
     ASTParser a(std::move(tokenData));
-    ASSERT_THROWS(a.evaluate(s), std::exception);
+    Value res = a.evaluate(s);
+    ASSERT_EQ(res,Value("NaN"));
+    delete s;
 }
 
 Scope* generateScope() {
@@ -462,10 +464,10 @@ TEST(EvaluationTest, addition63) {
     testEvaluationError(input);
 }
 
-/*TEST(EvaluationTest, addition64) {
+TEST(EvaluationTest, addition64) {
     string input = "return -Infinity + -Infinity;";
     testEvaluation(input, Value("-Infinity"));
-}*/
+}
 
 TEST(EvaluationTest, addition65) {
     string input = "return Infinity + null;";
@@ -799,7 +801,7 @@ TEST(EvaluationTest, multiplication61) {
     testEvaluation(input, Value("Infinity"));
 }
 
-/*TEST(EvaluationTest, multiplication62) {
+TEST(EvaluationTest, multiplication62) {
     string input = "return Infinity * -Infinity;";
     testEvaluation(input, Value("-Infinity"));
 }
@@ -812,7 +814,7 @@ TEST(EvaluationTest, multiplication63) {
 TEST(EvaluationTest, multiplication64) {
     string input = "return -Infinity * -Infinity;";
     testEvaluation(input, Value("Infinity"));
-}*/
+}
 
 TEST(EvaluationTest, multiplication65) {
     string input = "return Infinity * null;";
@@ -1146,7 +1148,7 @@ TEST(EvaluationTest, subtraction61) {
     testEvaluationError(input);
 }
 
-/*TEST(EvaluationTest, subtraction62) {
+TEST(EvaluationTest, subtraction62) {
     string input = "return Infinity - -Infinity;";
     testEvaluation(input, Value("Infinity"));
 }
@@ -1159,7 +1161,7 @@ TEST(EvaluationTest, subtraction63) {
 TEST(EvaluationTest, subtraction64) {
     string input = "return -Infinity - -Infinity;";
     testEvaluationError(input);
-}*/
+}
 
 TEST(EvaluationTest, subtraction65) {
     string input = "return Infinity - null;";
@@ -1502,10 +1504,10 @@ TEST(EvaluationTest, division63) {
     testEvaluationError(input);
 }
 
-/*TEST(EvaluationTest, division64) {
+TEST(EvaluationTest, division64) {
     string input = "return -Infinity / -Infinity;";
     testEvaluationError(input);
-}*/
+}
 
 TEST(EvaluationTest, division65) {
     string input = "return Infinity / null;";
@@ -1532,10 +1534,10 @@ TEST(EvaluationTest, division69) {
     testEvaluation(input, Value("Infinity"));
 }
 
-/*TEST(EvaluationTest, division70) {
+TEST(EvaluationTest, division70) {
     string input = "return -1 / 0;";
     testEvaluation(input, Value("-Infinity"));
-}*/
+}
 
 } // namespace tinyjs
 } // namespace mongo

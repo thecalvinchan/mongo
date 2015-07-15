@@ -107,20 +107,20 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
     Value leftValue = this->getLeftChild()->evaluate(scope);
     Value rightValue = this->getRightChild()->evaluate(scope);
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 
     if (leftValue.getType() == String) {
         if (makeString(leftValue) == "Infinity") {
             if (isZero(rightValue)) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             }
             return (isNegative(rightValue) ? Value("-Infinity") : Value("Infinity"));
         } else if (makeString(leftValue) == "-Infinity") {
             if (isZero(rightValue)) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             }
-            return (isNegative(leftValue) ? Value("Infinity") : Value("-Infinity"));
+            return (isNegative(rightValue) ? Value("Infinity") : Value("-Infinity"));
         } else {
             throw std::runtime_error(
                 "NaN");  // TODO should be unreachable, except maybe type errors
@@ -129,16 +129,16 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
         std::cout << makeString(rightValue) << std::endl;
         if (makeString(rightValue) == "Infinity") {
             if (isZero(leftValue)) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             }
-            return Value("Infinity");
+            return (isNegative(leftValue) ? Value("-Infinity") : Value("Infinity"));
         } else if (rightValue.toString() == "-Infinity") {
             if (isZero(leftValue)) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             }
-            return Value("-Infinity");
+            return (isNegative(leftValue) ? Value("Infinity") : Value("-Infinity"));
         } else {
-            throw std::runtime_error("NaN");  // TODO should be unreachable
+            return Value("NaN");  // TODO should be unreachable
         }
     }
 
@@ -153,7 +153,7 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getDouble() * rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (leftValue.getType() == NumberInt) {
         if (rightValue.getType() == NumberDouble) {
@@ -163,7 +163,7 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getInt() * rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (leftValue.getType() == NumberLong) {
         if (rightValue.getType() == NumberDouble) {
@@ -173,10 +173,10 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getLong() * rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else {
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 }
 
@@ -187,24 +187,24 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
 
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
         std::cout << "don't both count as numbers" << std::endl;
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 
     if (leftValue.getType() == String) {
         if (makeString(leftValue) == "Infinity") {
             if ((rightValue.getType() == String && ((makeString(rightValue) == "Infinity") ||
                                                     (makeString(rightValue) == "-Infinity")))) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             }
             return (isNegative(rightValue) ? Value("-Infinity") : Value("Infinity"));
         } else if (makeString(leftValue) == "-Infinity") {
             if ((rightValue.getType() == String && ((makeString(rightValue) == "Infinity") ||
                                                     (makeString(rightValue) == "-Infinity")))) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             }
             return (isNegative(leftValue) ? Value("Infinity") : Value("-Infinity"));
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (rightValue.getType() == String) {
         std::cout << makeString(rightValue) << std::endl;
@@ -214,7 +214,7 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
         } else if (rightValue.toString() == "-Infinity") {
             return Value(0);
         } else {
-            throw std::runtime_error("NaN");  // TODO should be unreachable
+            return Value("NaN");  // TODO should be unreachable
         }
     }
 
@@ -224,7 +224,7 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
     if (isZero(rightValue)) {
         if (isZero(leftValue)) {
             std::cout << "0/0 " << std::endl;
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         } else {
             std::cout << "right value is 0 " << std::endl;
             return (isNegative(leftValue) ? Value("-Infinity") : Value("Infinity"));
@@ -237,7 +237,7 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getDouble() / rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (leftValue.getType() == NumberInt) {
         if (rightValue.getType() == NumberDouble) {
@@ -247,7 +247,7 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getInt() / rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
 
     } else if (leftValue.getType() == NumberLong) {
@@ -258,10 +258,10 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getLong() / rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else {
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 }
 
@@ -278,13 +278,13 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
     }
 
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 
     if (leftValue.getType() == String) {
         if (makeString(leftValue) == "Infinity") {
             if ((rightValue.getType() == String) && (makeString(rightValue) == "-Infinity")) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             } else {
                 return Value("Infinity");
             }
@@ -293,7 +293,7 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
                     "should not reach this point",
                     makeString(leftValue) == "-Infinity");  // is this good style?
             if ((rightValue.getType() == String) && (makeString(rightValue) == "Infinity")) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             } else {
                 return Value("-Infinity");
             }
@@ -313,7 +313,6 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
     rightValue = makeNumeric(rightValue);
 
     if (leftValue.getType() == NumberDouble) {
-        // TODO: refactor to share code with multiplication?
         if (rightValue.getType() == NumberDouble) {
             return Value(leftValue.getDouble() + rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
@@ -321,7 +320,7 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getDouble() + rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (leftValue.getType() == NumberInt) {
         if (rightValue.getType() == NumberDouble) {
@@ -331,7 +330,7 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getInt() + rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (leftValue.getType() == NumberLong) {
         if (rightValue.getType() == NumberDouble) {
@@ -341,10 +340,10 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getLong() + rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else {
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 }
 
@@ -353,13 +352,13 @@ const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
     Value rightValue = this->getRightChild()->evaluate(scope);
 
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 
     if (leftValue.getType() == String) {
         if (makeString(leftValue) == "Infinity") {
             if ((rightValue.getType() == String) && (makeString(rightValue) == "Infinity")) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             } else {
                 return Value("Infinity");
             }
@@ -368,7 +367,7 @@ const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
                     "should not reach this point",
                     makeString(leftValue) == "-Infinity");  // is this good style?
             if ((rightValue.getType() == String) && (makeString(rightValue) == "-Infinity")) {
-                throw std::runtime_error("NaN");
+                return Value("NaN");
             } else {
                 return Value("-Infinity");
             }
@@ -388,7 +387,6 @@ const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
     rightValue = makeNumeric(rightValue);
 
     if (leftValue.getType() == NumberDouble) {
-        // TODO: refactor to share code with multiplication?
         if (rightValue.getType() == NumberDouble) {
             return Value(leftValue.getDouble() - rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
@@ -396,7 +394,7 @@ const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getDouble() - rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (leftValue.getType() == NumberInt) {
         if (rightValue.getType() == NumberDouble) {
@@ -406,7 +404,7 @@ const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getInt() - rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else if (leftValue.getType() == NumberLong) {
         if (rightValue.getType() == NumberDouble) {
@@ -416,10 +414,10 @@ const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getLong() - rightValue.getLong());
         } else {
-            throw std::runtime_error("NaN");
+            return Value("NaN");
         }
     } else {
-        throw std::runtime_error("NaN");
+        return Value("NaN");
     }
 }
 
@@ -436,10 +434,7 @@ bool isNegative(Value value) {
             ((value.getType() == String) && makeString(value) == "-Infinity"));
 }
 
-std::string stripDoubleQuotes(std::string s) {
-    if (((s.front() == '"') && (s.back() == '"')) || ((s.front() == '\'') && (s.back() == '\''))) {
-        s = s.substr(1, s.size() - 2);
-    }
+std::string stripQuotes(std::string s) {
     if (((s.front() == '"') && (s.back() == '"')) || ((s.front() == '\'') && (s.back() == '\''))) {
         s = s.substr(1, s.size() - 2);
     }
@@ -448,7 +443,7 @@ std::string stripDoubleQuotes(std::string s) {
 
 std::string makeString(Value value) {
     if (value.getType() == String) {
-        return stripDoubleQuotes(value.toString());
+        return stripQuotes(value.toString());
     } else if (value.numeric()) {
         return value.coerceToString();
     } else if (value.getType() == jstNULL) {

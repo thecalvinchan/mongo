@@ -62,7 +62,7 @@ bool isZero(Value value);
 
 bool isNegative(Value value);
 
-std::string stripDoubleQuotes(std::string s);
+std::string stripQuotes(std::string s);
 
 std::string makeString(Value value);
 
