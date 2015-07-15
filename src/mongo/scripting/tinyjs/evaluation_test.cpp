@@ -135,6 +135,11 @@ TEST(EvaluationTest, simple) {
     testEvaluation(input, Value(1));
 }
 
+TEST(EvaluationTest, simpleNegation) {
+    string input = "return -1;";
+    testEvaluation(input, Value(-1));
+}
+
 /*
  * Addition tests
  */
