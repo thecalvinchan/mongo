@@ -55,6 +55,7 @@ env.CppUnitTest(
     ], 
     LIBDEPS=[
         'ast_parser', 
-        'lexer'
+        'lexer',
+        '$BUILD_DIR/mongo/bson/mutable/mutable_bson'
     ]
 )
