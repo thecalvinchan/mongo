@@ -111,7 +111,7 @@ TEST(ParserTest, test4) {
     expected << "return ";
     expected << "=== ";
     expected << "[ true ";
-    expected << "this 'a' " << std::endl;
+    expected << "this a " << std::endl;
 
     testParseTree(input, expected.str());
 }
@@ -190,7 +190,7 @@ TEST(ParserTest, test10) {
     expected << "return ";
     expected << "== ";
     expected << ". [ ";
-    expected << "this elements 'cat' 'dog' " << std::endl;
+    expected << "this elements cat dog " << std::endl;
 
     testParseTree(input, expected.str());
 }
@@ -201,8 +201,8 @@ TEST(ParserTest, test11) {
     std::stringstream expected;
     expected << "return ";
     expected << "? ";
-    expected << "true ? 'no pets' ";
-    expected << "> 'dog' 'cat' ";
+    expected << "true ? no pets ";
+    expected << "> dog cat ";
     expected << "1 . ";
     expected << "this pets " << std::endl;
 
@@ -215,8 +215,8 @@ TEST(ParserTest, test12) {
     std::stringstream expected;
     expected << "return ";
     expected << "? ";
-    expected << "true ? 'no pets' ";
-    expected << "> 'dog' 'cat' ";
+    expected << "true ? no pets ";
+    expected << "> dog cat ";
     expected << "1 . ";
     expected << "this pets " << std::endl;
 
@@ -267,7 +267,7 @@ TEST(ParserTest, test16) {
     expected << "return ";
     expected << "== ";
     expected << "[ [ ";
-    expected << ". . . \"foo\" ";
+    expected << ". . . foo ";
     expected << "this a this b this c " << std::endl;
 
     testParseTree(input, expected.str());
