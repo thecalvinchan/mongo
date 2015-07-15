@@ -58,7 +58,18 @@ private:
     static std::string generateNestedField(const Node *head, Scope* scope);
 };
 
+bool isZero(Value value);
+
+bool isNegative(Value value);
+
+std::string stripDoubleQuotes(std::string s);
+
 std::string makeString(Value value);
+
+Value makeNumeric(Value value);
+
+bool isString(Value v);
+
 bool countsAsNumber(Value v);
 
 } // namespace tinyjs
