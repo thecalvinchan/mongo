@@ -58,5 +58,8 @@ private:
     static std::string generateNestedField(const Node *head, Scope* scope);
 };
 
+std::string makeString(Value value);
+bool countsAsNumber(Value v);
+
 } // namespace tinyjs
 } // namespace mongo

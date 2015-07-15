@@ -119,7 +119,7 @@ namespace {
         };
 
         kStringLiteral => {
-        emit(TokenType::kStringLiteral, &tokenData, ts, te);
+        emit(TokenType::kStringLiteral, &tokenData, ts + 1, te - 1);
         };
         
         kIdentifier => {
@@ -245,7 +245,11 @@ namespace {
  * This function adds a token containing type and value to the tokenData array.
  */
 void emit(TokenType t, std::vector<Token> *tokenData, const char *ts, const char *te) {
-    tokenData->emplace_back(t, StringData(ts, (te - ts)), ts, te);
+    if (te < ts) {
+         tokenData->emplace_back(t, StringData(""), ts, te);
+    } else {
+        tokenData->emplace_back(t, StringData(ts, (te - ts)), ts, te);
+    }
 }
 
 /*
