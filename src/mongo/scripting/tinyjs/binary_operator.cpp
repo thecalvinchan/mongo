@@ -75,7 +75,7 @@ const Value BinaryOperator::evaluate(Scope* scope) const {
         case TokenType::kAdd:
             return evaluateAdd(scope);
         case TokenType::kSubtract:
-            break;
+            return evaluateSubtract(scope);
         case TokenType::kTripleEquals:
             break;
         case TokenType::kDoubleEquals:
@@ -197,16 +197,26 @@ bool isZero(Value value) {
             ((value.getType() == Bool) && value.getBool() == false));
 }
 
+bool isNegative(Value value) {
+    return ((value.numeric() && (value.coerceToInt() < 0)) ||
+            ((value.getType() == String) && makeString(value) == "-Infinity"));
+}
+
 const Value BinaryOperator::evaluateDivide(Scope* scope) const {
     const Value leftValue = this->getLeftChild()->evaluate(scope);
     const Value rightValue = this->getRightChild()->evaluate(scope);
 
-    if (leftValue.getType() == NumberDouble) {
-        if (isZero(rightValue)) {
-            throw std::runtime_error(
-                "Divide by 0");  // TODO: doesn't match JS behavior, should give infinity
+    if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
+        throw std::runtime_error("NaN");
+    } else if (isZero(rightValue)) {
+        if (isZero(leftValue)) {
+            throw std::runtime_error("NaN");
+        } else {
+            return (isNegative(leftValue) ? Value("-Infinity") : Value("Infinity"));
         }
-
+    } else if (leftValue.getType() == jstNULL) {
+        return (Value(0));
+    } else if (leftValue.getType() == NumberDouble) {
         if (rightValue.getType() == NumberDouble) {
             return Value(leftValue.getDouble() / rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
@@ -221,11 +231,6 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
         }
 
     } else if (leftValue.getType() == NumberInt) {
-        if (isZero(rightValue)) {
-            throw std::runtime_error(
-                "Divide by 0");  // TODO: doesn't match JS behavior, should give infinity
-        }
-
         if (rightValue.getType() == NumberDouble) {
             return Value(leftValue.getInt() / rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
@@ -240,11 +245,6 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
         }
 
     } else if (leftValue.getType() == NumberLong) {
-        if (isZero(rightValue)) {
-            throw std::runtime_error(
-                "Divide by 0");  // TODO: doesn't match JS behavior, should give infinity
-        }
-
         if (rightValue.getType() == NumberDouble) {
             return Value(leftValue.getLong() / rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
@@ -258,18 +258,9 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
             throw std::runtime_error("NaN");
         }
     } else if ((leftValue.getType() == jstNULL) && rightValue.numeric()) {
-        if (isZero(rightValue)) {
-            throw std::runtime_error("Divide 0/0: NaN");
-        }
-
         return Value(0);
-
     } else if (leftValue.getType() == Bool) {
-        if (isZero(rightValue)) {
-            throw std::runtime_error("Divide 0/0: NaN");
-        }
-
-        int leftOperand = rightValue.getBool() ? 1 : 0;
+        int leftOperand = leftValue.getBool() ? 1 : 0;
         if (rightValue.getType() == NumberDouble) {
             return Value(leftOperand / rightValue.getDouble());
         } else if (rightValue.getType() == NumberInt) {
@@ -343,7 +334,8 @@ Value evaluateAddNumeric(Value leftValue, Value rightValue) {
                 return Value("-Infinity");
             }
         } else {
-            throw std::runtime_error("NaN");  // TODO should be unreachable
+            throw std::runtime_error(
+                "NaN");  // TODO should be unreachable, except maybe type errors
         }
     } else if (rightValue.getType() == String) {
         if (makeString(rightValue) == "Infinity") {
@@ -445,7 +437,10 @@ bool isString(Value v) {
 }
 
 bool countsAsNumber(Value v) {
-    return ((v.numeric() || (v.getType() == String)) || ((v.getType() == Bool) || (v.getType() == jstNULL)));
+    if (v.getType() == String) {
+        return ((v.toString() == "Infinity") || (v.toString() == "-Infinity"));
+    }
+    return (v.numeric() || ((v.getType() == Bool) || (v.getType() == jstNULL)));
 }
 
 const Value BinaryOperator::evaluateAdd(Scope* scope) const {
@@ -466,7 +461,116 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
 }
 
 const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
-    return Value();
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    if (!countsAsNumber(leftValue) && !countsAsNumber(rightValue)) {
+        throw std::runtime_error("NaN");
+    } else if (leftValue.getType() == String) {
+        if (makeString(leftValue) == "Infinity") {
+            if ((rightValue.getType() == String) && (makeString(rightValue) == "Infinity")) {
+                throw std::runtime_error("NaN");
+            } else {
+                return Value("Infinity");
+            }
+        } else if (makeString(leftValue) == "-Infinity") {
+            if ((rightValue.getType() == String) && (makeString(rightValue) == "-Infinity")) {
+                throw std::runtime_error("NaN");
+            } else {
+                return Value("-Infinity");
+            }
+        } else {
+            throw std::runtime_error(
+                "NaN");  // TODO should be unreachable, except maybe type errors
+        }
+    } else if (rightValue.getType() == String) {
+        if (makeString(rightValue) == "Infinity") {
+            return Value("Infinity");
+        } else if (rightValue.toString() == "-Infinity") {
+            return Value("-Infinity");
+        } else {
+            throw std::runtime_error("NaN");  // TODO should be unreachable
+        }
+    } else if (leftValue.getType() == NumberDouble) {
+        // TODO: refactor to share code with multiplication?
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getDouble() - rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getDouble() - rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getDouble() - rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return leftValue;
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getDouble() - rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == NumberInt) {
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getInt() - rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getInt() - rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getInt() - rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return leftValue;
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getInt() - rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == NumberLong) {
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftValue.getLong() - rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftValue.getLong() - rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftValue.getLong() - rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return leftValue;
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftValue.getLong() - rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == Bool) {
+        int leftOperand = leftValue.getBool() ? 1 : 0;
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftOperand - rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftOperand - rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftOperand - rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(leftOperand);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftOperand - rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else if (leftValue.getType() == jstNULL) {  // TODO CLEAN UP
+        int leftOperand = 0;
+        if (rightValue.getType() == NumberDouble) {
+            return Value(leftOperand - rightValue.getDouble());
+        } else if (rightValue.getType() == NumberInt) {
+            return Value(leftOperand - rightValue.getInt());
+        } else if (rightValue.getType() == NumberLong) {
+            return Value(leftOperand - rightValue.getLong());
+        } else if (rightValue.getType() == jstNULL) {
+            return Value(leftOperand);
+        } else if (rightValue.getType() == Bool) {
+            int rightOperand = rightValue.getBool() ? 1 : 0;
+            return Value(leftOperand - rightOperand);
+        } else {
+            throw std::runtime_error("NaN");
+        }
+    } else {
+        throw std::runtime_error("NaN");
+    }
 }
 
 /*

@@ -137,7 +137,9 @@ TEST(LexerTest, booleanFalse) {
 }
 
 TEST(LexerTest, kStringLiteral) {
-    testSingleToken("'hello world'", TokenType::kStringLiteral);
+    TokenType types[] = {TokenType::kStringLiteral};
+    string lexemes[] = {"hello world"};
+    testValidLine("'hello world'", types, lexemes, 1);
 }
 
 TEST(LexerTest, kIdentifier) {
@@ -349,7 +351,7 @@ TEST(LexerTest, functionTernaryOp) {
                          TokenType::kCloseParen,
                          TokenType::kCloseCurlyBrace};
 
-    string lexemes[] = {"function", "(",  ")", "{",    "return", "this", ".",  "a", "[", "'foo'",
+    string lexemes[] = {"function", "(",  ")", "{",    "return", "this", ".",  "a", "[", "foo",
                         "]",        "==", "3", "?",    "(",      "this", ".",  "b", ">", "1",
                         ")",        ":",  "(", "this", ".",      "d",    "==", "2", ")", "}"};
 
@@ -393,9 +395,9 @@ TEST(LexerTest, nestedNonsense) {
                          TokenType::kCloseSquareBracket,
                          TokenType::kCloseParen};
 
-    string lexemes[] = {"return", "(",   "(",   "(", "(",    "3", "+",    "a", ")", "-", "'string'",
+    string lexemes[] = {"return", "(",   "(",   "(", "(",    "3", "+",    "a", ")", "-", "string",
                         ")",      "*",   "NaN", ")", "/",   "x", ")",    "+", "-", "(", "bar",
-                        "[",      "'a'", "]",   ".", "this", ".", "null", "[", "1", "]", ")"};
+                        "[",      "a", "]",   ".", "this", ".", "null", "[", "1", "]", ")"};
 
     testValidLine(input, types, lexemes, 33);
 }
