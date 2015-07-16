@@ -14,7 +14,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * As a special exception, the copyright holders give permission to link the
- * code of portions of this program with the OpenSSL library under certain
  * conditions as described in each individual source file and distribute
  * linked combinations including the program with the OpenSSL library. You
  * must comply with the GNU Affero General Public License in all respects
@@ -26,41 +25,23 @@
  * then also delete it in the license file.
  */
 
-#pragma once
+#include "mongo/platform/basic.h"
+#include "mongo/bson/bsontypes.h"
+#include "mongo/base/checked_cast.h"
+#include "mongo/db/pipeline/field_path.h"
+#include "mongo/db/pipeline/document.h"
+#include "mongo/scripting/tinyjs/binary_operator.h"
+#include "mongo/scripting/tinyjs/triple_equals_operator.h"
 
-#include "mongo/scripting/tinyjs/nonterminal_node.h"
 
 namespace mongo {
 namespace tinyjs {
 
-class BinaryOperator : public NonTerminalNode {
-public:
-    BinaryOperator(TokenType type);
-    ~BinaryOperator() {}
-    std::vector<Node*> getChildren() const;
-    Node* getLeftChild() const;
-    Node* getRightChild() const;
-    void setLeftChild(std::unique_ptr<Node>);
-    void setRightChild(std::unique_ptr<Node>);
-    virtual const Value evaluate(Scope* scope) const = 0;
-private:
-    std::unique_ptr<Node> _leftChild;
-    std::unique_ptr<Node> _rightChild;
-};
+TripleEqualsOperator::TripleEqualsOperator() : BinaryOperator(TokenType::kTripleEquals) {}
 
-bool isZero(Value value);
+const Value TripleEqualsOperator::evaluate(Scope* scope) const {
+    return Value();
+}
 
-bool isNegative(Value value);
-
-std::string stripQuotes(std::string s);
-
-std::string makeString(Value value);
-
-Value makeNumeric(Value value);
-
-bool isString(Value v);
-
-bool countsAsNumber(Value v);
-
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

@@ -33,34 +33,13 @@
 namespace mongo {
 namespace tinyjs {
 
-class BinaryOperator : public NonTerminalNode {
+class ObjectAccessorOperator : public BinaryOperator {
 public:
-    BinaryOperator(TokenType type);
-    ~BinaryOperator() {}
-    std::vector<Node*> getChildren() const;
-    Node* getLeftChild() const;
-    Node* getRightChild() const;
-    void setLeftChild(std::unique_ptr<Node>);
-    void setRightChild(std::unique_ptr<Node>);
-    virtual const Value evaluate(Scope* scope) const = 0;
+    ObjectAccessorOperator(TokenType t);
+    virtual const Value evaluate(Scope* scope) const;
 private:
-    std::unique_ptr<Node> _leftChild;
-    std::unique_ptr<Node> _rightChild;
+    std::string generateNestedField(const Node* head, Scope* scope) const;
 };
-
-bool isZero(Value value);
-
-bool isNegative(Value value);
-
-std::string stripQuotes(std::string s);
-
-std::string makeString(Value value);
-
-Value makeNumeric(Value value);
-
-bool isString(Value v);
-
-bool countsAsNumber(Value v);
 
 } // namespace tinyjs
 } // namespace mongo

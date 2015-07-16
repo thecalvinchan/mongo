@@ -33,11 +33,30 @@
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/node.h"
 #include "mongo/scripting/tinyjs/terminal_node.h"
- #include "mongo/scripting/tinyjs/identifier.h"
+#include "mongo/scripting/tinyjs/identifier.h"
 #include "mongo/scripting/tinyjs/ternary_operator.h"
 #include "mongo/scripting/tinyjs/parse_exception.h"
 #include "mongo/scripting/tinyjs/unary_operator.h"
 #include "mongo/scripting/tinyjs/array_literal.h"
+
+
+
+#include "mongo/scripting/tinyjs/object_accessor_operator.h"
+#include "mongo/scripting/tinyjs/multiplication_operator.h"
+#include "mongo/scripting/tinyjs/division_operator.h"
+#include "mongo/scripting/tinyjs/addition_operator.h"
+#include "mongo/scripting/tinyjs/subtraction_operator.h"
+#include "mongo/scripting/tinyjs/triple_equals_operator.h"
+#include "mongo/scripting/tinyjs/double_equals_operator.h"
+#include "mongo/scripting/tinyjs/greater_than_operator.h"
+#include "mongo/scripting/tinyjs/greater_than_equals_operator.h"
+#include "mongo/scripting/tinyjs/less_than_operator.h"
+#include "mongo/scripting/tinyjs/less_than_equals_operator.h"
+#include "mongo/scripting/tinyjs/not_equals_operator.h"
+#include "mongo/scripting/tinyjs/double_not_equals_operator.h"
+#include "mongo/scripting/tinyjs/logical_and_operator.h"
+#include "mongo/scripting/tinyjs/logical_or_operator.h"
+
 
 namespace mongo {
 namespace tinyjs {

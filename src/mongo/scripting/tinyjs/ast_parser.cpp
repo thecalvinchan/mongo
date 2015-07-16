@@ -197,12 +197,12 @@ std::unique_ptr<Node> ASTParser::variableAction() {
  */
 std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> leftChild) {
     if ((matchImplicitTerminal(TokenType::kPeriod))) {
-        std::unique_ptr<BinaryOperator> head(new BinaryOperator(TokenType::kPeriod));
+        std::unique_ptr<BinaryOperator> head(new ObjectAccessorOperator(TokenType::kPeriod));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(matchNodeTerminal(TokenType::kIdentifier)));
         return objectAccessorAction(std::move(head));
     } else if ((matchImplicitTerminal(TokenType::kOpenSquareBracket))) {
-        std::unique_ptr<BinaryOperator> head(new BinaryOperator(TokenType::kOpenSquareBracket));
+        std::unique_ptr<BinaryOperator> head(new ObjectAccessorOperator(TokenType::kOpenSquareBracket));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(arithmeticExpressionAction()));
         expectImplicitTerminal(TokenType::kCloseSquareBracket);
@@ -321,9 +321,9 @@ std::unique_ptr<Node> ASTParser::multiplicativeOperationAction(std::unique_ptr<N
     std::unique_ptr<BinaryOperator> head;
 
     if ((matchImplicitTerminal(TokenType::kMultiply))) {
-        head.reset(new BinaryOperator(TokenType::kMultiply));
+        head.reset(new MultiplicationOperator());
     } else if ((matchImplicitTerminal(TokenType::kDivide))) {
-        head.reset(new BinaryOperator(TokenType::kDivide));
+        head.reset(new DivisionOperator());
     } else {
         // multiplicativeOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -354,9 +354,9 @@ std::unique_ptr<Node> ASTParser::arithmeticOperationAction(std::unique_ptr<Node>
     std::unique_ptr<BinaryOperator> head;
 
     if ((matchImplicitTerminal(TokenType::kAdd))) {
-        head.reset(new BinaryOperator(TokenType::kAdd));
+        head.reset(new AdditionOperator());
     } else if ((matchImplicitTerminal(TokenType::kSubtract))) {
-        head.reset(new BinaryOperator(TokenType::kSubtract));
+        head.reset(new SubtractionOperator());
     } else {
         // arithmeticOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -403,21 +403,21 @@ std::unique_ptr<Node> ASTParser::relationalOperationAction(std::unique_ptr<Node>
     std::unique_ptr<Node> head;
 
     if ((matchImplicitTerminal(TokenType::kTripleEquals))) {
-        head.reset(new BinaryOperator(TokenType::kTripleEquals));
+        head.reset(new TripleEqualsOperator());
     } else if ((matchImplicitTerminal(TokenType::kDoubleEquals))) {
-        head.reset(new BinaryOperator(TokenType::kDoubleEquals));
+        head.reset(new DoubleEqualsOperator());
     } else if ((matchImplicitTerminal(TokenType::kGreaterThan))) {
-        head.reset(new BinaryOperator(TokenType::kGreaterThan));
+        head.reset(new GreaterThanOperator());
     } else if ((matchImplicitTerminal(TokenType::kGreaterThanEquals))) {
-        head.reset(new BinaryOperator(TokenType::kGreaterThanEquals));
+        head.reset(new GreaterThanEqualsOperator());
     } else if ((matchImplicitTerminal(TokenType::kLessThan))) {
-        head.reset(new BinaryOperator(TokenType::kLessThan));
+        head.reset(new LessThanOperator());
     } else if ((matchImplicitTerminal(TokenType::kLessThanEquals))) {
-        head.reset(new BinaryOperator(TokenType::kLessThanEquals));
+        head.reset(new LessThanEqualsOperator());
     } else if ((matchImplicitTerminal(TokenType::kNotEquals))) {
-        head.reset(new BinaryOperator(TokenType::kNotEquals));
+        head.reset(new NotEqualsOperator());
     } else if ((matchImplicitTerminal(TokenType::kDoubleNotEquals))) {
-        head.reset(new BinaryOperator(TokenType::kDoubleNotEquals));
+        head.reset(new DoubleNotEqualsOperator());
     } else {
         // relationalOperation is optional, so if it doesn't match, just return leftChild
         return leftChild;
@@ -452,12 +452,12 @@ std::unique_ptr<Node> ASTParser::booleanOperationAction(std::unique_ptr<Node> le
     if ((head = tryProductionMatch(fn))) {
         checked_cast<TernaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
     } else if ((matchImplicitTerminal(TokenType::kLogicalAnd))) {
-        head.reset(new BinaryOperator(TokenType::kLogicalAnd));
+        head.reset(new LogicalAndOperator());
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
         checked_cast<BinaryOperator*>(head.get())
             ->setRightChild(std::move(booleanExpressionAction()));
     } else if ((matchImplicitTerminal(TokenType::kLogicalOr))) {
-        head.reset(new BinaryOperator(TokenType::kLogicalOr));
+        head.reset(new LogicalOrOperator());
         checked_cast<BinaryOperator*>(head.get())->setLeftChild(std::move(leftChild));
         checked_cast<BinaryOperator*>(head.get())
             ->setRightChild(std::move(booleanExpressionAction()));
