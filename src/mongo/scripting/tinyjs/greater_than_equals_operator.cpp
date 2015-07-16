@@ -26,10 +26,7 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "mongo/bson/bsontypes.h"
-#include "mongo/base/checked_cast.h"
-#include "mongo/db/pipeline/field_path.h"
-#include "mongo/db/pipeline/document.h"
+
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/greater_than_equals_operator.h"
 
@@ -37,12 +34,13 @@
 namespace mongo {
 namespace tinyjs {
 
-GreaterThanEqualsOperator::GreaterThanEqualsOperator() : BinaryOperator(TokenType::kGreaterThanEquals) {}
+GreaterThanEqualsOperator::GreaterThanEqualsOperator()
+    : BinaryOperator(TokenType::kGreaterThanEquals) {}
 
 const Value GreaterThanEqualsOperator::evaluate(Scope* scope) const {
-    const Value leftValue = this->getLeftChild()->evaluate(scope);
-    const Value rightValue = this->getRightChild()->evaluate(scope);
-    return Value(Value::compare(leftValue, rightValue) >= 0); 
+    Value leftValue = this->getLeftChild()->evaluate(scope);
+    Value rightValue = this->getRightChild()->evaluate(scope);
+    return Value(Value::compare(leftValue, rightValue) >= 0);
 }
 
 }  // namespace tinyjs

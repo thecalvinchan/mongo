@@ -60,7 +60,7 @@ const Value SubtractionOperator::evaluate(Scope* scope) const {
                 return Value("-Infinity");
             }
         } else {
-            verify(false); // should not reach this point
+            verify(false);  // should not reach this point
         }
     } else if (rightValue.getType() == String) {
         if (makeString(rightValue) == "Infinity") {
@@ -68,7 +68,7 @@ const Value SubtractionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.toString() == "-Infinity") {
             return Value("Infinity");
         } else {
-            verify(false); // should not reach this point
+            verify(false);  // should not reach this point
         }
     }
 

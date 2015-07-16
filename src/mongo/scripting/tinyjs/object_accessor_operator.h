@@ -37,9 +37,10 @@ class ObjectAccessorOperator : public BinaryOperator {
 public:
     ObjectAccessorOperator(TokenType t);
     virtual const Value evaluate(Scope* scope) const;
+
 private:
     std::string generateNestedField(const Node* head, Scope* scope) const;
 };
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

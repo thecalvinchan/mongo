@@ -45,11 +45,12 @@ public:
     void setMiddleChild(std::unique_ptr<Node> node);
     void setRightChild(std::unique_ptr<Node> node);
     const Value evaluate(Scope* scope) const;
+
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _middleChild;
     std::unique_ptr<Node> _rightChild;
 };
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

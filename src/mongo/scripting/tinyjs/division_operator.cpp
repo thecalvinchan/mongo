@@ -26,10 +26,7 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "mongo/bson/bsontypes.h"
-#include "mongo/base/checked_cast.h"
-#include "mongo/db/pipeline/field_path.h"
-#include "mongo/db/pipeline/document.h"
+
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/division_operator.h"
 
@@ -72,7 +69,7 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.toString() == "-Infinity") {
             return Value(0);
         } else {
-            verify(false); // should not reach this point
+            verify(false);  // should not reach this point
         }
     }
 

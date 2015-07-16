@@ -26,10 +26,7 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "mongo/bson/bsontypes.h"
-#include "mongo/base/checked_cast.h"
-#include "mongo/db/pipeline/field_path.h"
-#include "mongo/db/pipeline/document.h"
+
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/addition_operator.h"
 
@@ -69,7 +66,7 @@ const Value AdditionOperator::evaluate(Scope* scope) const {
                 return Value("-Infinity");
             }
         } else {
-            verify(false); // should not reach this point
+            verify(false);  // should not reach this point
         }
     } else if (rightValue.getType() == String) {
         std::cout << makeString(rightValue) << std::endl;
@@ -78,7 +75,7 @@ const Value AdditionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.toString() == "-Infinity") {
             return Value("-Infinity");
         } else {
-            verify(false); // should not reach this point
+            verify(false);  // should not reach this point
         }
     }
 

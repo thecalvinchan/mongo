@@ -26,10 +26,7 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "mongo/bson/bsontypes.h"
-#include "mongo/base/checked_cast.h"
-#include "mongo/db/pipeline/field_path.h"
-#include "mongo/db/pipeline/document.h"
+ 
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/multiplication_operator.h"
 
@@ -58,7 +55,7 @@ const Value MultiplicationOperator::evaluate(Scope* scope) const {
             }
             return (isNegative(rightValue) ? Value("Infinity") : Value("-Infinity"));
         } else {
-            verify(false); // should not reach this point
+            verify(false);  // should not reach this point
         }
     } else if (rightValue.getType() == String) {
         std::cout << makeString(rightValue) << std::endl;
@@ -73,7 +70,7 @@ const Value MultiplicationOperator::evaluate(Scope* scope) const {
             }
             return (isNegative(leftValue) ? Value("Infinity") : Value("-Infinity"));
         } else {
-            verify(false); // should not reach this point
+            verify(false);  // should not reach this point
         }
     }
 

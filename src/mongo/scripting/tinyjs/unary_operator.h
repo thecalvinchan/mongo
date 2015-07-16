@@ -43,11 +43,12 @@ public:
     Node* getChild() const;
     void setChild(std::unique_ptr<Node> node);
     const Value evaluate(Scope* scope) const;
+
 private:
     std::unique_ptr<Node> _child;
     const Value evaluateReturn(Scope* scope) const;
     const Value evaluateNegativeOperator(Scope* scope) const;
 };
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

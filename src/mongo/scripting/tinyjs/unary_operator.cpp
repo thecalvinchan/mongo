@@ -33,8 +33,7 @@
 namespace mongo {
 namespace tinyjs {
 
-UnaryOperator::UnaryOperator(TokenType type) : NonTerminalNode(type) {
-}
+UnaryOperator::UnaryOperator(TokenType type) : NonTerminalNode(type) {}
 
 std::vector<Node*> UnaryOperator::getChildren() const {
     std::vector<Node*> children;
@@ -52,14 +51,14 @@ void UnaryOperator::setChild(std::unique_ptr<Node> node) {
 
 const Value UnaryOperator::evaluate(Scope* scope) const {
     switch (this->getType()) {
-        case TokenType::kReturnKeyword: 
+        case TokenType::kReturnKeyword:
             return evaluateReturn(scope);
             break;
-        case TokenType::kSubtract: 
+        case TokenType::kSubtract:
             return evaluateNegativeOperator(scope);
             break;
         default:
-            return Value(); //TODO: error?
+            return Value();  // TODO: error?
     }
 }
 
@@ -100,5 +99,5 @@ const Value UnaryOperator::evaluateNegativeOperator(Scope* scope) const {
     }
 }
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

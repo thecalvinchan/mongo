@@ -39,12 +39,13 @@ class ArrayLiteral : public NonTerminalNode {
 public:
     ArrayLiteral(TokenType type);
     ~ArrayLiteral() {}
-    std::vector<Node* > getChildren() const;
+    std::vector<Node*> getChildren() const;
     void setChild(std::unique_ptr<Node>);
     const Value evaluate(Scope* scope) const;
+
 private:
     std::vector<std::unique_ptr<Node>> _children;
 };
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

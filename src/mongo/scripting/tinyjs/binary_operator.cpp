@@ -82,7 +82,7 @@ std::string makeString(Value value) {
             ((s.front() == '\'') && (s.back() == '\''))) {
             s = s.substr(1, s.size() - 2);
         }
-    return s;
+        return s;
     } else if (value.numeric()) {
         return value.coerceToString();
     } else if (value.getType() == jstNULL) {
@@ -139,12 +139,15 @@ bool countsAsNumber(Value v) {
 }
 
 bool isFalse(Value v) {
-    return (isZero(v) || (v.getType() == Undefined) || (v.getType() == String && v.getString() == "NaN"));
+    return (isZero(v) || (v.getType() == Undefined) ||
+            (v.getType() == String && v.getString() == "NaN"));
 }
 
 bool strictlyEqual(Value leftValue, Value rightValue) {
     if (((leftValue.getType() == String) && (leftValue.getString() == "NaN")) ||
         ((rightValue.getType() == String) && (rightValue.getString() == "NaN"))) {
+        return false;
+    } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
         return false;
     } else if (leftValue.getType() != rightValue.getType()) {
         return false;
@@ -154,10 +157,8 @@ bool strictlyEqual(Value leftValue, Value rightValue) {
 }
 
 bool looselyEqualNumberString(Value numberValue, std::string s) {
-
     switch (numberValue.getType()) {
         case NumberInt: {
-
             if (s == "") {
                 return (numberValue.getInt() == 0);
             }
@@ -171,7 +172,6 @@ bool looselyEqualNumberString(Value numberValue, std::string s) {
             }
         }
         case NumberDouble: {
-
             if (s == "") {
                 return (numberValue.getDouble() == 0);
             }
@@ -185,7 +185,6 @@ bool looselyEqualNumberString(Value numberValue, std::string s) {
             }
         }
         case NumberLong: {
-
             if (s == "") {
                 return (numberValue.getLong() == 0);
             }
@@ -198,7 +197,7 @@ bool looselyEqualNumberString(Value numberValue, std::string s) {
                 return false;
             }
         }
-        default: 
+        default:
             verify(false);
     }
 }
@@ -225,7 +224,6 @@ bool looselyEqualStringBool(std::string s, bool b) {
 
 
 bool looselyEqual(Value leftValue, Value rightValue) {
-
     if (leftValue.getType() == Array) {
         if (rightValue.getType() != Array) {
             if (leftValue.getArray().size() == 0) {
@@ -240,13 +238,8 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             }
 
         } else {
-            bool match = true;
-            for (Value v1 : leftValue.getArray()) {
-                for (Value v2 : rightValue.getArray()) {
-                    match = match && (Value::compare(v1, v2) == 0);
-                }
-            }
-            return match;
+            // 2 array literals can't be equal
+            return false;
         }
     } else if (rightValue.getType() == Array) {
         if (rightValue.getArray().size() == 0) {
@@ -254,8 +247,8 @@ bool looselyEqual(Value leftValue, Value rightValue) {
         } else if (rightValue.getArray().size() == 1) {
             rightValue = rightValue.getArray()[0];
             if ((rightValue.getType() == Array) && rightValue.getArray().size() == 0) {
-                    rightValue = Value(false);
-                }
+                rightValue = Value(false);
+            }
         } else {
             return false;
         }
@@ -270,7 +263,7 @@ bool looselyEqual(Value leftValue, Value rightValue) {
     if (leftValue.getType() == Undefined) {
         if (rightValue.getType() == jstNULL) {
             return true;
-        }    
+        }
     }
 
     if (leftValue.getType() == jstNULL) {
@@ -284,7 +277,7 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualNumberString(leftValue, rightValue.getString());
         } else if (rightValue.getType() == Bool) {
             return looselyEqualNumberBool(leftValue, rightValue.getBool());
-        } 
+        }
     }
 
     if (leftValue.getType() == String) {
@@ -292,7 +285,7 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualNumberString(rightValue, leftValue.getString());
         } else if (rightValue.getType() == Bool) {
             return looselyEqualStringBool(leftValue.getString(), rightValue.getBool());
-        } 
+        }
     }
 
     if (leftValue.getType() == Bool) {
@@ -300,7 +293,7 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualNumberBool(rightValue, leftValue.getBool());
         } else if (rightValue.getType() == String) {
             return looselyEqualStringBool(rightValue.getString(), leftValue.getBool());
-        } 
+        }
     }
 
 

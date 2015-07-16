@@ -39,5 +39,5 @@ public:
     virtual const Value evaluate(Scope* scope) const;
 };
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

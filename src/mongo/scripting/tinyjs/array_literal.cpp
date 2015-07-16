@@ -33,10 +33,9 @@
 namespace mongo {
 namespace tinyjs {
 
-ArrayLiteral::ArrayLiteral(TokenType type) : NonTerminalNode(type) {
-}
+ArrayLiteral::ArrayLiteral(TokenType type) : NonTerminalNode(type) {}
 
-std::vector<Node *> ArrayLiteral::getChildren() const {
+std::vector<Node*> ArrayLiteral::getChildren() const {
     std::vector<Node*> children;
     for (std::size_t i = 0; i < _children.size(); i++) {
         children.push_back(_children[i].get());
@@ -56,5 +55,5 @@ const Value ArrayLiteral::evaluate(Scope* scope) const {
     return Value(v);
 }
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

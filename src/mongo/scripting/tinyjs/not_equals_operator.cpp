@@ -26,10 +26,7 @@
  */
 
 #include "mongo/platform/basic.h"
-#include "mongo/bson/bsontypes.h"
-#include "mongo/base/checked_cast.h"
-#include "mongo/db/pipeline/field_path.h"
-#include "mongo/db/pipeline/document.h"
+
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/not_equals_operator.h"
 

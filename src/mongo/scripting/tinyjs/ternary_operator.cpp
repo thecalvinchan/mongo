@@ -33,11 +33,10 @@
 namespace mongo {
 namespace tinyjs {
 
-TernaryOperator::TernaryOperator(TokenType type) : NonTerminalNode(type) {
-}
+TernaryOperator::TernaryOperator(TokenType type) : NonTerminalNode(type) {}
 
 std::vector<Node*> TernaryOperator::getChildren() const {
-    std::vector<Node* > children;
+    std::vector<Node*> children;
     children.push_back(_leftChild.get());
     children.push_back(_middleChild.get());
     children.push_back(_rightChild.get());
@@ -69,11 +68,10 @@ void TernaryOperator::setRightChild(std::unique_ptr<Node> node) {
 }
 
 const Value TernaryOperator::evaluate(Scope* scope) const {
-    
     const Value condition = this->getLeftChild()->evaluate(scope);
 
-    if (condition.getType() != Bool) { // TODO how does it understand the BSON types?
-        //TODO throw error
+    if (condition.getType() != Bool) {  // TODO how does it understand the BSON types?
+        // TODO throw error
     }
 
     if (condition.getBool()) {
@@ -85,5 +83,5 @@ const Value TernaryOperator::evaluate(Scope* scope) const {
     }
 }
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo

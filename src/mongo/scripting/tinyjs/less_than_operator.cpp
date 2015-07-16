@@ -40,8 +40,8 @@ namespace tinyjs {
 LessThanOperator::LessThanOperator() : BinaryOperator(TokenType::kLessThan) {}
 
 const Value LessThanOperator::evaluate(Scope* scope) const {
-    const Value leftValue = this->getLeftChild()->evaluate(scope);
-    const Value rightValue = this->getRightChild()->evaluate(scope);
+    Value leftValue = this->getLeftChild()->evaluate(scope);
+    Value rightValue = this->getRightChild()->evaluate(scope);
     return Value(Value::compare(leftValue, rightValue) < 0);
 }
 

@@ -43,6 +43,7 @@ public:
     void setLeftChild(std::unique_ptr<Node>);
     void setRightChild(std::unique_ptr<Node>);
     virtual const Value evaluate(Scope* scope) const = 0;
+
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _rightChild;
@@ -68,5 +69,5 @@ bool strictlyEqual(Value leftValue, Value rightValue);
 
 bool looselyEqual(Value leftValue, Value rightValue);
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo
