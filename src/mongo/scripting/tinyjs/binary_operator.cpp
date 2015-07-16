@@ -25,6 +25,8 @@
  * then also delete it in the license file.
  */
 
+#include <boost/lexical_cast.hpp>
+
 #include "mongo/platform/basic.h"
 #include "mongo/bson/bsontypes.h"
 #include "mongo/base/checked_cast.h"
@@ -140,6 +142,127 @@ bool isFalse(Value v) {
     return (isZero(v) || (v.getType() == Undefined) || (v.getType() == String && v.getString() == "NaN"));
 }
 
+bool strictlyEqual(Value leftValue, Value rightValue) {
+    if (((leftValue.getType() == String) && (leftValue.getString() == "NaN")) ||
+        ((rightValue.getType() == String) && (rightValue.getString() == "NaN"))) {
+        return false;
+    } else if (leftValue.getType() != rightValue.getType()) {
+        return false;
+    } else {
+        return Value::compare(leftValue, rightValue) == 0;
+    }
+}
+
+bool looselyEqualNumberString(Value numberValue, std::string s) {
+    switch (numberValue.getType()) {
+        case NumberInt: {
+            int rightInt;
+            try {
+                rightInt = boost::lexical_cast<int>(s);
+                return numberValue.getInt() == rightInt;
+            } catch (boost::bad_lexical_cast& e) {
+                return false;
+            }
+        }
+        case NumberDouble: {
+            double rightDouble;
+            try {
+                rightDouble = boost::lexical_cast<double>(s);
+                return numberValue.getDouble() == rightDouble;
+            } catch (boost::bad_lexical_cast& e) {
+                return false;
+            }
+        }
+        case NumberLong: {
+            double rightLong;
+            try {
+                rightLong = boost::lexical_cast<long>(s);
+                return numberValue.getLong() == rightLong;
+            } catch (boost::bad_lexical_cast& e) {
+                return false;
+            }
+        }
+        default: 
+            verify(false);
+    }
+}
+
+bool looselyEqualNumberBool(Value numberValue, bool b) {
+    int boolNumber = (b ? 1 : 0);
+    // TODO behavior for 1.0 and 1.5 ?
+    return (numberValue.coerceToInt() == boolNumber);
+}
+
+bool looselyEqualStringBool(std::string s, bool b) {
+    int boolInt = (b ? 1 : 0);
+    try {
+        int stringInt = boost::lexical_cast<int>(s);
+        return stringInt == boolInt;
+    } catch (boost::bad_lexical_cast& e) {
+        return false;
+    }
+    // TODO behavior for 1.0 and 1.5 ?
+}
+
+
+bool looselyEqual(Value leftValue, Value rightValue) {
+    if (((leftValue.getType() == String) && (leftValue.getString() == "NaN")) ||
+        ((rightValue.getType() == String) && (rightValue.getString() == "NaN"))) {
+        return false;
+    }
+
+    if (leftValue.getType() == Undefined) {
+        if (rightValue.getType() == jstNULL) {
+            return true;
+        }    
+    }
+
+    if (leftValue.getType() == jstNULL) {
+        if (rightValue.getType() == Undefined) {
+            return true;
+        }
+    }
+
+    if (leftValue.numeric()) {
+        if (rightValue.getType() == String) {
+            return looselyEqualNumberString(leftValue, rightValue.getString());
+        } else if (rightValue.getType() == Bool) {
+            return looselyEqualNumberBool(leftValue, rightValue.getBool());
+        }
+    }
+
+    if (leftValue.getType() == String) {
+        if (rightValue.numeric()) {
+            return looselyEqualNumberString(rightValue, leftValue.getString());
+        } else if (rightValue.getType() == Bool) {
+            return looselyEqualStringBool(rightValue.getString(), leftValue.getBool());
+        }
+    }
+
+    if (leftValue.getType() == Bool) {
+        if (rightValue.numeric()) {
+            return looselyEqualNumberBool(rightValue, leftValue.getBool());
+        } else if (rightValue.getType() == String) {
+            return looselyEqualStringBool(rightValue.getString(), leftValue.getBool());
+        }
+    }
+
+    if (leftValue.getType() == Array) {
+        if (rightValue.getType() != Array) {
+            return false;
+            // TODO there are some non-arrays the empty array should match
+        }
+        bool match = true;
+        for (Value v1 : leftValue.getArray()) {
+            for (Value v2 : rightValue.getArray()) {
+                match = match && (Value::compare(v1, v2) == 0);
+            }
+        }
+        return match;
+    }
+
+    return Value::compare(leftValue, rightValue) == 0;
+}
 
 }  // namespace tinyjs
 }  // namespace mongo

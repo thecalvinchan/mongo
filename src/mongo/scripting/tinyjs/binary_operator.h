@@ -64,5 +64,9 @@ bool countsAsNumber(Value v);
 
 bool isFalse(Value v);
 
+bool strictlyEqual(Value leftValue, Value rightValue);
+
+bool looselyEqual(Value leftValue, Value rightValue);
+
 } // namespace tinyjs
 } // namespace mongo

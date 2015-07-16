@@ -40,7 +40,9 @@ namespace tinyjs {
 TripleEqualsOperator::TripleEqualsOperator() : BinaryOperator(TokenType::kTripleEquals) {}
 
 const Value TripleEqualsOperator::evaluate(Scope* scope) const {
-    return Value();
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    return Value(strictlyEqual(leftValue, rightValue));
 }
 
 }  // namespace tinyjs

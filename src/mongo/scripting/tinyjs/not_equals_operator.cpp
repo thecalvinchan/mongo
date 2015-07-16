@@ -40,7 +40,9 @@ namespace tinyjs {
 NotEqualsOperator::NotEqualsOperator() : BinaryOperator(TokenType::kNotEquals) {}
 
 const Value NotEqualsOperator::evaluate(Scope* scope) const {
-    return Value();
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+    return Value(!looselyEqual(leftValue, rightValue));
 }
 
 }  // namespace tinyjs
