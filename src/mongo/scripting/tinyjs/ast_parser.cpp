@@ -105,7 +105,6 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
             node.reset((new TerminalNode(BSONNULL)));
             break;
         case TokenType::kUndefinedLiteral: {
-            std::cout << "making undefined terminal" << std::endl;
             node.reset((new TerminalNode(BSONUndefined)));
             break;
         }
@@ -224,13 +223,13 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> left
  */
 std::unique_ptr<Node> ASTParser::termAction() {
     std::unique_ptr<Node> head;
-    if ((head = tryProductionMatch(std::bind(&ASTParser::numberAction, this))) ||
+    if ((head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this))) ||
+        (head = tryProductionMatch(std::bind(&ASTParser::numberAction, this))) ||
         (head = matchNodeTerminal(TokenType::kStringLiteral)) ||
         (head = tryProductionMatch(std::bind(&ASTParser::variableAction, this))) ||
         (head = matchNodeTerminal(TokenType::kBooleanLiteral)) ||
         (head = matchNodeTerminal(TokenType::kNullLiteral)) ||
-        (head = matchNodeTerminal(TokenType::kUndefinedLiteral)) ||
-        (head = tryProductionMatch(std::bind(&ASTParser::arrayLiteralAction, this)))) {
+        (head = matchNodeTerminal(TokenType::kUndefinedLiteral))) {
     } else {
         throw ParseException(_currentToken.value.rawData(), _currentToken);
     }
@@ -266,7 +265,7 @@ std::unique_ptr<Node> ASTParser::numberAction() {
  *      | [arrayElements]
  */
 std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
-    std::unique_ptr<Node> head(new ArrayLiteral(TokenType::kOpenSquareBracket));
+    std::unique_ptr<Node> head(new ArrayLiteral(TokenType::kCloseSquareBracket));
     std::unique_ptr<Node> child;
     if (matchImplicitTerminal(TokenType::kOpenSquareBracket)) {
         if (matchImplicitTerminal(TokenType::kCloseSquareBracket)) {

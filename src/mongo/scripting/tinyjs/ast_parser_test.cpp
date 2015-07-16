@@ -189,7 +189,7 @@ TEST(ParserTest, test10) {
     std::stringstream expected;
     expected << "return ";
     expected << "== ";
-    expected << ". [ ";
+    expected << ". ] ";
     expected << "this elements cat dog " << std::endl;
 
     testParseTree(input, expected.str());
@@ -320,6 +320,18 @@ TEST(ParserTest, test20) {
     expected << "return ";
     expected << "/ ";
     expected << "true 1 " << std::endl;
+
+    testParseTree(input, expected.str());
+}
+
+TEST(ParserTest, test21) {
+    string input = "return 1 == [1];";
+
+    std::stringstream expected;
+    expected << "return ";
+    expected << "== ";
+    expected << "1 ] "; 
+    expected << "1 " << std::endl;
 
     testParseTree(input, expected.str());
 }

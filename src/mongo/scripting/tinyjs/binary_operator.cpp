@@ -154,8 +154,14 @@ bool strictlyEqual(Value leftValue, Value rightValue) {
 }
 
 bool looselyEqualNumberString(Value numberValue, std::string s) {
+
     switch (numberValue.getType()) {
         case NumberInt: {
+
+            if (s == "") {
+                return (numberValue.getInt() == 0);
+            }
+
             int rightInt;
             try {
                 rightInt = boost::lexical_cast<int>(s);
@@ -165,6 +171,11 @@ bool looselyEqualNumberString(Value numberValue, std::string s) {
             }
         }
         case NumberDouble: {
+
+            if (s == "") {
+                return (numberValue.getDouble() == 0);
+            }
+
             double rightDouble;
             try {
                 rightDouble = boost::lexical_cast<double>(s);
@@ -174,6 +185,11 @@ bool looselyEqualNumberString(Value numberValue, std::string s) {
             }
         }
         case NumberLong: {
+
+            if (s == "") {
+                return (numberValue.getLong() == 0);
+            }
+
             double rightLong;
             try {
                 rightLong = boost::lexical_cast<long>(s);
@@ -195,6 +211,9 @@ bool looselyEqualNumberBool(Value numberValue, bool b) {
 
 bool looselyEqualStringBool(std::string s, bool b) {
     int boolInt = (b ? 1 : 0);
+    if ((s == "") && (!b)) {
+        return true;
+    }
     try {
         int stringInt = boost::lexical_cast<int>(s);
         return stringInt == boolInt;
@@ -206,6 +225,43 @@ bool looselyEqualStringBool(std::string s, bool b) {
 
 
 bool looselyEqual(Value leftValue, Value rightValue) {
+
+    if (leftValue.getType() == Array) {
+        if (rightValue.getType() != Array) {
+            if (leftValue.getArray().size() == 0) {
+                leftValue = Value(false);
+            } else if (leftValue.getArray().size() == 1) {
+                leftValue = leftValue.getArray()[0];
+                if ((leftValue.getType() == Array) && leftValue.getArray().size() == 0) {
+                    leftValue = Value(false);
+                }
+            } else {
+                return false;
+            }
+
+        } else {
+            bool match = true;
+            for (Value v1 : leftValue.getArray()) {
+                for (Value v2 : rightValue.getArray()) {
+                    match = match && (Value::compare(v1, v2) == 0);
+                }
+            }
+            return match;
+        }
+    } else if (rightValue.getType() == Array) {
+        if (rightValue.getArray().size() == 0) {
+            rightValue = Value(false);
+        } else if (rightValue.getArray().size() == 1) {
+            rightValue = rightValue.getArray()[0];
+            if ((rightValue.getType() == Array) && rightValue.getArray().size() == 0) {
+                    rightValue = Value(false);
+                }
+        } else {
+            return false;
+        }
+    }
+
+
     if (((leftValue.getType() == String) && (leftValue.getString() == "NaN")) ||
         ((rightValue.getType() == String) && (rightValue.getString() == "NaN"))) {
         return false;
@@ -228,15 +284,15 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualNumberString(leftValue, rightValue.getString());
         } else if (rightValue.getType() == Bool) {
             return looselyEqualNumberBool(leftValue, rightValue.getBool());
-        }
+        } 
     }
 
     if (leftValue.getType() == String) {
         if (rightValue.numeric()) {
             return looselyEqualNumberString(rightValue, leftValue.getString());
         } else if (rightValue.getType() == Bool) {
-            return looselyEqualStringBool(rightValue.getString(), leftValue.getBool());
-        }
+            return looselyEqualStringBool(leftValue.getString(), rightValue.getBool());
+        } 
     }
 
     if (leftValue.getType() == Bool) {
@@ -244,22 +300,9 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualNumberBool(rightValue, leftValue.getBool());
         } else if (rightValue.getType() == String) {
             return looselyEqualStringBool(rightValue.getString(), leftValue.getBool());
-        }
+        } 
     }
 
-    if (leftValue.getType() == Array) {
-        if (rightValue.getType() != Array) {
-            return false;
-            // TODO there are some non-arrays the empty array should match
-        }
-        bool match = true;
-        for (Value v1 : leftValue.getArray()) {
-            for (Value v2 : rightValue.getArray()) {
-                match = match && (Value::compare(v1, v2) == 0);
-            }
-        }
-        return match;
-    }
 
     return Value::compare(leftValue, rightValue) == 0;
 }

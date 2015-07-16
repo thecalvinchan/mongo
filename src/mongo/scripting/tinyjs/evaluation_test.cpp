@@ -2270,7 +2270,6 @@ TEST(EvaluationTest, logicalOr70) {
     testEvaluation(input, Value(-1));
 }
 
-
 TEST(EvaluationTest, logicalOr71) {
     string input = "return \"dog\" || 5;";
     testEvaluation(input, Value("dog"));
@@ -2293,6 +2292,255 @@ TEST(EvaluationTest, logicalOr74) {
     testEvaluation(input, Value(vec));
 }
 
+/* 
+ * Loose equality tests
+ */
+
+TEST(EvaluationTest, looseEquality1) {
+    string input = "return true == true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality2) {
+    string input = "return true == 1;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality3) {
+    string input = "return true == \"1\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality4) {
+    string input = "return true == [1];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality5) {
+    string input = "return false == false;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality6) {
+    string input = "return false == 0;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality7) {
+    string input = "return false == \"0\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality8) {
+    string input = "return false == \"\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality9) {
+    string input = "return false == [];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality10) {
+    string input = "return false == [[]];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality11) {
+    string input = "return false == [0];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality12) {
+    string input = "return 1 == true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality13) {
+    string input = "return 1 == 1;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality14) {
+    string input = "return 1 == \"1\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality15) {
+    string input = "return 1 == [1];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality16) {
+    string input = "return 0 == false;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality17) {
+    string input = "return 0 == 0;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality18) {
+    string input = "return 0 == \"0\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality19) {
+    string input = "return 0 == \"\";";
+    testEvaluation(input, Value(true));
+}
+
+
+TEST(EvaluationTest, looseEquality20) {
+    string input = "return 0 == [];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality21) {
+    string input = "return 0 == [[]];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality22) {
+    string input = "return 0 == [0];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality23) {
+    string input = "return -1 == -1;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality24) {
+    string input = "return -1 == \"-1\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality25) {
+    string input = "return \"true\" == \"true\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality26) {
+    string input = "return \"false\" == \"false\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality27) {
+    string input = "return \"1\" == true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality28) {
+    string input = "return \"1\" == 1;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality29) {
+    string input = "return \"1\" == \"1\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality30) {
+    string input = "return \"1\" == [1];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality31) {
+    string input = "return \"0\" == false;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality32) {
+    string input = "return \"0\" == 0;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality33) {
+    string input = "return \"0\" == \"0\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality34) {
+    string input = "return \"0\" == [0];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality35) {
+    string input = "return \"\" == false;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality36) {
+    string input = "return \"\" == 0;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality37) {
+    string input = "return \"\" == \"\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality38) {
+    string input = "return \"\" == [];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality39) {
+    string input = "return \"\" == [[]];";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality40) {
+    string input = "return null == null;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality41) {
+    string input = "return null == undefined;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality42) {
+    string input = "return undefined == null;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality43) {
+    string input = "return undefined == undefined;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality44) {
+    string input = "return Infinity == Infinity;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality45) {
+    string input = "return -Infinity == -Infinity;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality46) {
+    string input = "return [] == false;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality47) {
+    string input = "return [] == 0;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality48) {
+    string input = "return [] == \"\";";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, looseEquality49) {
+    string input = "return [[]] == false;";
+    testEvaluation(input, Value(true));
+}
 
 } // namespace tinyjs
 } // namespace mongo
