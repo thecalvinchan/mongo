@@ -40,8 +40,17 @@ namespace tinyjs {
 LogicalAndOperator::LogicalAndOperator() : BinaryOperator(TokenType::kLogicalAnd) {}
 
 const Value LogicalAndOperator::evaluate(Scope* scope) const {
-    return Value();
+    const Value leftValue = this->getLeftChild()->evaluate(scope);
+    const Value rightValue = this->getRightChild()->evaluate(scope);
+
+    if (!isFalse(leftValue)) {
+        return rightValue;
+    } else {
+        return leftValue;
+    }
 }
+
+
 
 }  // namespace tinyjs
 }  // namespace mongo

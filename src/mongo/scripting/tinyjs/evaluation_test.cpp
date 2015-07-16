@@ -1539,5 +1539,760 @@ TEST(EvaluationTest, division70) {
     testEvaluation(input, Value("-Infinity"));
 }
 
+/*
+ * LogicalAnd tests
+ */
+
+TEST(EvaluationTest, logicalAnd1) {
+    string input = "return 1 && 1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalAnd2) {
+    string input = "return 1 && \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalAnd3) {
+    string input = "return \"dog\" && 0;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, logicalAnd4) {
+    string input = "return \"dog\" && \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalAnd5) {
+    string input = "return true && 1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalAnd6) {
+    string input = "return 3 && false;";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, logicalAnd7) {
+    string input = "return false && null;";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, logicalAnd8) {
+    string input = "return null && true;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd9) {
+    string input = "return 1.5 && 2.5;";
+    testEvaluation(input, Value(2.5));
+}
+
+TEST(EvaluationTest, logicalAnd10) {
+    string input = "return 1 && 1.5;";
+    testEvaluation(input, Value(1.5));
+}
+
+TEST(EvaluationTest, logicalAnd11) {
+    string input = "return 1.5 && 1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalAnd12) {
+    string input = "return 0 && 0;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, logicalAnd13) {
+    string input = "return 0 && undefined;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, logicalAnd14) {
+    string input = "return undefined && 5;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd15) {
+    string input = "return NaN && 5;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd16) {
+    string input = "return 5 && NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd17) {
+    string input = "return 3 && Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalAnd18) {
+    string input = "return Infinity && 10;";
+    testEvaluation(input, Value(10));
+}
+
+TEST(EvaluationTest, logicalAnd19) {
+    string input = "return [1, 2, 3] && 1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalAnd20) {
+    string input = "return 5 && [1, 2, 3];";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalAnd21) {
+    string input = "return [1, 2, 3] && true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalAnd22) {
+    string input = "return false && [1, 2, 3];";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, logicalAnd23) {
+    string input = "return [1, 2, 3] && undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd24) {
+    string input = "return undefined && [1, 2, 3];";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd25) {
+    string input = "return [1, 2, 3] && NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd26) {
+    string input = "return NaN && [1, 2, 3];";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd27) {
+    string input = "return [1, 2, 3] && Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalAnd28) {
+    string input = "return Infinity && [1, 2, 3];";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalAnd29) {
+    string input = "return [\"cat\", \"dog\"] && null;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+
+TEST(EvaluationTest, logicalAnd30) {
+    string input = "return null && [\"cat\", \"dog\"];";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd31) {
+    string input = "return [1, 2, 3] && \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalAnd32) {
+    string input = "return \"cat\" && [1, 2, 3];";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+
+TEST(EvaluationTest, logicalAnd33) {
+    string input = "return undefined && \"cat\";";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd34) {
+    string input = "return \"cat\" && undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd35) {
+    string input = "return NaN && \"cat\";";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd36) {
+    string input = "return \"cat\" && NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd37) {
+    string input = "return Infinity && \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalAnd38) {
+    string input = "return \"cat\" && Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalAnd39) {
+    string input = "return true && \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+
+TEST(EvaluationTest, logicalAnd40) {
+    string input = "return \"cat\" && false;";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, logicalAnd41) {
+    string input = "return null && \"cat\";";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd42) {
+    string input = "return \"cat\" && null;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd43) {
+    string input = "return NaN && NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd44) {
+    string input = "return undefined && NaN;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd45) {
+    string input = "return NaN && undefined;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd46) {
+    string input = "return true && NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd47) {
+    string input = "return NaN && true;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd48) {
+    string input = "return null && NaN;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd49) {
+    string input = "return NaN && null;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd50) {
+    string input = "return Infinity && NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd51) {
+    string input = "return NaN && Infinity;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalAnd52) {
+    string input = "return undefined && undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd53) {
+    string input = "return undefined && Infinity;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd54) {
+    string input = "return Infinity && undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd55) {
+    string input = "return undefined && true;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd56) {
+    string input = "return false && undefined;";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, logicalAnd57) {
+    string input = "return undefined && null;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalAnd58) {
+    string input = "return null && undefined;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd59) {
+    string input = "return Infinity && true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalAnd60) {
+    string input = "return false && Infinity;";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, logicalAnd61) {
+    string input = "return Infinity && Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalAnd62) {
+    string input = "return Infinity && -Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, logicalAnd63) {
+    string input = "return -Infinity && Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalAnd64) {
+    string input = "return -Infinity && -Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, logicalAnd65) {
+    string input = "return Infinity && null;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd66) {
+    string input = "return null && Infinity;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd67) {
+    string input = "return true && null;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd68) {
+    string input = "return null && false;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalAnd69) {
+    string input = "return 1 && -1;";
+    testEvaluation(input, Value(-1));
+}
+
+TEST(EvaluationTest, logicalAnd70) {
+    string input = "return -1 && 1;";
+    testEvaluation(input, Value(1));
+}
+
+
+TEST(EvaluationTest, logicalAnd71) {
+    string input = "return \"dog\" && 5;";
+    testEvaluation(input, Value(5));
+}
+
+TEST(EvaluationTest, logicalAnd72) {
+    string input = "return 0 && \"cat\";";
+    testEvaluation(input, Value(0));
+}
+
+/*
+ * LogicalOr tests
+ */
+
+TEST(EvaluationTest, logicalOr1) {
+    string input = "return 1 || 1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalOr2) {
+    string input = "return 1 || \"cat\";";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalOr3) {
+    string input = "return \"dog\" || 0;";
+    testEvaluation(input, Value("dog"));
+}
+
+TEST(EvaluationTest, logicalOr4) {
+    string input = "return \"dog\" || \"cat\";";
+    testEvaluation(input, Value("dog"));
+}
+
+TEST(EvaluationTest, logicalOr5) {
+    string input = "return true || 1;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalOr6) {
+    string input = "return 3 || false;";
+    testEvaluation(input, Value(3));
+}
+
+TEST(EvaluationTest, logicalOr7) {
+    string input = "return false || null;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalOr8) {
+    string input = "return null || true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalOr9) {
+    string input = "return 1.5 || 2.5;";
+    testEvaluation(input, Value(1.5));
+}
+
+TEST(EvaluationTest, logicalOr10) {
+    string input = "return 1 || 1.5;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalOr11) {
+    string input = "return 1.5 || 1;";
+    testEvaluation(input, Value(1.5));
+}
+
+TEST(EvaluationTest, logicalOr12) {
+    string input = "return 0 || 0;";
+    testEvaluation(input, Value(0));
+}
+
+TEST(EvaluationTest, logicalOr13) {
+    string input = "return 0 || undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalOr14) {
+    string input = "return undefined || 5;";
+    testEvaluation(input, Value(5));
+}
+
+TEST(EvaluationTest, logicalOr15) {
+    string input = "return NaN || 5;";
+    testEvaluation(input, Value(5));
+}
+
+TEST(EvaluationTest, logicalOr16) {
+    string input = "return 5 || NaN;";
+    testEvaluation(input, Value(5));
+}
+
+TEST(EvaluationTest, logicalOr17) {
+    string input = "return 3 || Infinity;";
+    testEvaluation(input, Value(3));
+}
+
+TEST(EvaluationTest, logicalOr18) {
+    string input = "return Infinity || 10;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr19) {
+    string input = "return [1, 2, 3] || 1;";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr20) {
+    string input = "return 5 || [1, 2, 3];";
+    testEvaluation(input, Value(5));
+}
+
+TEST(EvaluationTest, logicalOr21) {
+    string input = "return [1, 2, 3] || true;";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr22) {
+    string input = "return false || [1, 2, 3];";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr23) {
+    string input = "return [1, 2, 3] || undefined;";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr24) {
+    string input = "return undefined || [1, 2, 3];";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr25) {
+    string input = "return [1, 2, 3] || NaN;";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr26) {
+    string input = "return NaN || [1, 2, 3];";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr27) {
+    string input = "return [1, 2, 3] || Infinity;";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr28) {
+    string input = "return Infinity || [1, 2, 3];";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr29) {
+    string input = "return [\"cat\", \"dog\"] || null;";
+    std::vector<Value> vec; 
+    vec.push_back(Value("cat"));
+    vec.push_back(Value("dog"));
+    testEvaluation(input, Value(vec));
+}
+
+
+TEST(EvaluationTest, logicalOr30) {
+    string input = "return null || [\"cat\", \"dog\"];";
+    std::vector<Value> vec; 
+    vec.push_back(Value("cat"));
+    vec.push_back(Value("dog"));
+    testEvaluation(input, Value(vec));
+}
+
+TEST(EvaluationTest, logicalOr31) {
+    string input = "return [1, 2, 3] || \"cat\";";
+    testEvaluation(input, Value({Value(1), Value(2), Value(3)}));
+}
+
+TEST(EvaluationTest, logicalOr32) {
+    string input = "return \"cat\" || [1, 2, 3];";
+    testEvaluation(input, Value("cat"));
+}
+
+
+TEST(EvaluationTest, logicalOr33) {
+    string input = "return undefined || \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr34) {
+    string input = "return \"cat\" || undefined;";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr35) {
+    string input = "return NaN || \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr36) {
+    string input = "return \"cat\" || NaN;";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr37) {
+    string input = "return Infinity || \"cat\";";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr38) {
+    string input = "return \"cat\" || Infinity;";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr39) {
+    string input = "return true || \"cat\";";
+    testEvaluation(input, Value(true));
+}
+
+
+TEST(EvaluationTest, logicalOr40) {
+    string input = "return \"cat\" || false;";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr41) {
+    string input = "return null || \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr42) {
+    string input = "return \"cat\" || null;";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr43) {
+    string input = "return NaN || NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalOr44) {
+    string input = "return undefined || NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalOr45) {
+    string input = "return NaN || undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalOr46) {
+    string input = "return true || NaN;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalOr47) {
+    string input = "return NaN || true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalOr48) {
+    string input = "return null || NaN;";
+    testEvaluationError(input);
+}
+
+TEST(EvaluationTest, logicalOr49) {
+    string input = "return NaN || null;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalOr50) {
+    string input = "return Infinity || NaN;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr51) {
+    string input = "return NaN || Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr52) {
+    string input = "return undefined || undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalOr53) {
+    string input = "return undefined || Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr54) {
+    string input = "return Infinity || undefined;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr55) {
+    string input = "return undefined || true;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalOr56) {
+    string input = "return false || undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalOr57) {
+    string input = "return undefined || null;";
+    testEvaluation(input, Value(BSONNULL));
+}
+
+TEST(EvaluationTest, logicalOr58) {
+    string input = "return null || undefined;";
+    testEvaluation(input, Value(BSONUndefined));
+}
+
+TEST(EvaluationTest, logicalOr59) {
+    string input = "return Infinity || true;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr60) {
+    string input = "return false || Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr61) {
+    string input = "return Infinity || Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr62) {
+    string input = "return Infinity || -Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr63) {
+    string input = "return -Infinity || Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr64) {
+    string input = "return -Infinity || -Infinity;";
+    testEvaluation(input, Value("-Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr65) {
+    string input = "return Infinity || null;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr66) {
+    string input = "return null || Infinity;";
+    testEvaluation(input, Value("Infinity"));
+}
+
+TEST(EvaluationTest, logicalOr67) {
+    string input = "return true || null;";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, logicalOr68) {
+    string input = "return null || false;";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, logicalOr69) {
+    string input = "return 1 || -1;";
+    testEvaluation(input, Value(1));
+}
+
+TEST(EvaluationTest, logicalOr70) {
+    string input = "return -1 || 1;";
+    testEvaluation(input, Value(-1));
+}
+
+
+TEST(EvaluationTest, logicalOr71) {
+    string input = "return \"dog\" || 5;";
+    testEvaluation(input, Value("dog"));
+}
+
+TEST(EvaluationTest, logicalOr72) {
+    string input = "return 0 || \"cat\";";
+    testEvaluation(input, Value("cat"));
+}
+
+TEST(EvaluationTest, logicalOr73) {
+    string input = "return [] || 0;";
+    std::vector<Value> vec;
+    testEvaluation(input, Value(vec));
+}
+
+TEST(EvaluationTest, logicalOr74) {
+    string input = "return 0 || [];";
+    std::vector<Value> vec;
+    testEvaluation(input, Value(vec));
+}
+
+
 } // namespace tinyjs
 } // namespace mongo

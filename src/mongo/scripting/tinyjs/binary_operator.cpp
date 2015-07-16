@@ -136,6 +136,10 @@ bool countsAsNumber(Value v) {
     return (v.numeric() || ((v.getType() == Bool) || (v.getType() == jstNULL)));
 }
 
+bool isFalse(Value v) {
+    return (isZero(v) || (v.getType() == Undefined) || (v.getType() == String && v.getString() == "NaN"));
+}
+
 
 }  // namespace tinyjs
 }  // namespace mongo

@@ -62,5 +62,7 @@ bool isString(Value v);
 
 bool countsAsNumber(Value v);
 
+bool isFalse(Value v);
+
 } // namespace tinyjs
 } // namespace mongo
