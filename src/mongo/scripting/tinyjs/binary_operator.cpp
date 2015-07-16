@@ -122,8 +122,7 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
             }
             return (isNegative(rightValue) ? Value("Infinity") : Value("-Infinity"));
         } else {
-            throw std::runtime_error(
-                "NaN");  // TODO should be unreachable, except maybe type errors
+            verify(false); // should not reach this point
         }
     } else if (rightValue.getType() == String) {
         std::cout << makeString(rightValue) << std::endl;
@@ -138,7 +137,7 @@ const Value BinaryOperator::evaluateMultiply(Scope* scope) const {
             }
             return (isNegative(leftValue) ? Value("Infinity") : Value("-Infinity"));
         } else {
-            return Value("NaN");  // TODO should be unreachable
+            verify(false); // should not reach this point
         }
     }
 
@@ -214,7 +213,7 @@ const Value BinaryOperator::evaluateDivide(Scope* scope) const {
         } else if (rightValue.toString() == "-Infinity") {
             return Value(0);
         } else {
-            return Value("NaN");  // TODO should be unreachable
+            verify(false); // should not reach this point
         }
     }
 
@@ -288,15 +287,14 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
             } else {
                 return Value("Infinity");
             }
-        } else {
-            massert(1,
-                    "should not reach this point",
-                    makeString(leftValue) == "-Infinity");  // is this good style?
+        } else if (makeString(leftValue) == "-Infinity") {
             if ((rightValue.getType() == String) && (makeString(rightValue) == "Infinity")) {
                 return Value("NaN");
             } else {
                 return Value("-Infinity");
             }
+        } else {
+            verify(false); // should not reach this point
         }
     } else if (rightValue.getType() == String) {
         std::cout << makeString(rightValue) << std::endl;
@@ -305,7 +303,7 @@ const Value BinaryOperator::evaluateAdd(Scope* scope) const {
         } else if (rightValue.toString() == "-Infinity") {
             return Value("-Infinity");
         } else {
-            throw std::runtime_error("Should not reach here");  // TODO should be unreachable
+            verify(false); // should not reach this point
         }
     }
 
@@ -362,24 +360,22 @@ const Value BinaryOperator::evaluateSubtract(Scope* scope) const {
             } else {
                 return Value("Infinity");
             }
-        } else {
-            massert(2,
-                    "should not reach this point",
-                    makeString(leftValue) == "-Infinity");  // is this good style?
+        } else if (makeString(leftValue) == "-Infinity") {
             if ((rightValue.getType() == String) && (makeString(rightValue) == "-Infinity")) {
                 return Value("NaN");
             } else {
                 return Value("-Infinity");
             }
+        } else {
+            verify(false); // should not reach this point
         }
     } else if (rightValue.getType() == String) {
-        std::cout << makeString(rightValue) << std::endl;
         if (makeString(rightValue) == "Infinity") {
             return Value("-Infinity");
         } else if (rightValue.toString() == "-Infinity") {
             return Value("Infinity");
         } else {
-            throw std::runtime_error("Should not reach here");  // TODO should be unreachable
+            verify(false); // should not reach this point
         }
     }
 

@@ -49,7 +49,11 @@ void ArrayLiteral::setChild(std::unique_ptr<Node> child) {
 }
 
 const Value ArrayLiteral::evaluate(Scope* scope) const {
-    return Value();
+    std::vector<Value> v;
+    for (size_t i = 0; i < _children.size(); i++) {
+        v.push_back(_children[i]->evaluate(scope));
+    }
+    return Value(v);
 }
 
 } // namespace tinyjs

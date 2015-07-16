@@ -236,7 +236,7 @@ TEST(EvaluationTest, addition18) {
     testEvaluation(input, Value("Infinity"));
 }
 
-/*TEST(EvaluationTest, addition19) {
+TEST(EvaluationTest, addition19) {
     string input = "return [1, 2, 3] + 1;";
     testEvaluation(input, Value("1,2,31"));
 }
@@ -294,7 +294,7 @@ TEST(EvaluationTest, addition29) {
 
 TEST(EvaluationTest, addition30) {
     string input = "return null + [\"cat\", \"dog\"];";
-    testEvaluation(input, Value("cat,dog"));
+    testEvaluation(input, Value("nullcat,dog"));
 }
 
 TEST(EvaluationTest, addition31) {
@@ -305,7 +305,7 @@ TEST(EvaluationTest, addition31) {
 TEST(EvaluationTest, addition32) {
     string input = "return \"cat\" + [1, 2, 3];";
     testEvaluation(input, Value("cat1,2,3"));
-} */
+}
 
 
 TEST(EvaluationTest, addition33) {
@@ -970,7 +970,7 @@ TEST(EvaluationTest, subtraction26) {
     testEvaluationError(input);
 }
 
-/*TEST(EvaluationTest, subtraction27) {
+TEST(EvaluationTest, subtraction27) {
     string input = "return [1, 2, 3] - Infinity;";
     testEvaluationError(input);
 }
@@ -999,7 +999,7 @@ TEST(EvaluationTest, subtraction31) {
 TEST(EvaluationTest, subtraction32) {
     string input = "return \"cat\" - [1, 2, 3];";
     testEvaluationError(input);
-}*/
+}
 
 
 TEST(EvaluationTest, subtraction33) {
