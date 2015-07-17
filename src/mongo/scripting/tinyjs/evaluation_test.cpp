@@ -132,6 +132,12 @@ TEST(EvaluationTest, superNestedObjectAccessor) {
     testEvaluation(input, Value("mangoDB"), s);
 }
 
+TEST(EvaluationTest, superNestedObjectAccessorAndArray) {
+    string input = "return this.y[\"d\"].j[1];";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(2), s);
+}
+
 TEST(EvaluationTest, simple) {
     string input = "return 1;";
     testEvaluation(input, Value(1));

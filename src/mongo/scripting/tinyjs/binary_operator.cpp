@@ -300,5 +300,74 @@ bool looselyEqual(Value leftValue, Value rightValue) {
     return Value::compare(leftValue, rightValue) == 0;
 }
 
+const Value BinaryOperator::evaluateObjectAccessor(Scope* scope) const {
+    Value val = Value(BSONUndefined);
+    std::string objectPathString = BinaryOperator::generateNestedField(this, scope, val);
+    if (!val.nullish()) {
+        return val;
+    }
+    int rootObjIndex = objectPathString.find_first_of('.');
+    std::string fieldPathString = objectPathString.substr(rootObjIndex + 1),
+                objectString = objectPathString.substr(0, rootObjIndex);
+    FieldPath fieldPath = FieldPath(fieldPathString);
+    Value object = scope->get(StringData(objectString));
+    Document doc = object.getDocument();
+    return doc.getNestedField(fieldPath);
+}
+
+std::string BinaryOperator::generateNestedField(const Node* head, Scope* scope, Value& val) {
+    std::string cur = (head->getName()).rawData();
+    std::string leftNestedField, rightNestedField;
+    if (cur == ".") {
+        Value valLeft = Value(BSONUndefined);
+        leftNestedField = BinaryOperator::generateNestedField(
+            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope, valLeft);
+        Value valRight = Value(BSONUndefined);
+        rightNestedField = BinaryOperator::generateNestedField(
+            (checked_cast<const BinaryOperator*>(head))->getRightChild(), scope, valRight);
+        if (!valLeft.nullish()) { 
+            leftNestedField = valLeft.coerceToString(); 
+            if (!valRight.nullish()) { 
+                rightNestedField = valRight.coerceToString(); 
+            }
+        } else {
+            if (!valRight.nullish()) { 
+                rightNestedField = valRight.coerceToString(); 
+            }
+        }
+    } else if (cur == "[") {
+        cur = ".";
+        Value valLeft = Value(BSONUndefined);
+        leftNestedField = BinaryOperator::generateNestedField(
+            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope, valLeft);
+        Value rightChildValue =
+            (checked_cast<const BinaryOperator*>(head))->getRightChild()->evaluate(scope);
+        if (rightChildValue.integral()) {
+            int index = rightChildValue.getInt();
+            if (!valLeft.nullish()) {
+                val = val[index];
+                return leftNestedField + '[' + rightChildValue.coerceToString() + ']';
+            }
+            //Array accessor
+            //Need to short terminate when array
+            int rootObjIndex = leftNestedField.find_first_of('.');
+            std::string fieldPathString = leftNestedField.substr(rootObjIndex + 1),
+                        objectString = leftNestedField.substr(0, rootObjIndex);
+            FieldPath fieldPath = FieldPath(fieldPathString);
+            Value object = scope->get(StringData(objectString));
+            Document doc = object.getDocument();
+            val = doc.getNestedField(fieldPath)[index];
+            return leftNestedField + '.' + cur + '[' + rightChildValue.coerceToString() + ']';
+        } else {
+            //Object key accessor
+            rightNestedField = rightChildValue.coerceToString();
+        }
+    } else {
+        leftNestedField = "";
+        rightNestedField = "";
+    }
+    return leftNestedField + '.' + cur + '.' + rightNestedField;
+}
+
 }  // namespace tinyjs
 }  // namespace mongo
