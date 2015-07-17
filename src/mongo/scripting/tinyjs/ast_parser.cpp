@@ -131,7 +131,7 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
             node.reset((new Identifier(token.value)));
             break;
         default:
-            throw ParseException("making terminal node for invalid terminal ", token); 
+            throw ParseException("making terminal node for invalid terminal ", (token.value).toString()); 
             break;
     }
     return node;
@@ -148,10 +148,49 @@ std::unique_ptr<Node> ASTParser::tryProductionMatch(std::function<std::unique_pt
     }
 }
 
+std::string getName(TokenType t) {
+    std::string names[36] = {"kThisIdentifier",
+                             "kReturnKeyword",
+                             "kNullLiteral",
+                             "kUndefinedLiteral",
+                             "kFunctionKeyword",
+                             "kIntegerLiteral",
+                             "kFloatLiteral",
+                             "kBooleanLiteral",
+                             "kStringLiteral",
+                             "kIdentifier",
+                             "kAdd",
+                             "kSubtract",
+                             "kMultiply",
+                             "kDivide",
+                             "kTripleEquals",
+                             "kDoubleEquals",
+                             "kLessThan",
+                             "kLessThanEquals",
+                             "kGreaterThan",
+                             "kGreaterThanEquals",
+                             "kNotEquals",
+                             "kDoubleNotEquals",
+                             "kLogicalAnd",
+                             "kLogicalOr",
+                             "kLogicalNot",
+                             "kSemiColon",
+                             "kOpenParen",
+                             "kCloseParen",
+                             "kQuestionMark",
+                             "kColon",
+                             "kPeriod",
+                             "kComma",
+                             "kOpenSquareBracket",
+                             "kCloseSquareBracket",
+                             "kOpenCurlyBrace",
+                             "kCloseCurlyBrace"};
+    return names[checked_cast<int>(t)];
+}
+
 void ASTParser::expectImplicitTerminal(TokenType t) {
     if (!(matchImplicitTerminal(t))) {
-        throw ParseException("expected different token", _currentToken);  // TODO better error
-                                                                         // message
+        throw ParseException("expected " + getName(t), (_currentToken.value).toString());  
     }
 }
 
@@ -168,11 +207,9 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
         expectImplicitTerminal(TokenType::kOpenCurlyBrace);
         head = returnStatementAction();
         expectImplicitTerminal(TokenType::kCloseCurlyBrace);
-    } else if ((head = tryProductionMatch(std::bind(&ASTParser::returnStatementAction, this)))) {
-        ;
     } else {
-        throw ParseException("clause", _currentToken);
-    }
+        head = returnStatementAction();
+    } 
     return head;
 }
 
@@ -231,7 +268,7 @@ std::unique_ptr<Node> ASTParser::termAction() {
         (head = matchNodeTerminal(TokenType::kNullLiteral)) ||
         (head = matchNodeTerminal(TokenType::kUndefinedLiteral))) {
     } else {
-        throw ParseException(_currentToken.value.rawData(), _currentToken);
+        throw ParseException("expected a term", (_currentToken.value).toString());
     }
     return head;
 }
@@ -254,7 +291,7 @@ std::unique_ptr<Node> ASTParser::numberAction() {
             return std::unique_ptr<Node>(negative_head);
         }
     } else {
-        throw ParseException(_currentToken.value.rawData(), _currentToken);
+        throw ParseException("expected a number", (_currentToken.value).toString());
     }
     return head;
 }
@@ -279,7 +316,7 @@ std::unique_ptr<Node> ASTParser::arrayLiteralAction() {
             }
         }
     } else {
-        throw ParseException("array literal", _currentToken);
+        throw ParseException("expected an array literal", (_currentToken.value).toString());
     }
     return head;
 }
@@ -296,7 +333,7 @@ std::unique_ptr<Node> ASTParser::factorAction() {
         head = arithmeticExpressionAction();
         expectImplicitTerminal(TokenType::kCloseParen);
     } else {
-        throw ParseException("factor", _currentToken);
+        throw ParseException("expected a factor", (_currentToken.value).toString());
     }
     return head;
 }
@@ -495,7 +532,7 @@ std::unique_ptr<Node> ASTParser::returnStatementAction() {
         head->setChild(std::move(booleanExpressionAction()));
         expectImplicitTerminal(TokenType::kSemiColon);
     } else {
-        throw ParseException("return statement", _currentToken);
+        throw ParseException("expected 'return'", (_currentToken.value).toString());
     }
     return std::unique_ptr<Node>(head.release());
 }
