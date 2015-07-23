@@ -285,7 +285,7 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualNumberString(rightValue, leftValue.getString());
         } else if (rightValue.getType() == Bool) {
             return looselyEqualStringBool(leftValue.getString(), rightValue.getBool());
-        }
+        }        
     }
 
     if (leftValue.getType() == Bool) {
@@ -296,10 +296,10 @@ bool looselyEqual(Value leftValue, Value rightValue) {
         }
     }
 
-
     return Value::compare(leftValue, rightValue) == 0;
 }
 
+/**
 const Value BinaryOperator::evaluateObjectAccessor(Scope* scope) const {
     Value val = Value(BSONUndefined);
     std::string objectPathString = BinaryOperator::generateNestedField(this, scope, val);
@@ -367,7 +367,7 @@ std::string BinaryOperator::generateNestedField(const Node* head, Scope* scope, 
         rightNestedField = "";
     }
     return leftNestedField + '.' + cur + '.' + rightNestedField;
-}
+}**/
 
 }  // namespace tinyjs
 }  // namespace mongo

@@ -44,10 +44,11 @@ const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
     int rootObjIndex = objectPathString.find_first_of('.');
     std::string fieldPathString = objectPathString.substr(rootObjIndex + 1),
                 objectString = objectPathString.substr(0, rootObjIndex);
-    FieldPath fieldPath = FieldPath(fieldPathString);
     Value object = scope->get(StringData(objectString));
     Document doc = object.getDocument();
-    return doc.getNestedField(fieldPath);
+    BSONObj obj = doc.toBson();
+    BSONElement el = obj.getFieldDotted(fieldPathString);
+    return Value(el);
 }
 
 
