@@ -39,15 +39,17 @@ public:
     /**
      * Constructor
      */
-    ParseException(std::string message, Token token) : _message(message), _token(token) {}
+    ParseException(std::string message, std::string s) : _message(message), tokenValue(s) {}
 
     virtual const char* what() const throw() {
-        return _message.c_str();
+        std::string m = "Unparseable token " + tokenValue + ": " + _message;
+        std::cout << m << std::endl;
+        return m.c_str();
     };
 
 private:
     std::string _message;
-    Token _token;
+    std::string tokenValue;
 };
 
 }  // namespace tinyjs
