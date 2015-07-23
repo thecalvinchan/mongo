@@ -285,7 +285,7 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualNumberString(rightValue, leftValue.getString());
         } else if (rightValue.getType() == Bool) {
             return looselyEqualStringBool(leftValue.getString(), rightValue.getBool());
-        }
+        }        
     }
 
     if (leftValue.getType() == Bool) {
@@ -295,7 +295,6 @@ bool looselyEqual(Value leftValue, Value rightValue) {
             return looselyEqualStringBool(rightValue.getString(), leftValue.getBool());
         }
     }
-
 
     return Value::compare(leftValue, rightValue) == 0;
 }
