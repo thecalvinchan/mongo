@@ -111,6 +111,7 @@ private:
     bool _currentResult;
     ScriptingFunction _createFunction(const char* code,
                                               ScriptingFunction functionNumber = 0) override;
+    std::vector<ASTParser *> _funcs;
 };
 
 }  // namespace tinyjs

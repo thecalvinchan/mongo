@@ -29,6 +29,8 @@
 #include "mongo/platform/basic.h"
 
 #include "mongo/scripting/tinyjs/scope.h"
+#include "mongo/scripting/tinyjs/lexer.h"
+#include "mongo/scripting/tinyjs/ast_parser.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -55,12 +57,18 @@ bool Scope::getBoolean(const char* field) {
 }
 
 ScriptingFunction Scope::createFunction(const char* code) {
-    return ScriptingFunction();
+    ScriptingFunction func = _funcs.size()
+    _createFunction(code, func);
+    return func;
 }
 
 ScriptingFunction Scope::_createFunction(const char* code,
                                               ScriptingFunction functionNumber = 0) {
-    
+    std::string input = str(code);
+    std::vector<Token> tokenData = lex(input).getValue();
+    ASTParser* func = new ASTParser(std::move(tokenData));
+    _funcs.push_back(func);
+    return functionNumber;
 }
 
 int Scope::invoke(ScriptingFunction func,
