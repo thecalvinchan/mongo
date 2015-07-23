@@ -42,6 +42,17 @@ env.Library(
     ]
 )
 
+env.Library(
+    target='engine_test',
+    source=[
+        'engine_test.cpp', 
+    ], 
+    LIBDEPS=[
+        'lexer', 
+        'ast_parser', 
+    ]
+)
+
 env.CppUnitTest(
     target='ast_parser_test',
     source=[

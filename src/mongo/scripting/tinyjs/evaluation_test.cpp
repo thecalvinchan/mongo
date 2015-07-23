@@ -40,6 +40,7 @@
 #include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
 #include "mongo/scripting/tinyjs/scope.h"
+ #include "mongo/scripting/tinyjs/tinyjs_engine.h"
 
 namespace mongo {
 namespace tinyjs {

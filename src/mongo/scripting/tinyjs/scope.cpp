@@ -33,9 +33,46 @@
 namespace mongo {
 namespace tinyjs {
 
-Scope::Scope(){}
+Scope::Scope() {}
 
 Scope::Scope(Scope* parent) : _parent(parent) {}
+
+
+void Scope::init(const BSONObj* data) {
+    if (!data)
+        return;
+
+    Value object = Value(*data);
+    put(StringData("this"), object);
+}
+
+bool Scope::getBoolean(const char* field) {
+    if (field == "__returnValue") {
+        return _currentResult;
+    } else {
+        return false;
+    }
+}
+
+ScriptingFunction Scope::createFunction(const char* code) {
+    return ScriptingFunction();
+}
+
+ScriptingFunction Scope::_createFunction(const char* code,
+                                              ScriptingFunction functionNumber = 0) {
+    
+}
+
+int Scope::invoke(ScriptingFunction func,
+           const BSONObj* args,
+           const BSONObj* recv,
+           int timeoutMs = 0,
+           bool ignoreReturn = false,
+           bool readOnlyArgs = false,
+           bool readOnlyRecv = false) {
+    _currentResult = func.evaluate(this);
+}
+
 
 void Scope::put(StringData variableName, Value value) {
     _variables[variableName] = value;
@@ -51,7 +88,7 @@ Value Scope::get(StringData variableName) const {
         return _parent->get(variableName);
     } else {
         // variable is out of scope
-        return Value(BSONUndefined); 
+        return Value(BSONUndefined);
     }
 }
 

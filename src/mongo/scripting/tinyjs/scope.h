@@ -30,24 +30,88 @@
 
 #include "mongo/base/string_data.h"
 #include "mongo/db/pipeline/value.h"
+#include "mongo/scripting/engine.h"
 
 namespace mongo {
 namespace tinyjs {
 
-class Scope {
+class Scope : public mongo::Scope {
 public:
     Scope();
     Scope(Scope* parent);
-    /* 
-     * This function inserts a variableName and value pair into the scope, regardless of whether that variableName was already in scope.
+
+    void reset() override {}
+    void init(const BSONObj* data) override ;  // IMPLEMENT
+    void registerOperation(OperationContext* txn) override {}
+    void unregisterOperation() override {}
+    void localConnectForDbEval(OperationContext* txn, const char* dbName) override {}
+    void externalSetup() override {}
+    BSONObj getObject(const char* field) override {
+        return BSONObj();
+    }
+    std::string getString(const char* field) override {
+        return NULL;
+    }
+    bool getBoolean(const char* field) override;  // IMPLEMENT
+    double getNumber(const char* field) override {
+        return 0.0;
+    }
+    void setElement(const char* field, const BSONElement& e) override {}
+    void setNumber(const char* field, double val) override {}
+    void setString(const char* field, StringData val) override {}
+    void setObject(const char* field, const BSONObj& obj, bool readOnly = true) override {}
+    void setBoolean(const char* field, bool val) override {}
+    void setFunction(const char* field, const char* code) override {}
+    int type(const char* field) override {
+        return 0;
+    }
+    void rename(const char* from, const char* to) override {}
+    std::string getError() override {
+        return "error";
+    }
+    bool hasOutOfMemoryException() override {
+        return false;
+    }
+    bool isKillPending() const override {
+        return false;
+    }
+    void gc() override {}
+    ScriptingFunction createFunction(const char* code) override;  // IMPLEMENT
+     /**
+     * @return 0 on success
+     */
+    int invoke(ScriptingFunction func,
+               const BSONObj* args,
+               const BSONObj* recv,
+               int timeoutMs = 0,
+               bool ignoreReturn = false,
+               bool readOnlyArgs = false,
+               bool readOnlyRecv = false) override;  // IMPLEMENT
+    void injectNative(const char* field, NativeFunction func, void* data = 0) override {}
+    bool exec(StringData code,
+              const std::string& name,
+              bool printResult,
+              bool reportError,
+              bool assertOnError,
+              int timeoutMs = 0) override {
+        return false;
+    }
+
+    /*
+     * This function inserts a variableName and value pair into the scope, regardless of whether
+     * that variableName was already in scope.
      */
     void put(StringData variableName, Value value);
     Value get(StringData variableName) const;
     const Scope* getParent() const;
+
 private:
     const Scope* _parent;
     std::map<StringData, Value> _variables;
+    bool _currentResult;
+    ScriptingFunction _createFunction(const char* code,
+                                              ScriptingFunction functionNumber = 0) override;
 };
 
-} // namespace tinyjs
-} // namespace mongo
+}  // namespace tinyjs
+}  // namespace mongo
