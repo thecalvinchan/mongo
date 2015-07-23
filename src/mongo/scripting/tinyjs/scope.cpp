@@ -47,7 +47,7 @@ void Scope::init(const BSONObj* data) {
 }
 
 bool Scope::getBoolean(const char* field) {
-    if (field == "__returnValue") {
+    if (strcmp(field,"__returnValue") == 0) {
         return _currentResult;
     } else {
         return false;
@@ -60,16 +60,16 @@ ScriptingFunction Scope::createFunction(const char* code) {
 
 ScriptingFunction Scope::_createFunction(const char* code,
                                               ScriptingFunction functionNumber = 0) {
-    
+    return ScriptingFunction();
 }
 
 int Scope::invoke(ScriptingFunction func,
            const BSONObj* args,
            const BSONObj* recv,
-           int timeoutMs = 0,
-           bool ignoreReturn = false,
-           bool readOnlyArgs = false,
-           bool readOnlyRecv = false) {
+           int timeoutMs,
+           bool ignoreReturn,
+           bool readOnlyArgs,
+           bool readOnlyRecv) {
     _currentResult = func.evaluate(this);
 }
 
