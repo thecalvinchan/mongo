@@ -138,6 +138,18 @@ TEST(EvaluationTest, superNestedObjectAccessorAndArray) {
     testEvaluation(input, Value(2), s);
 }
 
+TEST(EvaluationTest, superNestedObjectAccessorAndArrayComparison) {
+    string input = "return this.y[\"d\"].j[1] == 2;";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
+
+TEST(EvaluationTest, superNestedObjectAccessorAndArrayComparison2) {
+    string input = "return this.y[\"d\"].j[1] > this.y[\"d\"].j[0];";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
+
 TEST(EvaluationTest, simple) {
     string input = "return 1;";
     testEvaluation(input, Value(1));
