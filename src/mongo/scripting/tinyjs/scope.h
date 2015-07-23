@@ -35,13 +35,15 @@
 namespace mongo {
 namespace tinyjs {
 
+class ASTParser;
+
 class Scope : public mongo::Scope {
 public:
     Scope();
     Scope(Scope* parent);
 
     void reset() override {}
-    void init(const BSONObj* data) override ;  // IMPLEMENT
+    void init(const BSONObj* data) override;  // IMPLEMENT
     void registerOperation(OperationContext* txn) override {}
     void unregisterOperation() override {}
     void localConnectForDbEval(OperationContext* txn, const char* dbName) override {}
@@ -77,9 +79,9 @@ public:
     }
     void gc() override {}
     ScriptingFunction createFunction(const char* code) override;  // IMPLEMENT
-     /**
-     * @return 0 on success
-     */
+    /**
+    * @return 0 on success
+    */
     int invoke(ScriptingFunction func,
                const BSONObj* args,
                const BSONObj* recv,
@@ -110,8 +112,8 @@ private:
     std::map<StringData, Value> _variables;
     bool _currentResult;
     ScriptingFunction _createFunction(const char* code,
-                                              ScriptingFunction functionNumber = 0) override;
-    std::vector<ASTParser *> _funcs;
+                                      ScriptingFunction functionNumber = 0) override;
+    std::vector<ASTParser*> _funcs;
 };
 
 }  // namespace tinyjs

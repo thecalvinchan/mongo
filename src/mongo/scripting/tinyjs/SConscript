@@ -28,10 +28,12 @@ env.Library(
         'not_equals_operator.cpp',
         'double_not_equals_operator.cpp',
         'logical_and_operator.cpp',
-        'logical_or_operator.cpp',
+        'logical_or_operator.cpp'
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/db/pipeline/document_value'
+        '$BUILD_DIR/mongo/db/pipeline/document_value',
+        '$BUILD_DIR/mongo/scripting/scripting_common',
+        '$BUILD_DIR/mongo/client/clientdriver'
     ]
 )
 

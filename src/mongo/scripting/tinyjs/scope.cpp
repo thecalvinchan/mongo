@@ -57,14 +57,14 @@ bool Scope::getBoolean(const char* field) {
 }
 
 ScriptingFunction Scope::createFunction(const char* code) {
-    ScriptingFunction func = _funcs.size()
+    ScriptingFunction func = _funcs.size();
     _createFunction(code, func);
     return func;
 }
 
 ScriptingFunction Scope::_createFunction(const char* code,
-                                              ScriptingFunction functionNumber = 0) {
-    std::string input = str(code);
+                                              ScriptingFunction functionNumber) {
+    std::string input(code);
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser* func = new ASTParser(std::move(tokenData));
     _funcs.push_back(func);
@@ -78,7 +78,8 @@ int Scope::invoke(ScriptingFunction func,
            bool ignoreReturn,
            bool readOnlyArgs,
            bool readOnlyRecv) {
-    _currentResult = func.evaluate(this);
+    _currentResult = _funcs[func]->evaluate(this).getBool();
+    return 0;
 }
 
 
