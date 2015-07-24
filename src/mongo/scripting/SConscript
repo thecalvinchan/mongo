@@ -3,6 +3,7 @@
 Import([
     'env',
     'serverJs',
+    'useTinyJS',
     'usev8',
     'v8suffix',
 ])
@@ -60,11 +61,15 @@ if useTinyJS:
     scriptingEnv.Library(
         target='scripting',
         source=[
-            'tinyjs/tinyjs_engine.h'
+            'tinyjs/tinyjs_engine.cpp'
         ],
         LIBDEPS=[
+            'scripting_common',
+            'bson_template_evaluator',
             '$BUILD_DIR/mongo/scripting/tinyjs/ast_parser',
-            '$BUILD_DIR/mongo/scripting/tinyjs/lexer'
+            '$BUILD_DIR/mongo/scripting/tinyjs/lexer',
+            '$BUILD_DIR/mongo/shell/mongojs',
+            '$BUILD_DIR/mongo/db/service_context',
         ],
     )
 elif usev8:

@@ -214,10 +214,10 @@ add_option('wiredtiger',
 )
 
 # library choices
-js_engine_choices = ['v8-3.12', 'v8-3.25', 'none']
+js_engine_choices = ['v8-3.12', 'v8-3.25', 'tinyjs', 'none']
 add_option('js-engine',
     choices=js_engine_choices,
-    default=js_engine_choices[0],
+    default=js_engine_choices[2],
     help='JavaScript scripting engine implementation',
     type='choice',
 )
@@ -752,9 +752,9 @@ jsEngine = get_option( "js-engine")
 
 serverJs = get_option( "server-js" ) == "on"
 
-usev8 = (jsEngine != 'none')
+useTinyJS = (jsEngine == 'tinyjs')
 
-useTinyJS = (jsEngine != 'none')
+usev8 = (jsEngine != 'none' && !useTinyJS)
 
 v8version = jsEngine[3:] if jsEngine.startswith('v8-') else 'none'
 v8suffix = '' if v8version == '3.12' else '-' + v8version

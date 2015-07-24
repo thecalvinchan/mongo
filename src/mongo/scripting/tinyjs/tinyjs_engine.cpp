@@ -27,6 +27,7 @@
  */
 
 #include "mongo/scripting/engine.h"
+#include "mongo/scripting/tinyjs/scope.h"
 
 namespace mongo {
 namespace tinyjs {
@@ -35,7 +36,7 @@ class TinyJSEngine : public ScriptEngine {
 public:
     TinyJSEngine();
     ~TinyJSEngine();
-    virtual void runTest() {}
+    void runTest() {}
     bool utf8Ok() const {
         return false;
     }
@@ -45,5 +46,10 @@ public:
         return new mongo::tinyjs::Scope();
     }
 };
+
+TinyJSEngine::TinyJSEngine() {}
+TinyJSEngine::~TinyJSEngine() {}
+
 }
+void ScriptEngine::setup() {}
 }
