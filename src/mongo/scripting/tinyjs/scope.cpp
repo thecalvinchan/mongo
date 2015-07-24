@@ -59,7 +59,7 @@ bool Scope::getBoolean(const char* field) {
 ScriptingFunction Scope::createFunction(const char* code) {
     ScriptingFunction func = _funcs.size();
     _createFunction(code, func);
-    return func;
+    return func + 1;
 }
 
 ScriptingFunction Scope::_createFunction(const char* code,
@@ -78,7 +78,7 @@ int Scope::invoke(ScriptingFunction func,
            bool ignoreReturn,
            bool readOnlyArgs,
            bool readOnlyRecv) {
-    _currentResult = _funcs[func]->evaluate(this).getBool();
+    _currentResult = _funcs[func - 1]->evaluate(this).getBool();
     return 0;
 }
 

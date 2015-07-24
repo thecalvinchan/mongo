@@ -51,5 +51,15 @@ TinyJSEngine::TinyJSEngine() {}
 TinyJSEngine::~TinyJSEngine() {}
 
 }
-void ScriptEngine::setup() {}
+
+void ScriptEngine::setup() {
+    if (!globalScriptEngine) {
+        globalScriptEngine = new tinyjs::TinyJSEngine();
+
+        if (hasGlobalServiceContext()) {
+            getGlobalServiceContext()->registerKillOpListener(globalScriptEngine);
+        }
+    }
+}
+
 }
