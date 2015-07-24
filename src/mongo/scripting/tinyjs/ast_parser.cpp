@@ -112,8 +112,11 @@ std::unique_ptr<TerminalNode> ASTParser::makeTerminalNode(Token token) {
             node.reset((new TerminalNode(std::stoi(token.value.rawData()))));
             break;
         case TokenType::kFloatLiteral: {
-            if ((token.value.toString() == "NaN") || (token.value.toString() == "Infinity")) {
-                node.reset((new TerminalNode(token.value)));
+            if (token.value.toString() == "NaN") {
+                node.reset((new TerminalNode(std::nan(""))));
+            }
+            else if (token.value.toString() == "Infinity") {
+                node.reset((new TerminalNode(std::numeric_limits<double>::infinity())));
             } else {
                 node.reset((new TerminalNode(std::stod(token.value.rawData()))));
             }
