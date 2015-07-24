@@ -754,6 +754,8 @@ serverJs = get_option( "server-js" ) == "on"
 
 usev8 = (jsEngine != 'none')
 
+useTinyJS = (jsEngine != 'none')
+
 v8version = jsEngine[3:] if jsEngine.startswith('v8-') else 'none'
 v8suffix = '' if v8version == '3.12' else '-' + v8version
 
@@ -2287,6 +2289,7 @@ Export("get_option")
 Export("has_option use_system_version_of_library")
 Export("serverJs")
 Export("usev8")
+Export("useTinyJS")
 Export("v8version v8suffix")
 Export("boostSuffix")
 Export('module_sconscripts')

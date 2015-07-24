@@ -55,7 +55,19 @@ env.Library(
     ],
 )
 
-if usev8:
+if useTinyJS:
+    scriptingEnv = env.Clone()
+    scriptingEnv.Library(
+        target='scripting',
+        source=[
+            'tinyjs/tinyjs_engine.h'
+        ],
+        LIBDEPS=[
+            '$BUILD_DIR/mongo/scripting/tinyjs/ast_parser',
+            '$BUILD_DIR/mongo/scripting/tinyjs/lexer'
+        ],
+    )
+elif usev8:
     scriptingEnv = env.Clone()
     scriptingEnv.InjectThirdPartyIncludePaths(libraries=['v8'])
     scriptingEnv.Library(
