@@ -40,12 +40,8 @@ Scope::Scope() {}
 Scope::Scope(Scope* parent) : _parent(parent) {}
 
 
-void Scope::init(const BSONObj* data) {
-    if (!data)
-        return;
-
-    Value object = Value(*data);
-    put(StringData("this"), object);
+void Scope::setObject(const char* field, const BSONObj& obj, bool readOnly) {
+    put(StringData("this"), Value(obj));
 }
 
 bool Scope::getBoolean(const char* field) {
@@ -78,6 +74,7 @@ int Scope::invoke(ScriptingFunction func,
            bool ignoreReturn,
            bool readOnlyArgs,
            bool readOnlyRecv) {
+    init(recv);
     _currentResult = _funcs[func - 1]->evaluate(this).getBool();
     return 0;
 }

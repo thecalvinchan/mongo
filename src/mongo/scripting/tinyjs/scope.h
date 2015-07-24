@@ -43,7 +43,7 @@ public:
     Scope(Scope* parent);
 
     void reset() override {}
-    void init(const BSONObj* data) override;  // IMPLEMENT
+    void init(const BSONObj* data) override {}
     void registerOperation(OperationContext* txn) override {}
     void unregisterOperation() override {}
     void localConnectForDbEval(OperationContext* txn, const char* dbName) override {}
@@ -61,7 +61,7 @@ public:
     void setElement(const char* field, const BSONElement& e) override {}
     void setNumber(const char* field, double val) override {}
     void setString(const char* field, StringData val) override {}
-    void setObject(const char* field, const BSONObj& obj, bool readOnly = true) override {}
+    void setObject(const char* field, const BSONObj& obj, bool readOnly = true) override;
     void setBoolean(const char* field, bool val) override {}
     void setFunction(const char* field, const char* code) override {}
     int type(const char* field) override {
