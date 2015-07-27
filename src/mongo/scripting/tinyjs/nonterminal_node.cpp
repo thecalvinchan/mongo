@@ -33,18 +33,14 @@
 namespace mongo {
 namespace tinyjs {
 
-NonTerminalNode::NonTerminalNode(TokenType type) : _type(type) {}
+NonTerminalNode::NonTerminalNode(TokenType type) : Node(type) {}
 
 const Value NonTerminalNode::evaluate(Scope* scope) const {
     return Value();
 }
 
 StringData NonTerminalNode::getName() const {
-    return StringData(names[(int)_type]);
-}
-
-TokenType NonTerminalNode::getType() const {
-    return _type;
+    return StringData(names[(int)getType()]);
 }
 
 const std::string NonTerminalNode::names[] = {

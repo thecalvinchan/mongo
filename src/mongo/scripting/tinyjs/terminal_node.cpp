@@ -35,12 +35,12 @@
 namespace mongo {
 namespace tinyjs {
 
-TerminalNode::TerminalNode(const NullLabeler&) : _value(Value(BSONNULL)) {}
-TerminalNode::TerminalNode(const UndefinedLabeler&) : _value(Value(BSONUndefined)) {}
-TerminalNode::TerminalNode(const int& value) : _value(Value(value)) {}
-TerminalNode::TerminalNode(const double& value) : _value(Value(value)) {}
-TerminalNode::TerminalNode(const bool& value) : _value(Value(value)) {}
-TerminalNode::TerminalNode(const StringData& value) : _value(Value(value)) {}
+TerminalNode::TerminalNode(const NullLabeler&) : Node(TokenType::kNullLiteral), _value(Value(BSONNULL)) {}
+TerminalNode::TerminalNode(const UndefinedLabeler&) : Node(TokenType::kUndefinedLiteral), _value(Value(BSONUndefined)) {}
+TerminalNode::TerminalNode(const int& value) : Node(TokenType::kIntegerLiteral), _value(Value(value)) {}
+TerminalNode::TerminalNode(const double& value) : Node(TokenType::kFloatLiteral), _value(Value(value)) {}
+TerminalNode::TerminalNode(const bool& value) : Node(TokenType::kBooleanLiteral), _value(Value(value)) {}
+TerminalNode::TerminalNode(const StringData& value) : Node(TokenType::kStringLiteral), _value(Value(value)) {}
 
 std::vector<Node*> TerminalNode::getChildren() const {
     return std::vector<Node*>();

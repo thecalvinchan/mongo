@@ -53,24 +53,27 @@ const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
 
 
 std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope* scope) const {
-    std::string cur = (head->getName()).rawData();
-    std::string leftNestedField, rightNestedField;
-    if (cur == "[") {
-        cur = ".";
-        leftNestedField = ObjectAccessorOperator::generateNestedField(
+    TokenType type = head->getType();
+    if (type == TokenType::kPeriod) {
+        std::string cur = (head->getName()).rawData();
+        if (cur.front() == '[') {
+            cur.erase(0, 1);
+            std::string leftNestedField = ObjectAccessorOperator::generateNestedField(
+                (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
+            return leftNestedField + cur;
+        }
+        return cur;
+    } else if (type == TokenType::kOpenSquareBracket) {
+        std::string cur = ".";
+        std::string leftNestedField = ObjectAccessorOperator::generateNestedField(
             (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
         Value rightChildValue =
             (checked_cast<const BinaryOperator*>(head))->getRightChild()->evaluate(scope);
-        rightNestedField = rightChildValue.coerceToString();
-    } else if (cur.front() == '[') {
-        cur.erase(0, 1);
-        leftNestedField = ObjectAccessorOperator::generateNestedField(
-            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
+        std::string rightNestedField = rightChildValue.coerceToString();
+        return leftNestedField + cur + rightNestedField;
     } else {
-        leftNestedField = "";
-        rightNestedField = "";
+        return (head->getName()).rawData();
     }
-    return leftNestedField + cur + rightNestedField;
 }
 
 StringData ObjectAccessorOperator::getName() const {

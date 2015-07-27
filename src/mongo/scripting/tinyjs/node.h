@@ -41,8 +41,11 @@ public:
     virtual const Value evaluate(Scope* scope) const = 0;
     virtual std::vector<Node* > getChildren() const = 0;
     virtual StringData getName() const = 0;
+    TokenType getType() const { return _type; };
 protected:
-     Node() {};
+     Node(TokenType t) : _type(t) {};
+private:
+    TokenType _type;
 };
 
 } // namespace tinyjs
