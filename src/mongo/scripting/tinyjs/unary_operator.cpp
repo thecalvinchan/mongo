@@ -87,14 +87,9 @@ const Value UnaryOperator::evaluateNegativeOperator(Scope* scope) const {
         case Bool: {
             return childValue.getBool() ? Value(-1) : Value(-0);
         }
-        case String: {
-            if (childValue.getString() == "Infinity") {
-                return Value("-Infinity");
-            }
-        }
         default: {
             // Actual behavior
-            throw std::runtime_error("NaN");
+            return Value(std::nan(""));
         }
     }
 }

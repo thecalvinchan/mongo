@@ -40,38 +40,7 @@ const Value MultiplicationOperator::evaluate(Scope* scope) const {
     Value leftValue = this->getLeftChild()->evaluate(scope);
     Value rightValue = this->getRightChild()->evaluate(scope);
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
-        return Value("NaN");
-    }
-
-    if (leftValue.getType() == String) {
-        if (makeString(leftValue) == "Infinity") {
-            if (isZero(rightValue)) {
-                return Value("NaN");
-            }
-            return (isNegative(rightValue) ? Value("-Infinity") : Value("Infinity"));
-        } else if (makeString(leftValue) == "-Infinity") {
-            if (isZero(rightValue)) {
-                return Value("NaN");
-            }
-            return (isNegative(rightValue) ? Value("Infinity") : Value("-Infinity"));
-        } else {
-            verify(false);  // should not reach this point
-        }
-    } else if (rightValue.getType() == String) {
-        std::cout << makeString(rightValue) << std::endl;
-        if (makeString(rightValue) == "Infinity") {
-            if (isZero(leftValue)) {
-                return Value("NaN");
-            }
-            return (isNegative(leftValue) ? Value("-Infinity") : Value("Infinity"));
-        } else if (rightValue.toString() == "-Infinity") {
-            if (isZero(leftValue)) {
-                return Value("NaN");
-            }
-            return (isNegative(leftValue) ? Value("Infinity") : Value("-Infinity"));
-        } else {
-            verify(false);  // should not reach this point
-        }
+        return Value(std::nan(""));
     }
 
     leftValue = makeNumeric(leftValue);
@@ -85,7 +54,7 @@ const Value MultiplicationOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getDouble() * rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else if (leftValue.getType() == NumberInt) {
         if (rightValue.getType() == NumberDouble) {
@@ -95,7 +64,7 @@ const Value MultiplicationOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getInt() * rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else if (leftValue.getType() == NumberLong) {
         if (rightValue.getType() == NumberDouble) {
@@ -105,10 +74,10 @@ const Value MultiplicationOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getLong() * rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else {
-        return Value("NaN");
+        return Value(std::nan(""));
     }
 }
 

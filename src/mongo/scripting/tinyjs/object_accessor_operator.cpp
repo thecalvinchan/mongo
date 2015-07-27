@@ -37,6 +37,10 @@
 namespace mongo {
 namespace tinyjs {
 
+/*ObjectAccessorOperator::ObjectAccessorOperator(TokenType t, std::string objectPathString) : BinaryOperator(t) {
+    _objectPathString = objectPathString;
+}*/
+
 ObjectAccessorOperator::ObjectAccessorOperator(TokenType t) : BinaryOperator(t) {}
 
 const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
@@ -73,6 +77,10 @@ std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope*
     }
     return leftNestedField + cur + rightNestedField;
 }
+
+/*StringData ObjectAccessorOperator::getName() const override {
+    return _objectPathString;
+}*/
 
 }  // namespace tinyjs
 }  // namespace mongo

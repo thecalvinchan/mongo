@@ -41,36 +41,12 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
     Value rightValue = this->getRightChild()->evaluate(scope);
 
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
-        std::cout << "don't both count as numbers" << std::endl;
-        return Value("NaN");
+        return Value(std::nan(""));
     }
 
-    if (leftValue.getType() == String) {
-        if (makeString(leftValue) == "Infinity") {
-            if ((rightValue.getType() == String && ((makeString(rightValue) == "Infinity") ||
-                                                    (makeString(rightValue) == "-Infinity")))) {
-                return Value("NaN");
-            }
-            return (isNegative(rightValue) ? Value("-Infinity") : Value("Infinity"));
-        } else if (makeString(leftValue) == "-Infinity") {
-            if ((rightValue.getType() == String && ((makeString(rightValue) == "Infinity") ||
-                                                    (makeString(rightValue) == "-Infinity")))) {
-                return Value("NaN");
-            }
-            return (isNegative(leftValue) ? Value("Infinity") : Value("-Infinity"));
-        } else {
-            return Value("NaN");
-        }
-    } else if (rightValue.getType() == String) {
-        std::cout << makeString(rightValue) << std::endl;
-        // TODO return -0 when one of the 2 is negative
-        if (makeString(rightValue) == "Infinity") {
-            return Value(0);
-        } else if (rightValue.toString() == "-Infinity") {
-            return Value(0);
-        } else {
-            verify(false);  // should not reach this point
-        }
+    if ((leftValue.getType() == NumberDouble && isnan(leftValue.getDouble())) ||
+        (rightValue.getType() == NumberDouble && isnan(rightValue.getDouble()))) {
+        return Value(std::nan(""));
     }
 
     leftValue = makeNumeric(leftValue);
@@ -79,10 +55,10 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
     if (isZero(rightValue)) {
         if (isZero(leftValue)) {
             std::cout << "0/0 " << std::endl;
-            return Value("NaN");
+            return Value(std::nan(""));
         } else {
             std::cout << "right value is 0 " << std::endl;
-            return (isNegative(leftValue) ? Value("-Infinity") : Value("Infinity"));
+            return (isNegative(leftValue) ? Value(-std::numeric_limits<double>::infinity()) : Value(std::numeric_limits<double>::infinity()));
         }
     } else if (leftValue.getType() == NumberDouble) {
         if (rightValue.getType() == NumberDouble) {
@@ -92,7 +68,7 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getDouble() / rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else if (leftValue.getType() == NumberInt) {
         if (rightValue.getType() == NumberDouble) {
@@ -102,7 +78,7 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getInt() / rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
 
     } else if (leftValue.getType() == NumberLong) {
@@ -113,10 +89,10 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getLong() / rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else {
-        return Value("NaN");
+        return Value(std::nan(""));
     }
 }
 

@@ -40,7 +40,6 @@
 #include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
 #include "mongo/scripting/tinyjs/scope.h"
- #include "mongo/scripting/tinyjs/tinyjs_engine.cpp"
 
 namespace mongo {
 namespace tinyjs {
@@ -72,7 +71,7 @@ void testEvaluationError(string input) {
     Scope* s = new Scope();
     ASTParser a(std::move(tokenData));
     Value res = a.evaluate(s);
-    ASSERT_EQ(res,Value("NaN"));
+    ASSERT_EQ(res,Value(std::nan("")));
     delete s;
 }
 
@@ -247,12 +246,12 @@ TEST(EvaluationTest, addition16) {
 
 TEST(EvaluationTest, addition17) {
     string input = "return 3 + Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition18) {
     string input = "return Infinity + 10;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition19) {
@@ -460,17 +459,17 @@ TEST(EvaluationTest, addition58) {
 
 TEST(EvaluationTest, addition59) {
     string input = "return Infinity + true;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition60) {
     string input = "return false + Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition61) {
     string input = "return Infinity + Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition62) {
@@ -485,17 +484,17 @@ TEST(EvaluationTest, addition63) {
 
 TEST(EvaluationTest, addition64) {
     string input = "return -Infinity + -Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition65) {
     string input = "return Infinity + null;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition66) {
     string input = "return null + Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, addition67) {
@@ -594,12 +593,12 @@ TEST(EvaluationTest, multiplication16) {
 
 TEST(EvaluationTest, multiplication17) {
     string input = "return 3 * Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, multiplication18) {
     string input = "return Infinity * 10;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, multiplication19) {
@@ -807,7 +806,7 @@ TEST(EvaluationTest, multiplication58) {
 
 TEST(EvaluationTest, multiplication59) {
     string input = "return Infinity * true;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, multiplication60) {
@@ -817,22 +816,22 @@ TEST(EvaluationTest, multiplication60) {
 
 TEST(EvaluationTest, multiplication61) {
     string input = "return Infinity * Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, multiplication62) {
     string input = "return Infinity * -Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, multiplication63) {
     string input = "return -Infinity * Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, multiplication64) {
     string input = "return -Infinity * -Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, multiplication65) {
@@ -858,7 +857,8 @@ TEST(EvaluationTest, multiplication68) {
 /* 
  * Subtraction tests
  */
-
+ 
+ 
 TEST(EvaluationTest, subtraction1) {
     string input = "return 1 - 1;";
     testEvaluation(input, Value(0));
@@ -941,12 +941,12 @@ TEST(EvaluationTest, subtraction16) {
 
 TEST(EvaluationTest, subtraction17) {
     string input = "return 3 - Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction18) {
     string input = "return Infinity - 10;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction19) {
@@ -1154,12 +1154,12 @@ TEST(EvaluationTest, subtraction58) {
 
 TEST(EvaluationTest, subtraction59) {
     string input = "return Infinity - true;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction60) {
     string input = "return false - Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction61) {
@@ -1169,12 +1169,12 @@ TEST(EvaluationTest, subtraction61) {
 
 TEST(EvaluationTest, subtraction62) {
     string input = "return Infinity - -Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction63) {
     string input = "return -Infinity - Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction64) {
@@ -1184,12 +1184,12 @@ TEST(EvaluationTest, subtraction64) {
 
 TEST(EvaluationTest, subtraction65) {
     string input = "return Infinity - null;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction66) {
     string input = "return null - Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, subtraction67) {
@@ -1233,7 +1233,7 @@ TEST(EvaluationTest, division5) {
 
 TEST(EvaluationTest, division6) {
     string input = "return 3 / false;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, division7) {
@@ -1293,7 +1293,7 @@ TEST(EvaluationTest, division17) {
 
 TEST(EvaluationTest, division18) {
     string input = "return Infinity / 10;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, division19) {
@@ -1500,7 +1500,7 @@ TEST(EvaluationTest, division58) {
 
 TEST(EvaluationTest, division59) {
     string input = "return Infinity / true;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, division60) {
@@ -1530,7 +1530,7 @@ TEST(EvaluationTest, division64) {
 
 TEST(EvaluationTest, division65) {
     string input = "return Infinity / null;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, division66) {
@@ -1540,7 +1540,7 @@ TEST(EvaluationTest, division66) {
 
 TEST(EvaluationTest, division67) {
     string input = "return true / null;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, division68) {
@@ -1550,12 +1550,12 @@ TEST(EvaluationTest, division68) {
 
 TEST(EvaluationTest, division69) {
     string input = "return 1 / 0;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, division70) {
     string input = "return -1 / 0;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 /*
@@ -1644,7 +1644,7 @@ TEST(EvaluationTest, logicalAnd16) {
 
 TEST(EvaluationTest, logicalAnd17) {
     string input = "return 3 && Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalAnd18) {
@@ -1694,7 +1694,7 @@ TEST(EvaluationTest, logicalAnd26) {
 
 TEST(EvaluationTest, logicalAnd27) {
     string input = "return [1, 2, 3] && Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalAnd28) {
@@ -1751,7 +1751,7 @@ TEST(EvaluationTest, logicalAnd37) {
 
 TEST(EvaluationTest, logicalAnd38) {
     string input = "return \"cat\" && Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalAnd39) {
@@ -1867,22 +1867,22 @@ TEST(EvaluationTest, logicalAnd60) {
 
 TEST(EvaluationTest, logicalAnd61) {
     string input = "return Infinity && Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalAnd62) {
     string input = "return Infinity && -Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalAnd63) {
     string input = "return -Infinity && Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalAnd64) {
     string input = "return -Infinity && -Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalAnd65) {
@@ -2017,7 +2017,7 @@ TEST(EvaluationTest, logicalOr17) {
 
 TEST(EvaluationTest, logicalOr18) {
     string input = "return Infinity || 10;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr19) {
@@ -2067,7 +2067,7 @@ TEST(EvaluationTest, logicalOr27) {
 
 TEST(EvaluationTest, logicalOr28) {
     string input = "return Infinity || [1, 2, 3];";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr29) {
@@ -2120,7 +2120,7 @@ TEST(EvaluationTest, logicalOr36) {
 
 TEST(EvaluationTest, logicalOr37) {
     string input = "return Infinity || \"cat\";";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr38) {
@@ -2186,12 +2186,12 @@ TEST(EvaluationTest, logicalOr49) {
 
 TEST(EvaluationTest, logicalOr50) {
     string input = "return Infinity || NaN;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr51) {
     string input = "return NaN || Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr52) {
@@ -2201,12 +2201,12 @@ TEST(EvaluationTest, logicalOr52) {
 
 TEST(EvaluationTest, logicalOr53) {
     string input = "return undefined || Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr54) {
     string input = "return Infinity || undefined;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr55) {
@@ -2231,42 +2231,42 @@ TEST(EvaluationTest, logicalOr58) {
 
 TEST(EvaluationTest, logicalOr59) {
     string input = "return Infinity || true;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr60) {
     string input = "return false || Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr61) {
     string input = "return Infinity || Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr62) {
     string input = "return Infinity || -Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr63) {
     string input = "return -Infinity || Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr64) {
     string input = "return -Infinity || -Infinity;";
-    testEvaluation(input, Value("-Infinity"));
+    testEvaluation(input, Value(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr65) {
     string input = "return Infinity || null;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr66) {
     string input = "return null || Infinity;";
-    testEvaluation(input, Value("Infinity"));
+    testEvaluation(input, Value(std::numeric_limits<double>::infinity()));
 }
 
 TEST(EvaluationTest, logicalOr67) {
@@ -2592,7 +2592,6 @@ TEST(EvaluationTest, looseEquality55) {
     string input = "return [] == [];";
     testEvaluation(input, Value(false));
 }
-
 
 
 /* 
@@ -2968,8 +2967,6 @@ TEST(EvaluationTest, comparison18) {
     string input = "return 1 < [4, 5, 6];";
     testEvaluation(input, Value(false));
 }
-
-
 
 } // namespace tinyjs
 } // namespace mongo

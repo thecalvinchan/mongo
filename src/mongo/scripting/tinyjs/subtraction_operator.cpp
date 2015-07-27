@@ -43,33 +43,7 @@ const Value SubtractionOperator::evaluate(Scope* scope) const {
     Value rightValue = this->getRightChild()->evaluate(scope);
 
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
-        return Value("NaN");
-    }
-
-    if (leftValue.getType() == String) {
-        if (makeString(leftValue) == "Infinity") {
-            if ((rightValue.getType() == String) && (makeString(rightValue) == "Infinity")) {
-                return Value("NaN");
-            } else {
-                return Value("Infinity");
-            }
-        } else if (makeString(leftValue) == "-Infinity") {
-            if ((rightValue.getType() == String) && (makeString(rightValue) == "-Infinity")) {
-                return Value("NaN");
-            } else {
-                return Value("-Infinity");
-            }
-        } else {
-            verify(false);  // should not reach this point
-        }
-    } else if (rightValue.getType() == String) {
-        if (makeString(rightValue) == "Infinity") {
-            return Value("-Infinity");
-        } else if (rightValue.toString() == "-Infinity") {
-            return Value("Infinity");
-        } else {
-            verify(false);  // should not reach this point
-        }
+        return Value(std::nan(""));
     }
 
     leftValue = makeNumeric(leftValue);
@@ -83,7 +57,7 @@ const Value SubtractionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getDouble() - rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else if (leftValue.getType() == NumberInt) {
         if (rightValue.getType() == NumberDouble) {
@@ -93,7 +67,7 @@ const Value SubtractionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getInt() - rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else if (leftValue.getType() == NumberLong) {
         if (rightValue.getType() == NumberDouble) {
@@ -103,10 +77,10 @@ const Value SubtractionOperator::evaluate(Scope* scope) const {
         } else if (rightValue.getType() == NumberLong) {
             return Value(leftValue.getLong() - rightValue.getLong());
         } else {
-            return Value("NaN");
+            return Value(std::nan(""));
         }
     } else {
-        return Value("NaN");
+        return Value(std::nan(""));
     }
 }
 

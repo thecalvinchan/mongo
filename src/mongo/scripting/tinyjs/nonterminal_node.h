@@ -42,7 +42,7 @@ public:
     //evaluate and getChildren are only used for testing
     virtual std::vector<Node*> getChildren() const = 0;
     const Value evaluate(Scope* scope) const;
-    StringData getName() const;
+    virtual StringData getName() const;
     TokenType getType() const;
     const static std::string names[];
 private:

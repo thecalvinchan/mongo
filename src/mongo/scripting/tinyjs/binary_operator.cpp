@@ -26,6 +26,7 @@
  */
 
 #include <boost/lexical_cast.hpp>
+#include <math.h>
 
 #include "mongo/platform/basic.h"
 #include "mongo/bson/bsontypes.h"
@@ -33,6 +34,7 @@
 #include "mongo/db/pipeline/field_path.h"
 #include "mongo/db/pipeline/document.h"
 #include "mongo/scripting/tinyjs/binary_operator.h"
+
 
 namespace mongo {
 namespace tinyjs {
@@ -71,8 +73,8 @@ bool isZero(Value value) {
 }
 
 bool isNegative(Value value) {
-    return ((value.numeric() && (value.coerceToInt() < 0)) ||
-            ((value.getType() == String) && makeString(value) == "-Infinity"));
+    // uses coerceToDouble so that infinity comparisons work
+    return ((value.numeric() && (value.coerceToDouble() < 0.0)));
 }
 
 std::string makeString(Value value) {
@@ -83,6 +85,12 @@ std::string makeString(Value value) {
             s = s.substr(1, s.size() - 2);
         }
         return s;
+    } else if ((value.getType() == NumberDouble) && (isnan(value.getDouble()))) {
+        return "NaN";
+    } else if ((value.getType() == NumberDouble) && (value.getDouble() == std::numeric_limits<double>::infinity())) {
+        return "Infinity";
+    } else if ((value.getType() == NumberDouble) && (value.getDouble() == -std::numeric_limits<double>::infinity())) {
+        return "-Infinity";
     } else if (value.numeric()) {
         return value.coerceToString();
     } else if (value.getType() == jstNULL) {
@@ -140,12 +148,12 @@ bool countsAsNumber(Value v) {
 
 bool isFalse(Value v) {
     return (isZero(v) || (v.getType() == Undefined) ||
-            (v.getType() == String && v.getString() == "NaN"));
+            (v.getType() == NumberDouble && isnan(v.getDouble())));
 }
 
 bool strictlyEqual(Value leftValue, Value rightValue) {
-    if (((leftValue.getType() == String) && (leftValue.getString() == "NaN")) ||
-        ((rightValue.getType() == String) && (rightValue.getString() == "NaN"))) {
+    if (((leftValue.getType() == NumberDouble && leftValue.getDouble() == std::nan(""))) ||
+        ((rightValue.getType() == NumberDouble && rightValue.getDouble() == std::nan("")))) {
         return false;
     } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
         return false;
