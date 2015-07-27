@@ -37,9 +37,12 @@ class ObjectAccessorOperator : public BinaryOperator {
 public:
     ObjectAccessorOperator(TokenType t);
     virtual const Value evaluate(Scope* scope) const;
+    void setPath(std::string path);
+    StringData getName() const override;
 
 private:
     std::string generateNestedField(const Node* head, Scope* scope) const;
+    std::string _objectPathString;
 };
 
 }  // namespace tinyjs

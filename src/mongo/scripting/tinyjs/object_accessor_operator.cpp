@@ -37,10 +37,6 @@
 namespace mongo {
 namespace tinyjs {
 
-/*ObjectAccessorOperator::ObjectAccessorOperator(TokenType t, std::string objectPathString) : BinaryOperator(t) {
-    _objectPathString = objectPathString;
-}*/
-
 ObjectAccessorOperator::ObjectAccessorOperator(TokenType t) : BinaryOperator(t) {}
 
 const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
@@ -59,18 +55,17 @@ const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
 std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope* scope) const {
     std::string cur = (head->getName()).rawData();
     std::string leftNestedField, rightNestedField;
-    if (cur == ".") {
-        leftNestedField = ObjectAccessorOperator::generateNestedField(
-            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
-        rightNestedField = ObjectAccessorOperator::generateNestedField(
-            (checked_cast<const BinaryOperator*>(head))->getRightChild(), scope);
-    } else if (cur == "[") {
+    if (cur == "[") {
         cur = ".";
         leftNestedField = ObjectAccessorOperator::generateNestedField(
             (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
         Value rightChildValue =
             (checked_cast<const BinaryOperator*>(head))->getRightChild()->evaluate(scope);
         rightNestedField = rightChildValue.coerceToString();
+    } else if (cur.front() == '[') {
+        cur.erase(0, 1);
+        leftNestedField = ObjectAccessorOperator::generateNestedField(
+            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
     } else {
         leftNestedField = "";
         rightNestedField = "";
@@ -78,9 +73,13 @@ std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope*
     return leftNestedField + cur + rightNestedField;
 }
 
-/*StringData ObjectAccessorOperator::getName() const override {
-    return _objectPathString;
-}*/
+StringData ObjectAccessorOperator::getName() const {
+    return StringData(_objectPathString);
+}
+
+void ObjectAccessorOperator::setPath(std::string path) {
+    _objectPathString = path;
+}
 
 }  // namespace tinyjs
 }  // namespace mongo
