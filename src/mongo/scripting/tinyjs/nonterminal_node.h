@@ -43,7 +43,6 @@ public:
     virtual std::vector<Node*> getChildren() const = 0;
     const Value evaluate(Scope* scope) const;
     virtual StringData getName() const;
-    TokenType getType() const;
     const static std::string names[];
 private:
     TokenType _type;
