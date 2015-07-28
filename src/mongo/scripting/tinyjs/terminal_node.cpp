@@ -39,54 +39,54 @@ TerminalNode::TerminalNode(const NullLabeler&) : Node(TokenType::kNullLiteral), 
     std::string res = _value.toString();
     if (((res.front() == '"') && (res.back() == '"')) ||
         ((res.front() == '\'') && (res.back() == '\''))) {
-        this->name = StringData(res.substr(1, res.size() - 2));
+        this->_name = res.substr(1, res.size() - 2);
     } else {
-        this->name = StringData(res);
+        this->_name = res;
     }
 }
 TerminalNode::TerminalNode(const UndefinedLabeler&) : Node(TokenType::kUndefinedLiteral), _value(Value(BSONUndefined)) {
     std::string res = _value.toString();
     if (((res.front() == '"') && (res.back() == '"')) ||
         ((res.front() == '\'') && (res.back() == '\''))) {
-        this->name = StringData(res.substr(1, res.size() - 2));
+        this->_name = res.substr(1, res.size() - 2);
     } else {
-        this->name = StringData(res);
+        this->_name = res;
     }
 }
 TerminalNode::TerminalNode(const int& value) : Node(TokenType::kIntegerLiteral), _value(Value(value)) {
     std::string res = _value.toString();
     if (((res.front() == '"') && (res.back() == '"')) ||
         ((res.front() == '\'') && (res.back() == '\''))) {
-        this->name = StringData(res.substr(1, res.size() - 2));
+        this->_name = res.substr(1, res.size() - 2);
     } else {
-        this->name = StringData(res);
+        this->_name = res;
     }
 }
 TerminalNode::TerminalNode(const double& value) : Node(TokenType::kFloatLiteral), _value(Value(value)) {
     std::string res = _value.toString();
     if (((res.front() == '"') && (res.back() == '"')) ||
         ((res.front() == '\'') && (res.back() == '\''))) {
-        this->name = StringData(res.substr(1, res.size() - 2));
+        this->_name = res.substr(1, res.size() - 2);
     } else {
-        this->name = StringData(res);
+        this->_name = res;
     }
 }
 TerminalNode::TerminalNode(const bool& value) : Node(TokenType::kBooleanLiteral), _value(Value(value)) {
     std::string res = _value.toString();
     if (((res.front() == '"') && (res.back() == '"')) ||
         ((res.front() == '\'') && (res.back() == '\''))) {
-        this->name = StringData(res.substr(1, res.size() - 2));
+        this->_name = res.substr(1, res.size() - 2);
     } else {
-        this->name = StringData(res);
+        this->_name = res;
     }
 }
 TerminalNode::TerminalNode(const StringData& value) : Node(TokenType::kStringLiteral), _value(Value(value)) {
     std::string res = _value.toString();
     if (((res.front() == '"') && (res.back() == '"')) ||
         ((res.front() == '\'') && (res.back() == '\''))) {
-        this->name = StringData(res.substr(1, res.size() - 2));
+        this->_name = res.substr(1, res.size() - 2);
     } else {
-        this->name = StringData(res);
+        this->_name = res;
     }
 }
 
@@ -99,7 +99,7 @@ const Value TerminalNode::evaluate(Scope* scope) const {
 }
 
 StringData TerminalNode::getName() const {
-    return name;
+    return StringData(_name);
 }
 
 }  // namespace tinyjs

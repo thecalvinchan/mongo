@@ -49,7 +49,7 @@ public:
     StringData getName() const;
     bool isIdentifier() const;
 private:
-    StringData name;
+    std::string _name;
     Value _value;
     bool _isIdentifier;
 };
