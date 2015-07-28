@@ -235,6 +235,13 @@ tests.push({name: "Where.ReallyBigNestedComparison.Where",
             ]
             } );
 
+generateDocs(10, nestedGenerator(true))(t);
+var whereCursor = t.find({$where: 'return this.a.b.c.d ==1;'});
+var queryCursor = t.find({'a.b.c.d': 1});
+while (queryCursor.hasNext()) {
+    assert(whereCursor.next().a.b.c.d == queryCursor.next().a.b.c.d, "Really Big Nested Comparison");
+}
+
 /*
  * Setup: Creates a collection of 10 documents, each with 4 nested levels of 26 fields
  * Test: Find document through match of a deeply nested field using query language
