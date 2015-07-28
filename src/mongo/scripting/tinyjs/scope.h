@@ -103,7 +103,7 @@ public:
      * This function inserts a variableName and value pair into the scope, regardless of whether
      * that variableName was already in scope.
      */
-    void put(StringData variableName, const BSONObj value);
+    void put(StringData variableName, const BSONObj& value);
     BSONObj get(StringData variableName) const;
     const Scope* getParent() const;
 

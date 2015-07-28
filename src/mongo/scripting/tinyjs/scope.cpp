@@ -80,7 +80,7 @@ int Scope::invoke(ScriptingFunction func,
 }
 
 
-void Scope::put(StringData variableName, const BSONObj value) {
+void Scope::put(StringData variableName, const BSONObj& value) {
     _variables[variableName] = value;
 }
 
