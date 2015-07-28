@@ -239,14 +239,16 @@ std::unique_ptr<Node> ASTParser::objectAccessorAction(std::unique_ptr<Node> left
         std::unique_ptr<BinaryOperator> head(new ObjectAccessorOperator(TokenType::kPeriod));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(matchNodeTerminal(TokenType::kIdentifier)));
-        //std::string path = head->getLeftChild()->getName().rawData() + "." + head->getRightChild()->getName().rawData();
+        std::string path = head->getLeftChild()->getName().toString() + "." + head->getRightChild()->getName().toString();
+        (checked_cast<ObjectAccessorOperator*>(head.get()))->setPath(path);
         return objectAccessorAction(std::move(head));
     } else if ((matchImplicitTerminal(TokenType::kOpenSquareBracket))) {
         std::unique_ptr<BinaryOperator> head(new ObjectAccessorOperator(TokenType::kOpenSquareBracket));
         head->setLeftChild(std::move(leftChild));
         head->setRightChild(std::move(arithmeticExpressionAction()));
         expectImplicitTerminal(TokenType::kCloseSquareBracket);
-        //std::string path = head->getLeftChild()->getName().rawData() + "." + head->getRightChild()->getName().rawData();
+        std::string path = "[";
+        (checked_cast<ObjectAccessorOperator*>(head.get()))->setPath(path);
         return objectAccessorAction(std::move(head));
     } else {
         // multiplicativeOperation is optional, so if it doesn't match, just return leftChild

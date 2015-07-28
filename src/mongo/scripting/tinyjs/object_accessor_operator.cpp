@@ -37,10 +37,6 @@
 namespace mongo {
 namespace tinyjs {
 
-/*ObjectAccessorOperator::ObjectAccessorOperator(TokenType t, std::string objectPathString) : BinaryOperator(t) {
-    _objectPathString = objectPathString;
-}*/
-
 ObjectAccessorOperator::ObjectAccessorOperator(TokenType t) : BinaryOperator(t) {}
 
 const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
@@ -60,11 +56,13 @@ std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope*
     TokenType type = head->getType();
     if (type == TokenType::kPeriod) {
         std::string cur = (head->getName()).rawData();
-        std::string leftNestedField = ObjectAccessorOperator::generateNestedField(
-            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
-        std::string rightNestedField = ObjectAccessorOperator::generateNestedField(
-            (checked_cast<const BinaryOperator*>(head))->getRightChild(), scope);
-        return leftNestedField + cur + rightNestedField;
+        if (cur.front() == '[') {
+            cur.erase(0, 1);
+            std::string leftNestedField = ObjectAccessorOperator::generateNestedField(
+                (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
+            return leftNestedField + cur;
+        }
+        return cur;
     } else if (type == TokenType::kOpenSquareBracket) {
         std::string cur = ".";
         std::string leftNestedField = ObjectAccessorOperator::generateNestedField(
@@ -78,9 +76,13 @@ std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope*
     }
 }
 
-/*StringData ObjectAccessorOperator::getName() const override {
-    return _objectPathString;
-}*/
+StringData ObjectAccessorOperator::getName() const {
+    return StringData(_objectPathString);
+}
+
+void ObjectAccessorOperator::setPath(std::string path) {
+    _objectPathString = path;
+}
 
 }  // namespace tinyjs
 }  // namespace mongo
