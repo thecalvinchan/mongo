@@ -6,6 +6,8 @@ t.save( { a : 2 , b : "hi" } );
 
 assert( t.findOne( {a : 1} ).b == t.findOne( { $where: 'return this.a == 1;' } ).b, "A");
 
+tests = []
+
 // Document generation functions
 
 /**
@@ -141,6 +143,7 @@ function whereTripleEquals(t) {
 }
 
 
+
 // Queries that can be written in query language and using $where
 
 
@@ -158,6 +161,14 @@ while (queryLanguageCursorEquals.hasNext()) {
   var z = whereCursorTripleEquals.next();
   assert( x.x == y.x, "double equals doesn't match query language");
   assert( x.x == z.x, "triple equals doesn't match query language");
+}
+
+/** Simple Nested **/
+generateDocs(13, nestedGenerator())(t);
+var queryCursor = t.find( {'d.c.b.a' : 7} );
+var whereCursor = t.find( { $where: 'return this.d.c.b.a == 7;' } );
+while (queryCursor.hasNext()) {
+    assert( queryCursor.next().a.b.c.d == whereCursor.next().a.b.c.d, "SimpleNested" );
 }
 
 // Queries that require the use of $where
@@ -194,30 +205,21 @@ while (compareFields.hasNext()) {
   assert(doc.x <= doc.y, "compareFields error: this.x !<= this.y")
 }
 
-tests = []
 
-/**
- * Setup: creates a collection with 40,000 documents of the form {x: i, y: j}
- * Test: Finds all documents where x == 2 or y == 3
- */
-tests.push({name: "Where.Mixed",
-            tags: ['query','where'],
-            pre: generateDocs(200, tupleGenerator(200)),
-            ops: [
-              {op: "find", query: {$or : [{x: 2}, {$where: function() {return (this.y == 3);}}]}}
-            ]});
+var mixed = t.find({$or : [{x: 2}, {$where: function() {return (this.y == 3);}}]});
+while (compareFields.hasNext()) {
+  var doc = compareFields.next();
+  assert((doc.x == 2) || (doc.y == 3));
+}
 
-/*
- * Setup: Creates a collection of 13 objects, each with 4 nested levels of 13 fields
- * Test: Find document through match of two deeply nested fields on the same document using $where
- */
-tests.push({name: "Where.ComplexNested",
-            tags: ['query','where'],
-            pre: generateDocs(10, nestedGenerator(true)),
-            ops: [
-              {op: "find", query: {'$where': function() { return this.d.c.b.a === this.a.b.c.d; }}}
-            ]
-            } );
+generateDocs(10, nestedGenerator(true))(t);
+
+var complexNested = t.find({'$where': function() { return this.d.c.b.a === this.a.b.c.d; }});
+while (complexNested.hasNext()) {
+  var doc = complexNested.next();
+  assert(doc.d.c.b.a == doc.a.b.c.d);
+}
+
 
 // Queries to experiment with document size
 
