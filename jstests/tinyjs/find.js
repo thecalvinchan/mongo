@@ -71,7 +71,7 @@ function arrayGenerator() {
 function permutationGenerator() {
     var strings = [];
     for (var i = 0; i < 26; i++) {
-        strings.push(String.fromCharCode(95+i));
+        strings.push(String.fromCharCode(97+i));
     }
     var i = 0;
     var j = 0;
@@ -101,7 +101,7 @@ function permutationGenerator() {
 function nestedGenerator(big) {
     var strings = [];
     for (var i = 0; i < 26; i++) {
-        strings.push(String.fromCharCode(95+i));
+        strings.push(String.fromCharCode(97+i));
     }
     var i = 0;
     var levelSize = big ? 26 : 13;
@@ -140,6 +140,7 @@ tests.push({name: "Where.CompareToInt.QueryLanguage",
             ]});
 
 generateDocs(1000, increasingXGenerator())();
+
 
 /**
  * Setup: creates a collection with documents of the form {x : i}
@@ -189,29 +190,13 @@ tests.push({name: "Where.ElemMatch.QueryLanguage",
               {op: "find", query: {results: {$elemMatch: {$gte: 80, $lt: 85 }}}}
             ]});
 
-/*
- * Setup: Creates a collection of 13 objects, each with 4 nested levels of 13 fields
- * Test: Find document through match of deeply nested field using $where
- */
-tests.push({name: "Where.SimpleNested.Where",
-            tags: ['query', 'where'],
-            pre: generateDocs(13, nestedGenerator(false)),
-            ops: [
-              {op:"find", query: {'$where': function() { return this.d.c.b.a === 1; }}}
-            ]
-            } );
-
-/*
- * Setup: Creates a collection of 13 objects, each with 4 nested levels of 13 fields
- * Test: Find document through match of deeply nested field using Query Language
- */
-tests.push({name: "Where.SimpleNested.QueryLanguage",
-            tags: ['query','compare'],
-            pre: generateDocs(13, nestedGenerator()),
-            ops: [
-              {op: "find", query: { 'd.c.b.a' : 1 } }
-            ]
-            } );
+/** Simple Nested **/
+generateDocs(13, nestedGenerator())(t);
+    var queryCursor = t.find( {'d.c.b.a' : 7} );
+    var whereCursor = t.find( { $where: 'return this.d.c.b.a == 7;' } );
+    while (queryCursor.hasNext()) {
+        assert( queryCursor.next().a.b.c.d == whereCursor.next().a.b.c.d, "SimpleNested" );
+    }
 
 // Queries that require the use of $where
 
