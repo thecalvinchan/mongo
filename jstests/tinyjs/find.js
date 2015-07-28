@@ -19,7 +19,7 @@ function generateDocs(nDocs, generator) {
         for (var i = 0; i < nDocs; i++) {
           docs.push(generator());
         }
-        collection.insert(docs, {'ordered': false});
+        collection.insert(docs, {'ordered': true});
     }
  }
 
@@ -126,149 +126,76 @@ function nestedGenerator(big) {
 }
 
 
+// Functions to perform queries. Separated into functions so we can profile the calls. 
+
+function queryEquals(t) {
+  return t.find({x:1});
+}
+
+function whereDoubleEquals(t) {
+  return t.find({$where: function() {return this.x == 1;}});
+}
+
+function whereTripleEquals(t) {
+  return t.find({$where: function() {return this.x === 1;}});
+}
+
+
+
 // Queries that can be written in query language and using $where
 
-/**
- * Setup: creates a collection with documents of the form {x : i}
- * Test: Finds {x: 1} using query language
- */
-tests.push({name: "Where.CompareToInt.QueryLanguage",
-            tags: ['query','compare'],
-            pre: generateDocs(1000, increasingXGenerator()),
-            ops: [
-              {op: "find", query: {x : 1}}
-            ]});
 
-generateDocs(1000, increasingXGenerator())();
+generateDocs(1000, increasingXGenerator())(t);
 
-/**
- * Setup: creates a collection with documents of the form {x : i}
- * Test: Finds {x: 1} using a $where query with == (weak equality)
- */
-tests.push({name: "Where.CompareToInt.Where.DoubleEquals",
-            tags: ['query','where'],
-            pre: generateDocs(1000, increasingXGenerator()),
-            ops: [
-              {op: "find", query: {$where: function() {return this.x == 1;}}}
-            ]});
+var queryLanguageCursorEquals = queryEquals(t);
+var whereCursorDoubleEquals = whereDoubleEquals(t);
+var whereCursorTripleEquals = whereTripleEquals(t);
 
-/**
- * Setup: creates a collection with documents of the form {x : i}
- * Test: Finds {x: 1} using a $where query with === (type-safe equality)
- */
-tests.push({name: "Where.CompareToInt.Where.TripleEquals",
-            tags: ['query','where'],
-            pre: generateDocs(1000, increasingXGenerator()),
-            ops: [
-              {op: "find", query: {$where: function() {return this.x === 1;}}}
-            ]});
-
-
-/**
- * Setup: creates a collection with documents of the form {x : i}
- * Test: Finds all documents with x between 1 and 6 using $in
- */
-tests.push({name: "Where.In.QueryLanguage",
-            tags: ['query','compare'],
-            pre: generateDocs(1000, increasingXGenerator()),
-            ops: [
-              {op: "find", query: {x: {$in: [1, 2, 3, 4, 5, 6]}}}
-            ]});
-
-
-/**
- * Setup: creates a collection with documents containing arrays of 10
- * random numbers between 0 and 100
- * Test: Finds all documents with x containing y such that 80 <= y < 85
- * using $elemMatch
- */
-tests.push({name: "Where.ElemMatch.QueryLanguage",
-            tags: ['query','compare'],
-            pre: generateDocs(1000, arrayGenerator),
-            ops: [
-              {op: "find", query: {results: {$elemMatch: {$gte: 80, $lt: 85 }}}}
-            ]});
-
-/*
- * Setup: Creates a collection of 13 objects, each with 4 nested levels of 13 fields
- * Test: Find document through match of deeply nested field using $where
- */
-tests.push({name: "Where.SimpleNested.Where",
-            tags: ['query', 'where'],
-            pre: generateDocs(13, nestedGenerator(false)),
-            ops: [
-              {op:"find", query: {'$where': function() { return this.d.c.b.a === 1; }}}
-            ]
-            } );
-
-/*
- * Setup: Creates a collection of 13 objects, each with 4 nested levels of 13 fields
- * Test: Find document through match of deeply nested field using Query Language
- */
-tests.push({name: "Where.SimpleNested.QueryLanguage",
-            tags: ['query','compare'],
-            pre: generateDocs(13, nestedGenerator()),
-            ops: [
-              {op: "find", query: { 'd.c.b.a' : 1 } }
-            ]
-            } );
+while (queryLanguageCursorEquals.hasNext()) {
+  assert(whereCursorDoubleEquals.hasNext());
+  assert(whereCursorTripleEquals.hasNext());
+  var x = queryLanguageCursorEquals.next();
+  var y = whereCursorDoubleEquals.next();
+  var z = whereCursorTripleEquals.next();
+  assert( x.x == y.x, "double equals doesn't match query language");
+  assert( x.x == z.x, "triple equals doesn't match query language");
+}
 
 // Queries that require the use of $where
 
-/**
- * Setup: creates a collection with 40,000 documents of the form {x: i, y: j}
- * Test: Finds all documents where x == y
- */
-tests.push({name: "Where.CompareFields.Equals",
-            tags: ['query','where'],
-            pre: generateDocs(1000, increasingXGenerator()),
-            ops: [
-              {op: "find", query: {$where: function() {return this.x == this.y; }}}
-            ]});
+generateDocs(200, tupleGenerator(200))(t);
 
-/**
- * Setup: creates a collection with 40,000 documents of the form {x: i, y: j}
- * Test: Finds all documents where x > y
- */
-tests.push({name: "Where.CompareFields.Gt",
-            tags: ['query','where'],
-            pre: generateDocs(200, tupleGenerator(200)),
-            ops: [
-              {op: "find", query: {$where: function() {return this.x > this.y; }}}
-            ]});
+var compareFields = t.find({$where: function() {return this.x == this.y; }});
+while (compareFields.hasNext()) {
+  var doc = compareFields.next();
+  assert(doc.x == doc.y, "compareFields error: this.x != this.y")
+}
 
-/**
- * Setup: creates a collection with 40,000 documents of the form {x: i, y: j}
- * Test: Finds all documents where x >= y
- */
-tests.push({name: "Where.CompareFields.Gte",
-            tags: ['query','where'],
-            pre: generateDocs(200, tupleGenerator(200)),
-            ops: [
-              {op: "find", query: {$where: function() {return this.x >= this.y; }}}
-            ]});
+compareFields = t.find({$where: function() {return this.x > this.y; }});
+while (compareFields.hasNext()) {
+  var doc = compareFields.next();
+  assert(doc.x > doc.y, "compareFields error: this.x != this.y")
+}
 
-/**
- * Setup: creates a collection with 40,000 documents of the form {x: i, y: j}
- * Test: Finds all documents where x < y
- */
-tests.push({name: "Where.CompareFields.Lt",
-            tags: ['query','where'],
-            pre: generateDocs(200, tupleGenerator(200)),
-            ops: [
-              {op: "find", query: {$where: function() {return this.x < this.y; }}}
-            ]});
+compareFields = t.find({$where: function() {return this.x >= this.y; }});
+while (compareFields.hasNext()) {
+  var doc = compareFields.next();
+  assert(doc.x >= doc.y, "compareFields error: this.x !>= this.y")
+}
 
-/**
- * Setup: creates a collection with 40,000 documents of the form {x: i, y: j}
- * Test: Finds all documents where x <= y
- */
-tests.push({name: "Where.CompareFields.Lte",
-            tags: ['query','where'],
-            pre: generateDocs(200, tupleGenerator(200)),
-            ops: [
-              {op: "find", query: {$where: function() {return this.x <= this.y; }}}
-            ]});
+compareFields = t.find({$where: function() {return this.x < this.y; }});
+while (compareFields.hasNext()) {
+  var doc = compareFields.next();
+  assert(doc.x < doc.y, "compareFields error: this.x !< this.y")
+}
+
+compareFields = t.find({$where: function() {return this.x <= this.y; }});
+while (compareFields.hasNext()) {
+  var doc = compareFields.next();
+  assert(doc.x <= doc.y, "compareFields error: this.x !<= this.y")
+}
+
+tests = []
 
 /**
  * Setup: creates a collection with 40,000 documents of the form {x: i, y: j}
@@ -318,6 +245,8 @@ tests.push({name: "Where.ReallyBigNestedComparison.QueryLanguage",
               {op: "find", query: { 'a.b.c.d' : 1 }}
             ]
             });
+
+lookAtDocumentMetrics = false;
 
 if ( lookAtDocumentMetrics ) {
     // ignore mongos
