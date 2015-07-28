@@ -71,7 +71,7 @@ function arrayGenerator() {
 function permutationGenerator() {
     var strings = [];
     for (var i = 0; i < 26; i++) {
-        strings.push(String.fromCharCode(95+i));
+        strings.push(String.fromCharCode(97+i));
     }
     var i = 0;
     var j = 0;
@@ -101,7 +101,7 @@ function permutationGenerator() {
 function nestedGenerator(big) {
     var strings = [];
     for (var i = 0; i < 26; i++) {
-        strings.push(String.fromCharCode(95+i));
+        strings.push(String.fromCharCode(97+i));
     }
     var i = 0;
     var levelSize = big ? 26 : 13;
@@ -139,7 +139,6 @@ function whereDoubleEquals(t) {
 function whereTripleEquals(t) {
   return t.find({$where: function() {return this.x === 1;}});
 }
-
 
 
 // Queries that can be written in query language and using $where
