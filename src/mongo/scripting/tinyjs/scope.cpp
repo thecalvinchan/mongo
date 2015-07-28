@@ -80,12 +80,12 @@ int Scope::invoke(ScriptingFunction func,
 }
 
 
-void Scope::put(StringData variableName, const BSONObj& value) {
+void Scope::put(StringData variableName, const BSONObj value) {
     _variables[variableName] = value;
 }
 
 BSONObj Scope::get(StringData variableName) const {
-    std::map<StringData, BSONObj&>::const_iterator it = _variables.find(variableName);
+    std::map<StringData, BSONObj>::const_iterator it = _variables.find(variableName);
     if (it != _variables.end()) {
         // Case where variableName is found in this scope
         return it->second;
