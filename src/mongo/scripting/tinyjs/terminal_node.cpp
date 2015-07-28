@@ -35,12 +35,60 @@
 namespace mongo {
 namespace tinyjs {
 
-TerminalNode::TerminalNode(const NullLabeler&) : Node(TokenType::kNullLiteral), _value(Value(BSONNULL)) {}
-TerminalNode::TerminalNode(const UndefinedLabeler&) : Node(TokenType::kUndefinedLiteral), _value(Value(BSONUndefined)) {}
-TerminalNode::TerminalNode(const int& value) : Node(TokenType::kIntegerLiteral), _value(Value(value)) {}
-TerminalNode::TerminalNode(const double& value) : Node(TokenType::kFloatLiteral), _value(Value(value)) {}
-TerminalNode::TerminalNode(const bool& value) : Node(TokenType::kBooleanLiteral), _value(Value(value)) {}
-TerminalNode::TerminalNode(const StringData& value) : Node(TokenType::kStringLiteral), _value(Value(value)) {}
+TerminalNode::TerminalNode(const NullLabeler&) : Node(TokenType::kNullLiteral), _value(Value(BSONNULL)) {
+    std::string res = _value.toString();
+    if (((res.front() == '"') && (res.back() == '"')) ||
+        ((res.front() == '\'') && (res.back() == '\''))) {
+        this->name = StringData(res.substr(1, res.size() - 2));
+    } else {
+        this->name = StringData(res);
+    }
+}
+TerminalNode::TerminalNode(const UndefinedLabeler&) : Node(TokenType::kUndefinedLiteral), _value(Value(BSONUndefined)) {
+    std::string res = _value.toString();
+    if (((res.front() == '"') && (res.back() == '"')) ||
+        ((res.front() == '\'') && (res.back() == '\''))) {
+        this->name = StringData(res.substr(1, res.size() - 2));
+    } else {
+        this->name = StringData(res);
+    }
+}
+TerminalNode::TerminalNode(const int& value) : Node(TokenType::kIntegerLiteral), _value(Value(value)) {
+    std::string res = _value.toString();
+    if (((res.front() == '"') && (res.back() == '"')) ||
+        ((res.front() == '\'') && (res.back() == '\''))) {
+        this->name = StringData(res.substr(1, res.size() - 2));
+    } else {
+        this->name = StringData(res);
+    }
+}
+TerminalNode::TerminalNode(const double& value) : Node(TokenType::kFloatLiteral), _value(Value(value)) {
+    std::string res = _value.toString();
+    if (((res.front() == '"') && (res.back() == '"')) ||
+        ((res.front() == '\'') && (res.back() == '\''))) {
+        this->name = StringData(res.substr(1, res.size() - 2));
+    } else {
+        this->name = StringData(res);
+    }
+}
+TerminalNode::TerminalNode(const bool& value) : Node(TokenType::kBooleanLiteral), _value(Value(value)) {
+    std::string res = _value.toString();
+    if (((res.front() == '"') && (res.back() == '"')) ||
+        ((res.front() == '\'') && (res.back() == '\''))) {
+        this->name = StringData(res.substr(1, res.size() - 2));
+    } else {
+        this->name = StringData(res);
+    }
+}
+TerminalNode::TerminalNode(const StringData& value) : Node(TokenType::kStringLiteral), _value(Value(value)) {
+    std::string res = _value.toString();
+    if (((res.front() == '"') && (res.back() == '"')) ||
+        ((res.front() == '\'') && (res.back() == '\''))) {
+        this->name = StringData(res.substr(1, res.size() - 2));
+    } else {
+        this->name = StringData(res);
+    }
+}
 
 std::vector<Node*> TerminalNode::getChildren() const {
     return std::vector<Node*>();
@@ -51,12 +99,7 @@ const Value TerminalNode::evaluate(Scope* scope) const {
 }
 
 StringData TerminalNode::getName() const {
-    std::string res = _value.toString();
-    if (((res.front() == '"') && (res.back() == '"')) ||
-        ((res.front() == '\'') && (res.back() == '\''))) {
-        return StringData(res.substr(1, res.size() - 2));
-    }
-    return StringData(res);
+    return name;
 }
 
 }  // namespace tinyjs
