@@ -262,12 +262,6 @@ bool looselyEqual(Value leftValue, Value rightValue) {
         }
     }
 
-
-    if (((leftValue.getType() == String) && (leftValue.getString() == "NaN")) ||
-        ((rightValue.getType() == String) && (rightValue.getString() == "NaN"))) {
-        return false;
-    }
-
     if (leftValue.getType() == Undefined) {
         if (rightValue.getType() == jstNULL) {
             return true;

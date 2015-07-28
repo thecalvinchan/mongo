@@ -537,7 +537,7 @@ std::unique_ptr<Node> ASTParser::returnStatementAction() {
     auto head = stdx::make_unique<UnaryOperator>(TokenType::kReturnKeyword);
     if (matchImplicitTerminal(TokenType::kReturnKeyword)) {
         head->setChild(std::move(booleanExpressionAction()));
-        expectImplicitTerminal(TokenType::kSemiColon);
+        matchImplicitTerminal(TokenType::kSemiColon); // semicolon is optional
     } else {
         throw ParseException("expected 'return'", (_currentToken.value).toString());
     }
