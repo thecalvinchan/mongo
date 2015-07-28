@@ -97,8 +97,7 @@ Scope* generateScope() {
 
     BSONObj result = fromjson(json);
 
-    Value object = Value(result);
-    s->put(StringData("this"),object);
+    s->put(StringData("this"),result);
     return s;
 }
 

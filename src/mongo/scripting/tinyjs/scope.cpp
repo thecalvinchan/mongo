@@ -41,7 +41,7 @@ Scope::Scope(Scope* parent) : _parent(parent) {}
 
 
 void Scope::setObject(const char* field, const BSONObj& obj, bool readOnly) {
-    put(StringData("this"), Value(obj));
+    put(StringData("this"), obj);
 }
 
 bool Scope::getBoolean(const char* field) {
@@ -80,12 +80,12 @@ int Scope::invoke(ScriptingFunction func,
 }
 
 
-void Scope::put(StringData variableName, Value value) {
+void Scope::put(StringData variableName, const BSONObj& value) {
     _variables[variableName] = value;
 }
 
-Value Scope::get(StringData variableName) const {
-    std::map<StringData, Value>::const_iterator it = _variables.find(variableName);
+BSONObj Scope::get(StringData variableName) const {
+    std::map<StringData, BSONObj&>::const_iterator it = _variables.find(variableName);
     if (it != _variables.end()) {
         // Case where variableName is found in this scope
         return it->second;
@@ -94,7 +94,7 @@ Value Scope::get(StringData variableName) const {
         return _parent->get(variableName);
     } else {
         // variable is out of scope
-        return Value(BSONUndefined);
+        return BSONObj();
     }
 }
 

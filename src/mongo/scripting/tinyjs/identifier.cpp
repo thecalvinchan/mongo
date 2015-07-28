@@ -37,7 +37,7 @@ namespace tinyjs {
 Identifier::Identifier(const StringData& value) : TerminalNode(value) {}
 
 const Value Identifier::evaluate(Scope* scope) const {
-    return scope->get(StringData(_value.toString()));
+    return Value(scope->get(StringData(_value.toString())));
 }
 
 }  // namespace tinyjs
