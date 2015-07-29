@@ -111,7 +111,7 @@ public:
             if (!statusWithMatcher.isOK()) {
                 return appendCommandStatus(result, statusWithMatcher.getStatus());
             }
-            matcher.reset(statusWithMatcher.getValue());
+            matcher = std::move(statusWithMatcher.getValue());
         }
 
         const long long defaultBatchSize = std::numeric_limits<long long>::max();
@@ -157,29 +157,25 @@ public:
                 continue;
             }
 
-            WorkingSetMember member;
-            member.state = WorkingSetMember::OWNED_OBJ;
-            member.keyData.clear();
-            member.loc = RecordId();
-            member.obj = Snapshotted<BSONObj>(SnapshotId(), maybe);
-            root->pushBack(member);
+            WorkingSetID id = ws->allocate();
+            WorkingSetMember* member = ws->get(id);
+            member->keyData.clear();
+            member->loc = RecordId();
+            member->obj = Snapshotted<BSONObj>(SnapshotId(), maybe);
+            member->transitionToOwnedObj();
+            root->pushBack(id);
         }
 
         std::string cursorNamespace = str::stream() << dbname << ".$cmd." << name;
         dassert(NamespaceString(cursorNamespace).isValid());
-        dassert(NamespaceString(cursorNamespace).isListCollectionsGetMore());
+        dassert(NamespaceString(cursorNamespace).isListCollectionsCursorNS());
 
-        PlanExecutor* rawExec;
-        Status makeStatus = PlanExecutor::make(txn,
-                                               ws.release(),
-                                               root.release(),
-                                               cursorNamespace,
-                                               PlanExecutor::YIELD_MANUAL,
-                                               &rawExec);
-        std::unique_ptr<PlanExecutor> exec(rawExec);
-        if (!makeStatus.isOK()) {
-            return appendCommandStatus(result, makeStatus);
+        auto statusWithPlanExecutor = PlanExecutor::make(
+            txn, std::move(ws), std::move(root), cursorNamespace, PlanExecutor::YIELD_MANUAL);
+        if (!statusWithPlanExecutor.isOK()) {
+            return appendCommandStatus(result, statusWithPlanExecutor.getStatus());
         }
+        std::unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
         BSONArrayBuilder firstBatch;
 
@@ -198,8 +194,12 @@ public:
         CursorId cursorId = 0LL;
         if (!exec->isEOF()) {
             exec->saveState();
-            ClientCursor* cursor = new ClientCursor(
-                CursorManager::getGlobalCursorManager(), exec.release(), cursorNamespace);
+            exec->detachFromOperationContext();
+            ClientCursor* cursor =
+                new ClientCursor(CursorManager::getGlobalCursorManager(),
+                                 exec.release(),
+                                 cursorNamespace,
+                                 txn->recoveryUnit()->isReadingFromMajorityCommittedSnapshot());
             cursorId = cursor->cursorid();
         }
 

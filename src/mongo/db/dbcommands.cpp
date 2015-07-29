@@ -1,32 +1,30 @@
-// dbcommands.cpp
-
 /**
-*    Copyright (C) 2012-2014 MongoDB Inc.
-*
-*    This program is free software: you can redistribute it and/or  modify
-*    it under the terms of the GNU Affero General Public License, version 3,
-*    as published by the Free Software Foundation.
-*
-*    This program is distributed in the hope that it will be useful,
-*    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*    GNU Affero General Public License for more details.
-*
-*    You should have received a copy of the GNU Affero General Public License
-*    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*
-*    As a special exception, the copyright holders give permission to link the
-*    code of portions of this program with the OpenSSL library under certain
-*    conditions as described in each individual source file and distribute
-*    linked combinations including the program with the OpenSSL library. You
-*    must comply with the GNU Affero General Public License in all respects for
-*    all of the code used other than as permitted herein. If you modify file(s)
-*    with this exception, you may extend this exception to your version of the
-*    file(s), but you are not obligated to do so. If you do not wish to do so,
-*    delete this exception statement from your version. If you delete this
-*    exception statement from all source files in the program, then also delete
-*    it in the license file.
-*/
+ *    Copyright (C) 2012-2015 MongoDB Inc.
+ *
+ *    This program is free software: you can redistribute it and/or  modify
+ *    it under the terms of the GNU Affero General Public License, version 3,
+ *    as published by the Free Software Foundation.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU Affero General Public License for more details.
+ *
+ *    You should have received a copy of the GNU Affero General Public License
+ *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the GNU Affero General Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ */
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kCommand
 
@@ -49,28 +47,23 @@
 #include "mongo/db/auth/user_management_commands_parser.h"
 #include "mongo/db/auth/user_name.h"
 #include "mongo/db/background.h"
-#include "mongo/db/clientcursor.h"
 #include "mongo/db/catalog/coll_mod.h"
 #include "mongo/db/catalog/collection.h"
 #include "mongo/db/catalog/collection_catalog_entry.h"
 #include "mongo/db/catalog/create_collection.h"
 #include "mongo/db/catalog/drop_collection.h"
 #include "mongo/db/catalog/drop_database.h"
-#include "mongo/db/catalog/database_catalog_entry.h"
 #include "mongo/db/clientcursor.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/commands/server_status.h"
 #include "mongo/db/commands/shutdown.h"
 #include "mongo/db/concurrency/write_conflict_exception.h"
-#include "mongo/db/db.h"
 #include "mongo/db/db_raii.h"
 #include "mongo/db/dbdirectclient.h"
 #include "mongo/db/dbhelpers.h"
-#include "mongo/db/service_context_d.h"
-#include "mongo/db/service_context.h"
 #include "mongo/db/index_builder.h"
-#include "mongo/db/index/index_access_method.h"
 #include "mongo/db/index/index_descriptor.h"
+#include "mongo/db/index/index_access_method.h"
 #include "mongo/db/instance.h"
 #include "mongo/db/introspect.h"
 #include "mongo/db/jsobj.h"
@@ -79,27 +72,24 @@
 #include "mongo/db/lasterror.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/op_observer.h"
-#include "mongo/db/operation_context_impl.h"
 #include "mongo/db/ops/insert.h"
 #include "mongo/db/query/get_executor.h"
 #include "mongo/db/query/internal_plans.h"
 #include "mongo/db/query/query_planner.h"
 #include "mongo/db/repair_database.h"
 #include "mongo/db/repl/optime.h"
-#include "mongo/db/repl/read_after_optime_args.h"
-#include "mongo/db/repl/read_after_optime_response.h"
+#include "mongo/db/repl/read_concern_args.h"
+#include "mongo/db/repl/read_concern_response.h"
 #include "mongo/db/repl/repl_client_info.h"
 #include "mongo/db/repl/repl_settings.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
-#include "mongo/db/storage/mmap_v1/dur_stats.h"
-#include "mongo/db/storage/storage_engine.h"
+#include "mongo/db/s/sharding_state.h"
 #include "mongo/db/write_concern.h"
 #include "mongo/rpc/request_interface.h"
 #include "mongo/rpc/reply_builder_interface.h"
 #include "mongo/rpc/metadata.h"
 #include "mongo/rpc/metadata/server_selection_metadata.h"
 #include "mongo/rpc/metadata/sharding_metadata.h"
-#include "mongo/s/d_state.h"
 #include "mongo/s/stale_exception.h"  // for SendStaleConfigException
 #include "mongo/scripting/engine.h"
 #include "mongo/util/fail_point_service.h"
@@ -587,11 +577,13 @@ public:
         BSONObj sort = BSON("files_id" << 1 << "n" << 1);
 
         MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
-            CanonicalQuery* cq;
-            if (!CanonicalQuery::canonicalize(ns, query, sort, BSONObj(), &cq).isOK()) {
+            auto statusWithCQ =
+                CanonicalQuery::canonicalize(NamespaceString(ns), query, sort, BSONObj());
+            if (!statusWithCQ.isOK()) {
                 uasserted(17240, "Can't canonicalize query " + query.toString());
                 return 0;
             }
+            unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
             // Check shard version at startup.
             // This will throw before we've done any work if shard version is outdated
@@ -599,18 +591,17 @@ public:
             unique_ptr<AutoGetCollectionForRead> ctx(new AutoGetCollectionForRead(txn, ns));
             Collection* coll = ctx->getCollection();
 
-            PlanExecutor* rawExec;
-            if (!getExecutor(txn,
-                             coll,
-                             cq,
-                             PlanExecutor::YIELD_MANUAL,
-                             &rawExec,
-                             QueryPlannerParams::NO_TABLE_SCAN).isOK()) {
+            auto statusWithPlanExecutor = getExecutor(txn,
+                                                      coll,
+                                                      std::move(cq),
+                                                      PlanExecutor::YIELD_MANUAL,
+                                                      QueryPlannerParams::NO_TABLE_SCAN);
+            if (!statusWithPlanExecutor.isOK()) {
                 uasserted(17241, "Can't get executor for query " + query.toString());
                 return 0;
             }
 
-            unique_ptr<PlanExecutor> exec(rawExec);
+            unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
             // Process notifications when the lock is released/reacquired in the loop below
             exec->registerExec();
 
@@ -650,7 +641,7 @@ public:
                 }
 
                 // Have the lock again. See if we were killed.
-                if (!exec->restoreState(txn)) {
+                if (!exec->restoreState()) {
                     if (!partialOk) {
                         uasserted(13281, "File deleted during filemd5 command");
                     }
@@ -681,6 +672,7 @@ public:
         while (c->more())
             PRINT(c->nextSafe());
     }
+
 } cmdFileMD5;
 
 
@@ -755,7 +747,7 @@ public:
                 result.append("millis", timer.millis());
                 return 1;
             }
-            exec.reset(InternalPlanner::collectionScan(txn, ns, collection));
+            exec = InternalPlanner::collectionScan(txn, ns, collection);
         } else if (min.isEmpty() || max.isEmpty()) {
             errmsg = "only one of min or max specified";
             return false;
@@ -779,7 +771,7 @@ public:
             min = Helpers::toKeyFormat(kp.extendRangeBound(min, false));
             max = Helpers::toKeyFormat(kp.extendRangeBound(max, false));
 
-            exec.reset(InternalPlanner::indexScan(txn, collection, idx, min, max, false));
+            exec = InternalPlanner::indexScan(txn, collection, idx, min, max, false);
         }
 
         long long avgObjSize = collection->dataSize(txn) / collection->numRecords(txn);
@@ -888,7 +880,7 @@ public:
             return false;
         }
 
-        result.append("ns", nss);
+        result.append("ns", nss.ns());
 
         long long size = collection->dataSize(txn) / scale;
         long long numRecords = collection->numRecords(txn);
@@ -1173,14 +1165,14 @@ void Command::execCommand(OperationContext* txn,
             return;
         }
 
+        repl::ReplicationCoordinator* replCoord =
+            repl::ReplicationCoordinator::get(txn->getClient()->getServiceContext());
         ImpersonationSessionGuard guard(txn);
 
         uassertStatusOK(
             _checkAuthorization(command, txn->getClient(), dbname, request.getCommandArgs()));
 
         {
-            repl::ReplicationCoordinator* replCoord = repl::getGlobalReplicationCoordinator();
-
             bool iAmPrimary = replCoord->canAcceptWritesForDatabase(dbname);
             bool commandCanRunOnSecondary = command->slaveOk();
 
@@ -1265,22 +1257,47 @@ bool Command::run(OperationContext* txn,
     BSONObjBuilder replyBuilderBob;
 
     repl::ReplicationCoordinator* replCoord = repl::getGlobalReplicationCoordinator();
+
     {
-        // Handle read after opTime.
-        repl::ReadAfterOpTimeArgs readAfterOptimeSettings;
-        auto readAfterParseStatus = readAfterOptimeSettings.initialize(request.getCommandArgs());
-        if (!readAfterParseStatus.isOK()) {
+        // parse and validate ReadConcernArgs
+        repl::ReadConcernArgs readConcern;
+        auto readConcernParseStatus = readConcern.initialize(request.getCommandArgs());
+        if (!readConcernParseStatus.isOK()) {
             replyBuilder->setMetadata(rpc::makeEmptyMetadata())
-                .setCommandReply(readAfterParseStatus);
+                .setCommandReply(readConcernParseStatus);
             return false;
         }
 
-        auto readAfterResult = replCoord->waitUntilOpTime(txn, readAfterOptimeSettings);
-        readAfterResult.appendInfo(&replyBuilderBob);
-        if (!readAfterResult.getStatus().isOK()) {
-            replyBuilder->setMetadata(rpc::makeEmptyMetadata())
-                .setCommandReply(readAfterResult.getStatus(), replyBuilderBob.done());
-            return false;
+        if (!supportsReadConcern()) {
+            // Only return an error if a non-nullish readConcern was parsed, but do not process
+            // readConcern regardless.
+            if (!readConcern.getOpTime().isNull() ||
+                readConcern.getLevel() !=
+                    repl::ReadConcernArgs::ReadConcernLevel::kLocalReadConcern) {
+                replyBuilder->setMetadata(rpc::makeEmptyMetadata())
+                    .setCommandReply({ErrorCodes::InvalidOptions,
+                                      str::stream()
+                                          << "Command " << name << " does not support "
+                                          << repl::ReadConcernArgs::kReadConcernFieldName});
+                return false;
+            }
+        } else {
+            // wait for readConcern to be satisfied
+            auto readConcernResult = replCoord->waitUntilOpTime(txn, readConcern);
+            readConcernResult.appendInfo(&replyBuilderBob);
+            if (!readConcernResult.getStatus().isOK()) {
+                replyBuilder->setMetadata(rpc::makeEmptyMetadata())
+                    .setCommandReply(readConcernResult.getStatus(), replyBuilderBob.done());
+                return false;
+            }
+            if (readConcern.getLevel() ==
+                repl::ReadConcernArgs::ReadConcernLevel::kMajorityReadConcern) {
+                Status status = txn->recoveryUnit()->setReadFromMajorityCommittedSnapshot();
+                if (!status.isOK()) {
+                    replyBuilder->setMetadata(rpc::makeEmptyMetadata()).setCommandReply(status);
+                    return false;
+                }
+            }
         }
     }
 
@@ -1299,11 +1316,18 @@ bool Command::run(OperationContext* txn,
 
     // For commands from mongos, append some info to help getLastError(w) work.
     // TODO: refactor out of here as part of SERVER-18326
-    if (replCoord->getReplicationMode() == repl::ReplicationCoordinator::modeReplSet &&
-        shardingState.enabled()) {
+    bool isReplSet = replCoord->getReplicationMode() == repl::ReplicationCoordinator::modeReplSet;
+
+    if (isReplSet && ShardingState::get(txn)->enabled()) {
         rpc::ShardingMetadata(
             repl::ReplClientInfo::forClient(txn->getClient()).getLastOp().getTimestamp(),
             replCoord->getElectionId()).writeToMetadata(&metadataBob);
+    }
+
+    const auto& metadata = request.getMetadata();
+    if (isReplSet && metadata.hasField(rpc::kReplicationMetadataFieldName)) {
+        BSONObjBuilder replInfoBob(metadataBob.subobjStart(rpc::kReplicationMetadataFieldName));
+        replCoord->prepareReplResponseMetadata(&replInfoBob);
     }
 
     auto cmdResponse = replyBuilderBob.done();

@@ -31,15 +31,33 @@
 #include "mongo/platform/basic.h"
 
 #include <boost/intrusive_ptr.hpp>
-#include <boost/unordered_set.hpp>
+#include <unordered_set>
 #include <vector>
 
+#include "mongo/base/init.h"
 #include "mongo/bson/bsontypes.h"
 #include "mongo/db/pipeline/value.h"
+#include "mongo/stdx/functional.h"
 
 namespace mongo {
+/**
+ * Registers an Accumulator to have the name 'key'. When an accumulator with name '$key' is found
+ * during parsing of a $group stage, 'factory' will be called to construct the Accumulator.
+ *
+ * As an example, if your accumulator looks like {"$foo": <args>}, with a factory method 'create',
+ * you would add this line:
+ * REGISTER_EXPRESSION(foo, AccumulatorFoo::create);
+ */
+#define REGISTER_ACCUMULATOR(key, factory)                                     \
+    MONGO_INITIALIZER(addToAccumulatorFactoryMap_##key)(InitializerContext*) { \
+        Accumulator::registerAccumulator("$" #key, (factory));                 \
+        return Status::OK();                                                   \
+    }
+
 class Accumulator : public RefCountable {
 public:
+    using Factory = boost::intrusive_ptr<Accumulator>(*)();
+
     Accumulator() = default;
 
     /** Process input and update internal state.
@@ -65,6 +83,22 @@ public:
     /// Reset this accumulator to a fresh state ready to receive input.
     virtual void reset() = 0;
 
+    /**
+     * Registers an Accumulator with a parsing function, so that when an accumulator with the given
+     * name is encountered during parsing of the $group stage, it will call 'factory' to construct
+     * that Accumulator.
+     *
+     * DO NOT call this method directly. Instead, use the REGISTER_ACCUMULATOR macro defined in this
+     * file.
+     */
+    static void registerAccumulator(std::string name, Factory factory);
+
+    /**
+     * Retrieves the Factory for the accumulator specified by the given name, and raises an error if
+     * there is no such Accumulator registered.
+     */
+    static Factory getFactory(StringData name);
+
 protected:
     /// Update subclass's internal state based on input
     virtual void processInternal(const Value& input, bool merging) = 0;
@@ -86,7 +120,7 @@ public:
     static boost::intrusive_ptr<Accumulator> create();
 
 private:
-    typedef boost::unordered_set<Value, Value::Hash> SetType;
+    typedef std::unordered_set<Value, Value::Hash> SetType;
     SetType set;
 };
 

@@ -29,23 +29,27 @@
 #include "mongo/db/exec/skip.h"
 #include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set_common.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* SkipStage::kStageType = "SKIP";
 
-SkipStage::SkipStage(int toSkip, WorkingSet* ws, PlanStage* child)
-    : _ws(ws), _child(child), _toSkip(toSkip), _commonStats(kStageType) {}
+SkipStage::SkipStage(long long toSkip, WorkingSet* ws, PlanStage* child)
+    : PlanStage(kStageType), _ws(ws), _toSkip(toSkip) {
+    _children.emplace_back(child);
+}
 
 SkipStage::~SkipStage() {}
 
 bool SkipStage::isEOF() {
-    return _child->isEOF();
+    return child()->isEOF();
 }
 
 PlanStage::StageState SkipStage::work(WorkingSetID* out) {
@@ -55,7 +59,7 @@ PlanStage::StageState SkipStage::work(WorkingSetID* out) {
     ScopedTimer timer(&_commonStats.executionTimeMillis);
 
     WorkingSetID id = WorkingSet::INVALID_ID;
-    StageState status = _child->work(&id);
+    StageState status = child()->work(&id);
 
     if (PlanStage::ADVANCED == status) {
         // If we're still skipping results...
@@ -93,38 +97,13 @@ PlanStage::StageState SkipStage::work(WorkingSetID* out) {
     return status;
 }
 
-void SkipStage::saveState() {
-    ++_commonStats.yields;
-    _child->saveState();
-}
-
-void SkipStage::restoreState(OperationContext* opCtx) {
-    ++_commonStats.unyields;
-    _child->restoreState(opCtx);
-}
-
-void SkipStage::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
-    _child->invalidate(txn, dl, type);
-}
-
-vector<PlanStage*> SkipStage::getChildren() const {
-    vector<PlanStage*> children;
-    children.push_back(_child.get());
-    return children;
-}
-
-PlanStageStats* SkipStage::getStats() {
+unique_ptr<PlanStageStats> SkipStage::getStats() {
     _commonStats.isEOF = isEOF();
     _specificStats.skip = _toSkip;
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_SKIP));
-    ret->specific.reset(new SkipStats(_specificStats));
-    ret->children.push_back(_child->getStats());
-    return ret.release();
-}
-
-const CommonStats* SkipStage::getCommonStats() const {
-    return &_commonStats;
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_SKIP);
+    ret->specific = make_unique<SkipStats>(_specificStats);
+    ret->children.push_back(child()->getStats().release());
+    return ret;
 }
 
 const SpecificStats* SkipStage::getSpecificStats() const {

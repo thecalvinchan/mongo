@@ -45,6 +45,8 @@ namespace repl {
 namespace {
 
 using executor::NetworkInterfaceMock;
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 using unittest::assertGet;
 
 bool stringContains(const std::string& haystack, const std::string& needle) {
@@ -103,6 +105,7 @@ protected:
             BSON("ok" << 0 << "code" << ErrorCodes::BadValue << "errmsg"
                       << "term has already passed"
                       << "term" << 3),
+            BSONObj(),
             Milliseconds(10)));
     }
 
@@ -111,6 +114,7 @@ protected:
             BSON("ok" << 0 << "code" << ErrorCodes::BadValue << "errmsg"
                       << "term already has a primary"
                       << "term" << 1),
+            BSONObj(),
             Milliseconds(10)));
     }
 
@@ -119,6 +123,7 @@ protected:
             BSON("ok" << 0 << "code" << ErrorCodes::BadValue << "errmsg"
                       << "config version does not match"
                       << "term" << 1),
+            BSONObj(),
             Milliseconds(10)));
     }
 
@@ -127,12 +132,13 @@ protected:
             BSON("ok" << 0 << "code" << ErrorCodes::BadValue << "errmsg"
                       << "replSet name does not match"
                       << "term" << 1),
+            BSONObj(),
             Milliseconds(10)));
     }
 
     ResponseStatus goodResponse() {
-        return ResponseStatus(
-            NetworkInterfaceMock::Response(BSON("ok" << 1 << "term" << 1), Milliseconds(10)));
+        return ResponseStatus(NetworkInterfaceMock::Response(
+            BSON("ok" << 1 << "term" << 1), BSONObj(), Milliseconds(10)));
     }
 
 private:

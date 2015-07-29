@@ -55,6 +55,7 @@
 #include "mongo/shell/shell_utils.h"
 #include "mongo/stdx/thread.h"
 #include "mongo/util/log.h"
+#include "mongo/util/net/hostandport.h"
 #include "mongo/util/quick_exit.h"
 #include "mongo/util/scopeguard.h"
 #include "mongo/util/signal_win32.h"
@@ -557,6 +558,7 @@ BSONObj StartMongoProgram(const BSONObj& a, void* data) {
     ProgramRunner r(a);
     r.start();
     stdx::thread t(r);
+    t.detach();
     return BSON(string("") << r.pid().asLongLong());
 }
 
@@ -564,6 +566,7 @@ BSONObj RunMongoProgram(const BSONObj& a, void* data) {
     ProgramRunner r(a);
     r.start();
     stdx::thread t(r);
+    t.detach();
     int exit_code = -123456;  // sentinel value
     wait_for_pid(r.pid(), true, &exit_code);
     if (r.port() > 0) {
@@ -578,6 +581,7 @@ BSONObj RunProgram(const BSONObj& a, void* data) {
     ProgramRunner r(a);
     r.start();
     stdx::thread t(r);
+    t.detach();
     int exit_code = -123456;  // sentinel value
     wait_for_pid(r.pid(), true, &exit_code);
     registry.deletePid(r.pid());
@@ -660,7 +664,7 @@ inline void kill_wrapper(ProcessId pid, int sig, int port, const BSONObj& opt) {
             //
             try {
                 DBClientConnection conn;
-                conn.connect("127.0.0.1:" + BSONObjBuilder::numStr(port));
+                conn.connect(HostAndPort{"127.0.0.1:" + BSONObjBuilder::numStr(port)});
 
                 BSONElement authObj = opt["auth"];
 

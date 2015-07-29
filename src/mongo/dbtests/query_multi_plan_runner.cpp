@@ -46,6 +46,7 @@
 #include "mongo/db/query/query_planner_test_lib.h"
 #include "mongo/db/query/stage_builder.h"
 #include "mongo/dbtests/dbtests.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
@@ -58,12 +59,15 @@ namespace QueryMultiPlanRunner {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
+
+static const NamespaceString nss("unittests.QueryStageMultiPlanRunner");
 
 /**
  * Create query solution.
  */
 QuerySolution* createQuerySolution() {
-    std::unique_ptr<QuerySolution> soln(new QuerySolution());
+    unique_ptr<QuerySolution> soln(new QuerySolution());
     soln->cacheData.reset(new SolutionCacheData());
     soln->cacheData->solnType = SolutionCacheData::COLLSCAN_SOLN;
     soln->cacheData->tree.reset(new PlanCacheIndexTree());
@@ -73,31 +77,27 @@ QuerySolution* createQuerySolution() {
 class MultiPlanRunnerBase {
 public:
     MultiPlanRunnerBase() : _client(&_txn) {
-        OldClientWriteContext ctx(&_txn, ns());
-        _client.dropCollection(ns());
+        OldClientWriteContext ctx(&_txn, nss.ns());
+        _client.dropCollection(nss.ns());
     }
 
     virtual ~MultiPlanRunnerBase() {
-        OldClientWriteContext ctx(&_txn, ns());
-        _client.dropCollection(ns());
+        OldClientWriteContext ctx(&_txn, nss.ns());
+        _client.dropCollection(nss.ns());
     }
 
     void addIndex(const BSONObj& obj) {
-        ASSERT_OK(dbtests::createIndex(&_txn, ns(), obj));
+        ASSERT_OK(dbtests::createIndex(&_txn, nss.ns(), obj));
     }
 
     void insert(const BSONObj& obj) {
-        OldClientWriteContext ctx(&_txn, ns());
-        _client.insert(ns(), obj);
+        OldClientWriteContext ctx(&_txn, nss.ns());
+        _client.insert(nss.ns(), obj);
     }
 
     void remove(const BSONObj& obj) {
-        OldClientWriteContext ctx(&_txn, ns());
-        _client.remove(ns(), obj);
-    }
-
-    static const char* ns() {
-        return "unittests.QueryStageMultiPlanRunner";
+        OldClientWriteContext ctx(&_txn, nss.ns());
+        _client.remove(nss.ns(), obj);
     }
 
 protected:
@@ -118,7 +118,7 @@ public:
 
         addIndex(BSON("foo" << 1));
 
-        AutoGetCollectionForRead ctx(&_txn, ns());
+        AutoGetCollectionForRead ctx(&_txn, nss.ns());
         const Collection* coll = ctx.getCollection();
 
         // Plan 0: IXScan over foo == 7
@@ -144,19 +144,21 @@ public:
 
         // Make the filter.
         BSONObj filterObj = BSON("foo" << 7);
-        StatusWithMatchExpression swme = MatchExpressionParser::parse(filterObj);
-        verify(swme.isOK());
-        unique_ptr<MatchExpression> filter(swme.getValue());
+        StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(filterObj);
+        verify(statusWithMatcher.isOK());
+        unique_ptr<MatchExpression> filter = std::move(statusWithMatcher.getValue());
         // Make the stage.
         unique_ptr<PlanStage> secondRoot(
             new CollectionScan(&_txn, csparams, sharedWs.get(), filter.get()));
 
         // Hand the plans off to the runner.
-        CanonicalQuery* cq = NULL;
-        verify(CanonicalQuery::canonicalize(ns(), BSON("foo" << 7), &cq).isOK());
-        verify(NULL != cq);
+        auto statusWithCQ = CanonicalQuery::canonicalize(nss, BSON("foo" << 7));
+        verify(statusWithCQ.isOK());
+        unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+        verify(NULL != cq.get());
 
-        MultiPlanStage* mps = new MultiPlanStage(&_txn, ctx.getCollection(), cq);
+        unique_ptr<MultiPlanStage> mps =
+            make_unique<MultiPlanStage>(&_txn, ctx.getCollection(), cq.get());
         mps->addPlan(createQuerySolution(), firstRoot.release(), sharedWs.get());
         mps->addPlan(createQuerySolution(), secondRoot.release(), sharedWs.get());
 
@@ -167,11 +169,14 @@ public:
         ASSERT_EQUALS(0, mps->bestPlanIdx());
 
         // Takes ownership of arguments other than 'collection'.
-        PlanExecutor* rawExec;
-        Status status = PlanExecutor::make(
-            &_txn, sharedWs.release(), mps, cq, coll, PlanExecutor::YIELD_MANUAL, &rawExec);
-        ASSERT_OK(status);
-        std::unique_ptr<PlanExecutor> exec(rawExec);
+        auto statusWithPlanExecutor = PlanExecutor::make(&_txn,
+                                                         std::move(sharedWs),
+                                                         std::move(mps),
+                                                         std::move(cq),
+                                                         coll,
+                                                         PlanExecutor::YIELD_MANUAL);
+        ASSERT_OK(statusWithPlanExecutor.getStatus());
+        std::unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
         // Get all our results out.
         int results = 0;
@@ -197,18 +202,17 @@ public:
         addIndex(BSON("a" << 1));
         addIndex(BSON("b" << 1));
 
-        AutoGetCollectionForRead ctx(&_txn, ns());
+        AutoGetCollectionForRead ctx(&_txn, nss.ns());
         Collection* collection = ctx.getCollection();
 
         // Query for both 'a' and 'b' and sort on 'b'.
-        CanonicalQuery* cq;
-        verify(CanonicalQuery::canonicalize(ns(),
-                                            BSON("a" << 1 << "b" << 1),  // query
-                                            BSON("b" << 1),              // sort
-                                            BSONObj(),                   // proj
-                                            &cq).isOK());
-        ASSERT(NULL != cq);
-        std::unique_ptr<CanonicalQuery> killCq(cq);
+        auto statusWithCQ = CanonicalQuery::canonicalize(nss,
+                                                         BSON("a" << 1 << "b" << 1),  // query
+                                                         BSON("b" << 1),              // sort
+                                                         BSONObj());                  // proj
+        verify(statusWithCQ.isOK());
+        unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+        ASSERT(NULL != cq.get());
 
         // Force index intersection.
         bool forceIxisectOldValue = internalQueryForceIntersectionPlans;
@@ -216,7 +220,7 @@ public:
 
         // Get planner params.
         QueryPlannerParams plannerParams;
-        fillOutPlannerParams(&_txn, collection, cq, &plannerParams);
+        fillOutPlannerParams(&_txn, collection, cq.get(), &plannerParams);
         // Turn this off otherwise it pops up in some plans.
         plannerParams.options &= ~QueryPlannerParams::KEEP_MUTATIONS;
 
@@ -230,7 +234,7 @@ public:
         ASSERT_EQUALS(solutions.size(), 3U);
 
         // Fill out the MultiPlanStage.
-        unique_ptr<MultiPlanStage> mps(new MultiPlanStage(&_txn, collection, cq));
+        unique_ptr<MultiPlanStage> mps(new MultiPlanStage(&_txn, collection, cq.get()));
         unique_ptr<WorkingSet> ws(new WorkingSet());
         // Put each solution from the planner into the MPR.
         for (size_t i = 0; i < solutions.size(); ++i) {

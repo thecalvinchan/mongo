@@ -42,8 +42,10 @@ namespace {
 using std::unique_ptr;
 using unittest::assertGet;
 
+static const NamespaceString testns("testdb.testcoll");
+
 TEST(LiteParsedQueryTest, InitSortOrder) {
-    ASSERT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                              0,
                                              1,
                                              0,
@@ -59,7 +61,7 @@ TEST(LiteParsedQueryTest, InitSortOrder) {
 }
 
 TEST(LiteParsedQueryTest, InitSortOrderString) {
-    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                                  0,
                                                  1,
                                                  0,
@@ -75,7 +77,7 @@ TEST(LiteParsedQueryTest, InitSortOrderString) {
 }
 
 TEST(LiteParsedQueryTest, GetFilter) {
-    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery("testns",
+    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery(testns,
                                                                              5,
                                                                              6,
                                                                              9,
@@ -92,7 +94,7 @@ TEST(LiteParsedQueryTest, GetFilter) {
 }
 
 TEST(LiteParsedQueryTest, NumToReturn) {
-    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery("testns",
+    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery(testns,
                                                                              5,
                                                                              6,
                                                                              9,
@@ -105,12 +107,12 @@ TEST(LiteParsedQueryTest, NumToReturn) {
                                                                              false,     // snapshot
                                                                              false)));  // explain
 
-    ASSERT_EQUALS(6, lpq->getBatchSize());
+    ASSERT_EQUALS(6, *lpq->getBatchSize());
     ASSERT(lpq->wantMore());
 }
 
 TEST(LiteParsedQueryTest, NumToReturnNegative) {
-    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery("testns",
+    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery(testns,
                                                                              5,
                                                                              -6,
                                                                              9,
@@ -123,12 +125,12 @@ TEST(LiteParsedQueryTest, NumToReturnNegative) {
                                                                              false,     // snapshot
                                                                              false)));  // explain
 
-    ASSERT_EQUALS(6, lpq->getBatchSize());
+    ASSERT_EQUALS(6, *lpq->getBatchSize());
     ASSERT(!lpq->wantMore());
 }
 
 TEST(LiteParsedQueryTest, MinFieldsNotPrefixOfMax) {
-    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                                  0,
                                                  0,
                                                  0,
@@ -144,7 +146,7 @@ TEST(LiteParsedQueryTest, MinFieldsNotPrefixOfMax) {
 }
 
 TEST(LiteParsedQueryTest, MinFieldsMoreThanMax) {
-    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                                  0,
                                                  0,
                                                  0,
@@ -160,7 +162,7 @@ TEST(LiteParsedQueryTest, MinFieldsMoreThanMax) {
 }
 
 TEST(LiteParsedQueryTest, MinFieldsLessThanMax) {
-    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                                  0,
                                                  0,
                                                  0,
@@ -178,7 +180,7 @@ TEST(LiteParsedQueryTest, MinFieldsLessThanMax) {
 // Helper function which returns the Status of creating a LiteParsedQuery object with the given
 // parameters.
 void assertLiteParsedQuerySuccess(const BSONObj& query, const BSONObj& proj, const BSONObj& sort) {
-    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery("testns",
+    unique_ptr<LiteParsedQuery> lpq(assertGet(LiteParsedQuery::makeAsOpQuery(testns,
                                                                              0,
                                                                              0,
                                                                              0,
@@ -205,7 +207,7 @@ TEST(LiteParsedQueryTest, ValidSortProj) {
 }
 
 TEST(LiteParsedQueryTest, ForbidNonMetaSortOnFieldWithMetaProject) {
-    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                                  0,
                                                  0,
                                                  0,
@@ -224,7 +226,7 @@ TEST(LiteParsedQueryTest, ForbidNonMetaSortOnFieldWithMetaProject) {
 }
 
 TEST(LiteParsedQueryTest, ForbidMetaSortOnFieldWithoutMetaProject) {
-    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                                  0,
                                                  0,
                                                  0,
@@ -238,7 +240,7 @@ TEST(LiteParsedQueryTest, ForbidMetaSortOnFieldWithoutMetaProject) {
                                                  false)  // explain
                       .getStatus());
 
-    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery("testns",
+    ASSERT_NOT_OK(LiteParsedQuery::makeAsOpQuery(testns,
                                                  0,
                                                  0,
                                                  0,
@@ -261,7 +263,7 @@ TEST(LiteParsedQueryTest, MakeFindCmd) {
     auto&& lpq = result.getValue();
     ASSERT_EQUALS("test.ns", lpq->ns());
     ASSERT_EQUALS(BSON("x" << 1), lpq->getFilter());
-    ASSERT_EQUALS(2, lpq->getLimit());
+    ASSERT_EQUALS(2, *lpq->getLimit());
 
     ASSERT_EQUALS(BSONObj(), lpq->getProj());
     ASSERT_EQUALS(BSON("y" << -1), lpq->getSort());
@@ -330,10 +332,18 @@ TEST(LiteParsedQueryTest, MakeFindCmdNoLimit) {
 }
 
 TEST(LiteParsedQueryTest, MakeFindCmdBadLimit) {
-    auto status = LiteParsedQuery::makeAsFindCmd(
-                      NamespaceString("test.ns"), BSON("x" << 1), BSONObj(), 0).getStatus();
+    Status status = LiteParsedQuery::makeAsFindCmd(
+                        NamespaceString("test.ns"), BSON("x" << 1), BSONObj(), 0LL).getStatus();
     ASSERT_NOT_OK(status);
     ASSERT_EQUALS(ErrorCodes::BadValue, status.code());
+}
+
+TEST(LiteParsedQueryTest, MakeFindCmdLargeLimit) {
+    auto result = LiteParsedQuery::makeAsFindCmd(
+        NamespaceString("test.ns"), BSON("x" << 1), BSON("y" << -1), 8LL * 1000 * 1000 * 1000);
+    ASSERT_OK(result.getStatus());
+
+    ASSERT_EQUALS(8LL * 1000 * 1000 * 1000, *result.getValue()->getLimit());
 }
 
 //
@@ -535,10 +545,49 @@ TEST(LiteParsedQueryTest, ParseFromCommandAllNonOptionFields) {
     ASSERT_EQUALS(0, expectedProj.woCompare(lpq->getProj()));
     BSONObj expectedHint = BSON("d" << 1);
     ASSERT_EQUALS(0, expectedHint.woCompare(lpq->getHint()));
-    ASSERT_EQUALS(3, lpq->getLimit());
+    ASSERT_EQUALS(3, *lpq->getLimit());
     ASSERT_EQUALS(5, lpq->getSkip());
-    ASSERT_EQUALS(90, lpq->getBatchSize());
+    ASSERT_EQUALS(90, *lpq->getBatchSize());
     ASSERT(lpq->wantMore());
+}
+
+TEST(LiteParsedQueryTest, ParseFromCommandLargeLimit) {
+    BSONObj cmdObj = fromjson(
+        "{find: 'testns',"
+        "filter: {a: 1},"
+        "limit: 8000000000}");  // 8 * 1000 * 1000 * 1000
+    const NamespaceString nss("test.testns");
+    const bool isExplain = false;
+    unique_ptr<LiteParsedQuery> lpq(
+        assertGet(LiteParsedQuery::makeFromFindCommand(nss, cmdObj, isExplain)));
+
+    ASSERT_EQUALS(8LL * 1000 * 1000 * 1000, *lpq->getLimit());
+}
+
+TEST(LiteParsedQueryTest, ParseFromCommandLargeBatchSize) {
+    BSONObj cmdObj = fromjson(
+        "{find: 'testns',"
+        "filter: {a: 1},"
+        "batchSize: 8000000000}");  // 8 * 1000 * 1000 * 1000
+    const NamespaceString nss("test.testns");
+    const bool isExplain = false;
+    unique_ptr<LiteParsedQuery> lpq(
+        assertGet(LiteParsedQuery::makeFromFindCommand(nss, cmdObj, isExplain)));
+
+    ASSERT_EQUALS(8LL * 1000 * 1000 * 1000, *lpq->getBatchSize());
+}
+
+TEST(LiteParsedQueryTest, ParseFromCommandLargeSkip) {
+    BSONObj cmdObj = fromjson(
+        "{find: 'testns',"
+        "filter: {a: 1},"
+        "skip: 8000000000}");  // 8 * 1000 * 1000 * 1000
+    const NamespaceString nss("test.testns");
+    const bool isExplain = false;
+    unique_ptr<LiteParsedQuery> lpq(
+        assertGet(LiteParsedQuery::makeFromFindCommand(nss, cmdObj, isExplain)));
+
+    ASSERT_EQUALS(8LL * 1000 * 1000 * 1000, lpq->getSkip());
 }
 
 //
@@ -826,7 +875,7 @@ TEST(LiteParsedQueryTest, ParseFromCommandBatchSizeZero) {
         assertGet(LiteParsedQuery::makeFromFindCommand(nss, cmdObj, isExplain)));
 
     ASSERT(lpq->getBatchSize());
-    ASSERT_EQ(0, lpq->getBatchSize());
+    ASSERT_EQ(0, *lpq->getBatchSize());
 
     ASSERT(!lpq->getLimit());
 }
@@ -938,7 +987,7 @@ TEST(LiteParsedQueryTest, ParseCommandIsFromFindCommand) {
 
 TEST(LiteParsedQueryTest, ParseCommandNotFromFindCommand) {
     std::unique_ptr<LiteParsedQuery> lpq(
-        assertGet(LiteParsedQuery::makeAsOpQuery("testns",
+        assertGet(LiteParsedQuery::makeAsOpQuery(testns,
                                                  5,
                                                  6,
                                                  9,

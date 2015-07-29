@@ -143,6 +143,11 @@ src/third_party/v8/src/libraries.cc
 # Eclipse build artifacts
 .cproject
 .project
+.pydevproject
+
+# Idea CLion project artifacts
+.idea
+CMakeLists.txt
 
 # old things that should be removed
 # maybe remove this mid 2012

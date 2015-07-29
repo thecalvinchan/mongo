@@ -36,12 +36,15 @@
 #include "mongo/client/connpool.h"
 #include "mongo/db/client.h"
 #include "mongo/db/lasterror.h"
+#include "mongo/db/operation_context.h"
 #include "mongo/db/write_concern.h"
 #include "mongo/s/catalog/catalog_cache.h"
 #include "mongo/s/catalog/catalog_manager.h"
 #include "mongo/s/catalog/type_collection.h"
 #include "mongo/s/catalog/type_chunk.h"
 #include "mongo/s/catalog/type_database.h"
+#include "mongo/s/catalog/type_lockpings.h"
+#include "mongo/s/catalog/type_locks.h"
 #include "mongo/s/catalog/type_settings.h"
 #include "mongo/s/catalog/type_shard.h"
 #include "mongo/s/catalog/type_tags.h"
@@ -50,13 +53,10 @@
 #include "mongo/s/client/shard_registry.h"
 #include "mongo/s/cluster_write.h"
 #include "mongo/s/grid.h"
-#include "mongo/s/type_locks.h"
-#include "mongo/s/type_lockpings.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
 
-using std::endl;
 using std::set;
 using std::string;
 using std::unique_ptr;
@@ -140,14 +140,15 @@ DBConfig::DBConfig(std::string name, const DatabaseType& dbt) : _name(name) {
     _shardingEnabled = dbt.getSharded();
 }
 
-bool DBConfig::isSharded(const string& ns) {
-    if (!_shardingEnabled)
-        return false;
-    stdx::lock_guard<stdx::mutex> lk(_lock);
-    return _isSharded(ns);
-}
+DBConfig::~DBConfig() = default;
 
-bool DBConfig::_isSharded(const string& ns) {
+bool DBConfig::isSharded(const string& ns) {
+    if (!_shardingEnabled) {
+        return false;
+    }
+
+    stdx::lock_guard<stdx::mutex> lk(_lock);
+
     if (!_shardingEnabled) {
         return false;
     }
@@ -167,22 +168,22 @@ const ShardId& DBConfig::getShardId(const string& ns) {
     return _primaryId;
 }
 
-void DBConfig::enableSharding(bool save) {
-    if (_shardingEnabled)
-        return;
-
+void DBConfig::enableSharding() {
     verify(_name != "config");
 
     stdx::lock_guard<stdx::mutex> lk(_lock);
+    if (_shardingEnabled) {
+        return;
+    }
+
     _shardingEnabled = true;
-    if (save)
-        _save();
+    _save();
 }
 
 bool DBConfig::removeSharding(const string& ns) {
     if (!_shardingEnabled) {
         warning() << "could not remove sharding for collection " << ns
-                  << ", sharding not enabled for db" << endl;
+                  << ", sharding not enabled for db";
         return false;
     }
 
@@ -196,7 +197,7 @@ bool DBConfig::removeSharding(const string& ns) {
     CollectionInfo& ci = _collections[ns];
     if (!ci.isSharded()) {
         warning() << "could not remove sharding for collection " << ns
-                  << ", no sharding information found" << endl;
+                  << ", no sharding information found";
         return false;
     }
 
@@ -272,7 +273,7 @@ std::shared_ptr<ChunkManager> DBConfig::getChunkManager(const string& ns,
         bool earlyReload = !_collections[ns].isSharded() && (shouldReload || forceReload);
         if (earlyReload) {
             // This is to catch cases where there this is a new sharded collection
-            _reload();
+            _load();
         }
 
         CollectionInfo& ci = _collections[ns];
@@ -300,9 +301,7 @@ std::shared_ptr<ChunkManager> DBConfig::getChunkManager(const string& ns,
     vector<ChunkType> newestChunk;
     if (oldVersion.isSet() && !forceReload) {
         uassertStatusOK(grid.catalogManager()->getChunks(
-            Query(BSON(ChunkType::ns(ns))).sort(ChunkType::DEPRECATED_lastmod(), -1),
-            1,
-            &newestChunk));
+            BSON(ChunkType::ns(ns)), BSON(ChunkType::DEPRECATED_lastmod() << -1), 1, &newestChunk));
 
         if (!newestChunk.empty()) {
             invariant(newestChunk.size() == 1);
@@ -439,10 +438,10 @@ bool DBConfig::_load() {
 
     for (const auto& coll : collections) {
         if (coll.getDropped()) {
-            _collections.erase(coll.getNs());
+            _collections.erase(coll.getNs().ns());
             numCollsErased++;
         } else {
-            _collections[coll.getNs()] = CollectionInfo(coll);
+            _collections[coll.getNs().ns()] = CollectionInfo(coll);
             numCollsSharded++;
         }
     }
@@ -479,7 +478,7 @@ bool DBConfig::reload() {
 
     {
         stdx::lock_guard<stdx::mutex> lk(_lock);
-        successful = _reload();
+        successful = _load();
     }
 
     // If we aren't successful loading the database entry, we don't want to keep the stale
@@ -491,12 +490,7 @@ bool DBConfig::reload() {
     return successful;
 }
 
-bool DBConfig::_reload() {
-    // TODO: i don't think is 100% correct
-    return _load();
-}
-
-bool DBConfig::dropDatabase(string& errmsg) {
+bool DBConfig::dropDatabase(OperationContext* txn, string& errmsg) {
     /**
      * 1) update config server
      * 2) drop and reset sharded collections
@@ -504,8 +498,9 @@ bool DBConfig::dropDatabase(string& errmsg) {
      * 4) drop everywhere to clean up loose ends
      */
 
-    log() << "DBConfig::dropDatabase: " << _name << endl;
-    grid.catalogManager()->logChange(NULL, "dropDatabase.start", _name, BSONObj());
+    log() << "DBConfig::dropDatabase: " << _name;
+    grid.catalogManager()->logChange(
+        txn->getClient()->clientAddress(true), "dropDatabase.start", _name, BSONObj());
 
     // 1
     grid.catalogCache()->invalidate(_name);
@@ -514,18 +509,18 @@ bool DBConfig::dropDatabase(string& errmsg) {
         DatabaseType::ConfigNS, BSON(DatabaseType::name(_name)), 0, NULL);
     if (!result.isOK()) {
         errmsg = result.reason();
-        log() << "could not drop '" << _name << "': " << errmsg << endl;
+        log() << "could not drop '" << _name << "': " << errmsg;
         return false;
     }
 
-    LOG(1) << "\t removed entry from config server for: " << _name << endl;
+    LOG(1) << "\t removed entry from config server for: " << _name;
 
     set<ShardId> shardIds;
 
     // 2
     while (true) {
         int num = 0;
-        if (!_dropShardedCollections(num, shardIds, errmsg)) {
+        if (!_dropShardedCollections(txn, num, shardIds, errmsg)) {
             return 0;
         }
 
@@ -564,26 +559,31 @@ bool DBConfig::dropDatabase(string& errmsg) {
         conn.done();
     }
 
-    LOG(1) << "\t dropped primary db for: " << _name << endl;
+    LOG(1) << "\t dropped primary db for: " << _name;
 
-    grid.catalogManager()->logChange(NULL, "dropDatabase", _name, BSONObj());
+    grid.catalogManager()->logChange(
+        txn->getClient()->clientAddress(true), "dropDatabase", _name, BSONObj());
 
     return true;
 }
 
-bool DBConfig::_dropShardedCollections(int& num, set<ShardId>& shardIds, string& errmsg) {
+bool DBConfig::_dropShardedCollections(OperationContext* txn,
+                                       int& num,
+                                       set<ShardId>& shardIds,
+                                       string& errmsg) {
     num = 0;
     set<string> seen;
     while (true) {
         CollectionInfoMap::iterator i = _collections.begin();
         for (; i != _collections.end(); ++i) {
-            // log() << "coll : " << i->first << " and " << i->second.isSharded() << endl;
-            if (i->second.isSharded())
+            if (i->second.isSharded()) {
                 break;
+            }
         }
 
-        if (i == _collections.end())
+        if (i == _collections.end()) {
             break;
+        }
 
         if (seen.count(i->first)) {
             errmsg = "seen a collection twice!";
@@ -591,23 +591,23 @@ bool DBConfig::_dropShardedCollections(int& num, set<ShardId>& shardIds, string&
         }
 
         seen.insert(i->first);
-        LOG(1) << "\t dropping sharded collection: " << i->first << endl;
+        LOG(1) << "\t dropping sharded collection: " << i->first;
 
         i->second.getCM()->getAllShardIds(&shardIds);
 
-        uassertStatusOK(grid.catalogManager()->dropCollection(i->first));
+        uassertStatusOK(grid.catalogManager()->dropCollection(txn, NamespaceString(i->first)));
 
         // We should warn, but it's not a fatal error if someone else reloaded the db/coll as
         // unsharded in the meantime
         if (!removeSharding(i->first)) {
             warning() << "collection " << i->first
                       << " was reloaded as unsharded before drop completed"
-                      << " during drop of all collections" << endl;
+                      << " during drop of all collections";
         }
 
         num++;
         uassert(10184, "_dropShardedCollections too many collections - bailing", num < 100000);
-        LOG(2) << "\t\t dropped " << num << " so far" << endl;
+        LOG(2) << "\t\t dropped " << num << " so far";
     }
 
     return true;
@@ -631,7 +631,7 @@ void DBConfig::getAllShardedCollections(set<string>& namespaces) {
     stdx::lock_guard<stdx::mutex> lk(_lock);
 
     for (CollectionInfoMap::const_iterator i = _collections.begin(); i != _collections.end(); i++) {
-        log() << "Coll : " << i->first << " sharded? " << i->second.isSharded() << endl;
+        log() << "Coll : " << i->first << " sharded? " << i->second.isSharded();
         if (i->second.isSharded())
             namespaces.insert(i->first);
     }
@@ -742,7 +742,7 @@ void ConfigServer::replicaSetChange(const string& setName, const string& newConn
     Client::initThread("replSetChange");
 
     try {
-        ShardPtr s = Shard::lookupRSName(setName);
+        std::shared_ptr<Shard> s = grid.shardRegistry()->lookupRSName(setName);
         if (!s) {
             LOG(1) << "shard not found for set: " << newConnectionString;
             return;

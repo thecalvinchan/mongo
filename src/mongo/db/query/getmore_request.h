@@ -39,16 +39,32 @@
 namespace mongo {
 
 struct GetMoreRequest {
+    static const char kGetMoreCommandName[];
+
     /**
      * Construct an empty request.
      */
     GetMoreRequest();
 
     /**
+     * Construct from values for each field.
+     */
+    GetMoreRequest(NamespaceString namespaceString,
+                   CursorId id,
+                   boost::optional<long long> sizeOfBatch,
+                   boost::optional<long long> term);
+
+    /**
      * Construct a GetMoreRequest from the command specification and db name.
      */
     static StatusWith<GetMoreRequest> parseFromBSON(const std::string& dbname,
                                                     const BSONObj& cmdObj);
+
+    /**
+     * Serializes this object into a BSON representation. Fields that are not set will not be
+     * part of the the serialized object.
+     */
+    BSONObj toBSON() const;
 
     static std::string parseNs(const std::string& dbname, const BSONObj& cmdObj);
 
@@ -57,14 +73,12 @@ struct GetMoreRequest {
 
     // The batch size is optional. If not provided, we will put as many documents into the batch
     // as fit within the byte limit.
-    const boost::optional<int> batchSize;
+    const boost::optional<long long> batchSize;
+
+    // Only internal queries from replication will typically have a term.
+    const boost::optional<long long> term;
 
 private:
-    /**
-     * Construct from parsed BSON
-     */
-    GetMoreRequest(const std::string& fullns, CursorId id, boost::optional<int> batch);
-
     /**
      * Returns a non-OK status if there are semantic errors in the parsed request
      * (e.g. a negative batchSize).

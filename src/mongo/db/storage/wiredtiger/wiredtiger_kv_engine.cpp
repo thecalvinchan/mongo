@@ -50,6 +50,7 @@
 #include "mongo/util/log.h"
 #include "mongo/util/processinfo.h"
 #include "mongo/util/scopeguard.h"
+#include "mongo/util/time_support.h"
 
 #if !defined(__has_feature)
 #define __has_feature(x) 0
@@ -72,19 +73,21 @@ WiredTigerKVEngine::WiredTigerKVEngine(const std::string& path,
     size_t cacheSizeGB = wiredTigerGlobalOptions.cacheSizeGB;
     if (cacheSizeGB == 0) {
         // Since the user didn't provide a cache size, choose a reasonable default value.
+        // We want to reserve 1GB for the system and binaries, but it's not bad to
+        // leave a fair amount left over for pagecache since that's compressed storage.
         ProcessInfo pi;
-        unsigned long long memSizeMB = pi.getMemSizeMB();
+        double memSizeMB = pi.getMemSizeMB();
         if (memSizeMB > 0) {
-            double cacheMB = memSizeMB / 2;
+            double cacheMB = (memSizeMB - 1024) * 0.6;
             cacheSizeGB = static_cast<size_t>(cacheMB / 1024);
             if (cacheSizeGB < 1)
                 cacheSizeGB = 1;
         }
     }
 
+    boost::filesystem::path journalPath = path;
+    journalPath /= "journal";
     if (_durable) {
-        boost::filesystem::path journalPath = path;
-        journalPath /= "journal";
         if (!boost::filesystem::exists(journalPath)) {
             try {
                 boost::filesystem::create_directory(journalPath);
@@ -95,22 +98,45 @@ WiredTigerKVEngine::WiredTigerKVEngine(const std::string& path,
         }
     }
 
+    _previousCheckedDropsQueued = Date_t::now();
+
     std::stringstream ss;
     ss << "create,";
     ss << "cache_size=" << cacheSizeGB << "G,";
     ss << "session_max=20000,";
     ss << "eviction=(threads_max=4),";
     ss << "statistics=(fast),";
-    if (_durable) {
-        ss << "log=(enabled=true,archive=true,path=journal,compressor=";
-        ss << wiredTigerGlobalOptions.journalCompressor << "),";
-    }
+    // The setting may have a later setting override it if not using the journal.  We make it
+    // unconditional here because even nojournal may need this setting if it is a transition
+    // from using the journal.
+    ss << "log=(enabled=true,archive=true,path=journal,compressor=";
+    ss << wiredTigerGlobalOptions.journalCompressor << "),";
     ss << "file_manager=(close_idle_time=100000),";  //~28 hours, will put better fix in 3.1.x
     ss << "checkpoint=(wait=" << wiredTigerGlobalOptions.checkpointDelaySecs;
     ss << ",log_size=2GB),";
     ss << "statistics_log=(wait=" << wiredTigerGlobalOptions.statisticsLogDelaySecs << "),";
     ss << WiredTigerCustomizationHooks::get(getGlobalServiceContext())->getOpenConfig("metadata");
     ss << extraOpenOptions;
+    if (!_durable) {
+        // If we started without the journal, but previously used the journal then open with the
+        // WT log enabled to perform any unclean shutdown recovery and then close and reopen in
+        // the normal path without the journal.
+        if (boost::filesystem::exists(journalPath)) {
+            string config = ss.str();
+            log() << "Detected WT journal files.  Running recovery from last checkpoint.";
+            log() << "journal to nojournal transition config: " << config;
+            int ret = wiredtiger_open(path.c_str(), &_eventHandler, config.c_str(), &_conn);
+            if (ret == EINVAL) {
+                fassertFailedNoTrace(28717);
+            } else if (ret != 0) {
+                Status s(wtRCToStatus(ret));
+                msgassertedNoTrace(28718, s.reason());
+            }
+            invariantWTOK(_conn->close(_conn, NULL));
+        }
+        // This setting overrides the earlier setting because it is later in the config string.
+        ss << ",log=(enabled=false),";
+    }
     string config = ss.str();
     log() << "wiredtiger_open config: " << config;
     int ret = wiredtiger_open(path.c_str(), &_eventHandler, config.c_str(), &_conn);
@@ -345,10 +371,20 @@ bool WiredTigerKVEngine::_drop(StringData ident) {
 }
 
 bool WiredTigerKVEngine::haveDropsQueued() const {
+    Date_t now = Date_t::now();
+    Milliseconds delta = now - _previousCheckedDropsQueued;
+
     if (_sizeStorerSyncTracker.intervalHasElapsed()) {
         _sizeStorerSyncTracker.resetLastTime();
         syncSizeInfo(false);
     }
+
+    // We only want to check the queue max once per second or we'll thrash
+    // This is done in haveDropsQueued, not dropAllQueued so we skip the mutex
+    if (delta < Milliseconds(1000))
+        return false;
+
+    _previousCheckedDropsQueued = now;
     stdx::lock_guard<stdx::mutex> lk(_identToDropMutex);
     return !_identToDrop.empty();
 }
@@ -419,7 +455,7 @@ bool WiredTigerKVEngine::_hasUri(WT_SESSION* session, const std::string& uri) co
 
 std::vector<std::string> WiredTigerKVEngine::getAllIdents(OperationContext* opCtx) const {
     std::vector<std::string> all;
-    WiredTigerCursor cursor("metadata:", WiredTigerSession::kMetadataCursorId, false, opCtx);
+    WiredTigerCursor cursor("metadata:", WiredTigerSession::kMetadataTableId, false, opCtx);
     WT_CURSOR* c = cursor.get();
     if (!c)
         return all;

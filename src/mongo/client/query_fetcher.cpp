@@ -36,7 +36,8 @@ QueryFetcher::QueryFetcher(executor::TaskExecutor* exec,
                            const HostAndPort& src,
                            const NamespaceString& nss,
                            const BSONObj& cmdBSON,
-                           const CallbackFn& work)
+                           const CallbackFn& work,
+                           const BSONObj& metadata)
     : _exec(exec),
       _fetcher(exec,
                src,
@@ -46,20 +47,14 @@ QueryFetcher::QueryFetcher(executor::TaskExecutor* exec,
                           this,
                           stdx::placeholders::_1,
                           stdx::placeholders::_2,
-                          stdx::placeholders::_3)),
-      _responses(0),
+                          stdx::placeholders::_3),
+               metadata),
       _work(work) {}
-
-int QueryFetcher::_getResponses() const {
-    return _responses;
-}
 
 void QueryFetcher::_onFetchCallback(const Fetcher::QueryResponseStatus& fetchResult,
                                     Fetcher::NextAction* nextAction,
                                     BSONObjBuilder* getMoreBob) {
     _delegateCallback(fetchResult, nextAction);
-
-    ++_responses;
 
     // The fetcher will continue to call with kGetMore until an error or the last batch.
     if (fetchResult.isOK() && *nextAction == Fetcher::NextAction::kGetMore) {
@@ -82,7 +77,6 @@ void QueryFetcher::_delegateCallback(const Fetcher::QueryResponseStatus& fetchRe
 
 std::string QueryFetcher::getDiagnosticString() const {
     return str::stream() << "QueryFetcher -"
-                         << " responses: " << _responses
                          << " fetcher: " << _fetcher.getDiagnosticString();
 }
 

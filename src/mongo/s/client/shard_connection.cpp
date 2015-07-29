@@ -409,12 +409,19 @@ DBConnectionPool shardConnectionPool;
 // Different between mongos and mongod
 void usingAShardConnection(const string& addr);
 
-
 ShardConnection::ShardConnection(const ConnectionString& connectionString,
                                  const string& ns,
                                  std::shared_ptr<ChunkManager> manager)
-    : _cs(connectionString), _ns(ns), _manager(manager) {
-    _init();
+    : _cs(connectionString), _ns(ns), _manager(manager), _finishedInit(false) {
+    invariant(_cs.isValid());
+
+    // Make sure we specified a manager for the correct namespace
+    if (_ns.size() && _manager) {
+        invariant(_manager->getns() == _ns);
+    }
+
+    _conn = ClientConnections::threadInstance()->get(_cs.toString(), _ns);
+    usingAShardConnection(_cs.toString());
 }
 
 ShardConnection::~ShardConnection() {
@@ -437,22 +444,12 @@ ShardConnection::~ShardConnection() {
     }
 }
 
-void ShardConnection::_init() {
-    invariant(_cs.isValid());
-    _conn = ClientConnections::threadInstance()->get(_cs.toString(), _ns);
-    _finishedInit = false;
-    usingAShardConnection(_cs.toString());
-}
-
 void ShardConnection::_finishInit() {
     if (_finishedInit)
         return;
     _finishedInit = true;
 
     if (versionManager.isVersionableCB(_conn)) {
-        // Make sure we specified a manager for the correct namespace
-        if (_ns.size() && _manager)
-            verify(_manager->getns() == _ns);
         _setVersion = versionManager.checkShardVersionCB(this, false, 1);
     } else {
         // Make sure we didn't specify a manager for a non-versionable connection (i.e. config)
@@ -508,42 +505,4 @@ void ShardConnection::forgetNS(const string& ns) {
     ClientConnections::threadInstance()->forgetNS(ns);
 }
 
-
-bool setShardVersion(DBClientBase& conn,
-                     const string& ns,
-                     const string& configServerPrimary,
-                     ChunkVersion version,
-                     ChunkManager* manager,
-                     bool authoritative,
-                     BSONObj& result) {
-    BSONObjBuilder cmdBuilder;
-    cmdBuilder.append("setShardVersion", ns);
-    cmdBuilder.append("configdb", configServerPrimary);
-
-    ShardId shardId;
-    {
-        const auto shard = grid.shardRegistry()->getShard(conn.getServerAddress());
-        shardId = shard->getId();
-        cmdBuilder.append("shard", shardId);
-        cmdBuilder.append("shardHost", shard->getConnString().toString());
-    }
-
-    if (ns.size() > 0) {
-        version.addToBSON(cmdBuilder);
-    } else {
-        cmdBuilder.append("init", true);
-    }
-
-    if (authoritative) {
-        cmdBuilder.appendBool("authoritative", 1);
-    }
-
-    BSONObj cmd = cmdBuilder.obj();
-
-    LOG(1) << "    setShardVersion  " << shardId << " " << conn.getServerAddress() << "  " << ns
-           << "  " << cmd
-           << (manager ? string(str::stream() << " " << manager->getSequenceNumber()) : "");
-
-    return conn.runCommand("admin", cmd, result, 0);
-}
-}
+}  // namespace mongo

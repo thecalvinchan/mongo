@@ -48,7 +48,7 @@ class BSONObjBuilder;
 class WiredTigerSession;
 class WiredTigerSessionCache;
 
-class WiredTigerRecoveryUnit : public RecoveryUnit {
+class WiredTigerRecoveryUnit final : public RecoveryUnit {
 public:
     WiredTigerRecoveryUnit(WiredTigerSessionCache* sc);
 
@@ -65,9 +65,6 @@ public:
 
     virtual void registerChange(Change*);
 
-    virtual void beingReleasedFromOperationContext();
-    virtual void beingSetOnOperationContext();
-
     virtual void abandonSnapshot();
 
     // un-used API
@@ -78,6 +75,11 @@ public:
     virtual void setRollbackWritesDisabled() {}
 
     virtual SnapshotId getSnapshotId() const;
+
+    Status setReadFromMajorityCommittedSnapshot() final;
+    bool isReadingFromMajorityCommittedSnapshot() final {
+        return _readFromMajorityCommittedSnapshot;
+    }
 
     // ---- WT STUFF
 
@@ -105,6 +107,14 @@ public:
 
     static void appendGlobalStats(BSONObjBuilder& b);
 
+    /**
+     * Prepares this RU to be the basis for a named snapshot.
+     *
+     * Begins a WT transaction, and invariants if we are already in one.
+     * Bans being in a WriteUnitOfWork until the next call to commitAndRestart().
+     */
+    void prepareForCreateSnapshot(OperationContext* opCtx);
+
 private:
     void _abort();
     void _commit();
@@ -115,6 +125,7 @@ private:
     WiredTigerSessionCache* _sessionCache;  // not owned
     WiredTigerSession* _session;            // owned, but from pool
     bool _defaultCommit;
+    bool _areWriteUnitOfWorksBanned = false;
     bool _inUnitOfWork;
     bool _active;
     uint64_t _myTransactionCount;
@@ -123,6 +134,7 @@ private:
     bool _currentlySquirreled;
     bool _syncing;
     RecordId _oplogReadTill;
+    bool _readFromMajorityCommittedSnapshot = false;
 
     typedef OwnedPointerVector<Change> Changes;
     Changes _changes;
@@ -138,7 +150,7 @@ private:
 class WiredTigerCursor {
 public:
     WiredTigerCursor(const std::string& uri,
-                     uint64_t uriID,
+                     uint64_t tableID,
                      bool forRecordStore,
                      OperationContext* txn);
 
@@ -166,7 +178,7 @@ public:
     }
 
 private:
-    uint64_t _uriID;
+    uint64_t _tableID;
     WiredTigerRecoveryUnit* _ru;  // not owned
     WiredTigerSession* _session;
     WT_CURSOR* _cursor;  // owned, but pulled

@@ -32,19 +32,19 @@
 
 #include "mongo/s/catalog/legacy/config_upgrade.h"
 
-
 #include "mongo/client/connpool.h"
 #include "mongo/client/dbclientcursor.h"
 #include "mongo/client/syncclusterconnection.h"
 #include "mongo/s/catalog/catalog_manager.h"
+#include "mongo/s/catalog/config_server_version.h"
+#include "mongo/s/catalog/dist_lock_manager.h"
 #include "mongo/s/catalog/legacy/cluster_client_internal.h"
+#include "mongo/s/catalog/mongo_version_range.h"
 #include "mongo/s/catalog/type_collection.h"
+#include "mongo/s/catalog/type_config_version.h"
 #include "mongo/s/catalog/type_database.h"
 #include "mongo/s/catalog/type_settings.h"
 #include "mongo/s/catalog/type_shard.h"
-#include "mongo/s/catalog/dist_lock_manager.h"
-#include "mongo/s/mongo_version_range.h"
-#include "mongo/s/type_config_version.h"
 #include "mongo/stdx/functional.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/log.h"
@@ -219,18 +219,8 @@ VersionStatus isConfigVersionCompatible(const VersionType& versionInfo, string* 
         return VersionStatus_Incompatible;
     }
 
-    // Check that the mongo version of this process hasn't been excluded from the cluster
-    vector<MongoVersionRange> excludedRanges;
-    if (versionInfo.isExcludingMongoVersionsSet() &&
-        !MongoVersionRange::parseBSONArray(
-            versionInfo.getExcludingMongoVersions(), &excludedRanges, whyNot)) {
-        *whyNot = stream() << "could not understand excluded version ranges" << causedBy(whyNot);
-
-        return VersionStatus_Incompatible;
-    }
-
     // versionString is the global version of this process
-    if (isInMongoVersionRanges(versionString, excludedRanges)) {
+    if (isInMongoVersionRanges(versionString, versionInfo.getExcludingMongoVersions())) {
         // Cast needed here for MSVC compiler issue
         *whyNot = stream() << "not compatible with current config version, version "
                            << reinterpret_cast<const char*>(versionString) << "has been excluded.";
@@ -300,7 +290,7 @@ bool _nextUpgrade(CatalogManager* catalogManager,
     log() << "starting next upgrade step from v" << fromVersion << " to v" << toVersion;
 
     // Log begin to config.changelog
-    catalogManager->logChange(NULL,
+    catalogManager->logChange("<upgrade>",
                               "starting upgrade of config database",
                               VersionType::ConfigNS,
                               BSON("from" << fromVersion << "to" << toVersion));
@@ -321,7 +311,7 @@ bool _nextUpgrade(CatalogManager* catalogManager,
         return false;
     }
 
-    catalogManager->logChange(NULL,
+    catalogManager->logChange("<upgrade>",
                               "finished upgrade of config database",
                               VersionType::ConfigNS,
                               BSON("from" << fromVersion << "to" << toVersion));
@@ -362,15 +352,15 @@ Status getConfigVersion(CatalogManager* catalogManager, VersionType* versionInfo
         }
 
         BSONObj versionDoc = cursor->next();
-        string errMsg;
-
-        if (!versionInfo->parseBSON(versionDoc, &errMsg) || !versionInfo->isValid(&errMsg)) {
+        auto versionInfoResult = VersionType::fromBSON(versionDoc);
+        if (!versionInfoResult.isOK()) {
             conn.done();
 
             return Status(ErrorCodes::UnsupportedFormat,
                           stream() << "invalid config version document " << versionDoc
-                                   << causedBy(errMsg));
+                                   << versionInfoResult.getStatus().toString());
         }
+        *versionInfo = versionInfoResult.getValue();
 
         if (cursor->more()) {
             conn.done();

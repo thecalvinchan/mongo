@@ -57,7 +57,7 @@ static const WT_CONFIG_CHECK
     confchk_wiredtiger_open_file_manager_subconfigs[] = {
 	{ "close_handle_minimum", "int", NULL, "min=0", NULL, 0 },
 	{ "close_idle_time", "int",
-	    NULL, "min=1,max=100000",
+	    NULL, "min=0,max=100000",
 	    NULL, 0 },
 	{ "close_scan_interval", "int",
 	    NULL, "min=1,max=100000",
@@ -877,6 +877,10 @@ static const WT_CONFIG_ENTRY config_entries[] = {
 	  confchk_WT_SESSION_reconfigure, 1
 	},
 	{ "WT_SESSION.rename",
+	  "",
+	  NULL, 0
+	},
+	{ "WT_SESSION.reset",
 	  "",
 	  NULL, 0
 	},

@@ -57,6 +57,8 @@ protected:
 
     void addIndex(BSONObj keyPattern, BSONObj infoObj);
 
+    void addIndex(BSONObj keyPattern, MatchExpression* filterExpr);
+
     //
     // Execute planner.
     //
@@ -178,11 +180,16 @@ protected:
      */
     void assertHasOneSolutionOf(const std::vector<std::string>& solnStrs) const;
 
+    /**
+     * Helper function to parse a MatchExpression.
+     */
+    static std::unique_ptr<MatchExpression> parseMatchExpression(const BSONObj& obj);
+
     //
     // Data members.
     //
 
-    static const char* ns;
+    static const NamespaceString nss;
 
     BSONObj queryObj;
     std::unique_ptr<CanonicalQuery> cq;

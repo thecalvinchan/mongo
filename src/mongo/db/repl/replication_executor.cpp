@@ -33,7 +33,6 @@
 #include "mongo/db/repl/replication_executor.h"
 
 #include <limits>
-#include <thread>
 
 #include "mongo/db/repl/database_task.h"
 #include "mongo/db/repl/storage_interface.h"
@@ -50,6 +49,8 @@ stdx::function<void()> makeNoExcept(const stdx::function<void()>& fn);
 }  // namespace
 
 using executor::NetworkInterface;
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 
 ReplicationExecutor::ReplicationExecutor(NetworkInterface* netInterface,
                                          StorageInterface* storageInterface,
@@ -66,7 +67,10 @@ ReplicationExecutor::ReplicationExecutor(NetworkInterface* netInterface,
           &_dblockWorkers, stdx::bind(&StorageInterface::createOperationContext, storageInterface)),
       _nextId(0) {}
 
-ReplicationExecutor::~ReplicationExecutor() {}
+ReplicationExecutor::~ReplicationExecutor() {
+    // join must have been called
+    invariant(!_executorThread.joinable());
+}
 
 std::string ReplicationExecutor::getDiagnosticString() {
     stdx::lock_guard<stdx::mutex> lk(_mutex);
@@ -114,6 +118,13 @@ void ReplicationExecutor::run() {
     _networkInterface->shutdown();
 }
 
+void ReplicationExecutor::startup() {
+    // Ensure that thread has not yet been created
+    invariant(!_executorThread.joinable());
+
+    _executorThread = stdx::thread([this] { run(); });
+}
+
 void ReplicationExecutor::shutdown() {
     // Correct shutdown needs to:
     // * Disable future work queueing.
@@ -121,6 +132,8 @@ void ReplicationExecutor::shutdown() {
     //   callbacks with a "shutdown" or "canceled" status.
     // * Signal all threads blocked in waitForEvent, and wait for them to return from that method.
     stdx::lock_guard<stdx::mutex> lk(_mutex);
+    if (_inShutdown)
+        return;
     _inShutdown = true;
 
     _readyQueue.splice(_readyQueue.end(), _dbWorkInProgressQueue);
@@ -133,7 +146,13 @@ void ReplicationExecutor::shutdown() {
     for (auto readyWork : _readyQueue) {
         _getCallbackFromHandle(readyWork.callback)->_isCanceled = true;
     }
+
     _networkInterface->signalWorkAvailable();
+}
+
+void ReplicationExecutor::join() {
+    invariant(_executorThread.joinable());
+    _executorThread.join();
 }
 
 void ReplicationExecutor::finishShutdown() {

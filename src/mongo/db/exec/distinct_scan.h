@@ -72,28 +72,24 @@ struct DistinctParams {
  *
  * Only created through the getExecutorDistinct path.  See db/query/get_executor.cpp
  */
-class DistinctScan : public PlanStage {
+class DistinctScan final : public PlanStage {
 public:
     DistinctScan(OperationContext* txn, const DistinctParams& params, WorkingSet* workingSet);
-    virtual ~DistinctScan() {}
 
-    virtual StageState work(WorkingSetID* out);
-    virtual bool isEOF();
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    StageState work(WorkingSetID* out) final;
+    bool isEOF() final;
+    void doSaveState() final;
+    void doRestoreState() final;
+    void doDetachFromOperationContext() final;
+    void doReattachToOperationContext(OperationContext* opCtx) final;
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_DISTINCT_SCAN;
     }
 
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -118,7 +114,6 @@ private:
     IndexSeekPoint _seekPoint;
 
     // Stats
-    CommonStats _commonStats;
     DistinctScanStats _specificStats;
 };
 

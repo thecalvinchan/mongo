@@ -31,15 +31,18 @@
 #include "mongo/db/exec/eof.h"
 
 #include "mongo/db/exec/scoped_timer.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
+using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* EOFStage::kStageType = "EOF";
 
-EOFStage::EOFStage() : _commonStats(kStageType) {}
+EOFStage::EOFStage() : PlanStage(kStageType) {}
 
 EOFStage::~EOFStage() {}
 
@@ -54,30 +57,9 @@ PlanStage::StageState EOFStage::work(WorkingSetID* out) {
     return PlanStage::IS_EOF;
 }
 
-void EOFStage::saveState() {
-    ++_commonStats.yields;
-}
-
-void EOFStage::restoreState(OperationContext* opCtx) {
-    ++_commonStats.unyields;
-}
-
-void EOFStage::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
-}
-
-vector<PlanStage*> EOFStage::getChildren() const {
-    vector<PlanStage*> empty;
-    return empty;
-}
-
-PlanStageStats* EOFStage::getStats() {
+unique_ptr<PlanStageStats> EOFStage::getStats() {
     _commonStats.isEOF = isEOF();
-    return new PlanStageStats(_commonStats, STAGE_EOF);
-}
-
-const CommonStats* EOFStage::getCommonStats() const {
-    return &_commonStats;
+    return make_unique<PlanStageStats>(_commonStats, STAGE_EOF);
 }
 
 const SpecificStats* EOFStage::getSpecificStats() const {

@@ -64,6 +64,8 @@ namespace repl {
 namespace {
 
 using executor::NetworkInterfaceMock;
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 
 class CheckQuorumTest : public mongo::unittest::Test {
 protected:
@@ -257,7 +259,7 @@ TEST_F(CheckQuorumForInitiate, QuorumCheckSuccessForFiveNodes) {
         _net->scheduleResponse(
             noi,
             startDate + Milliseconds(10),
-            ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), Milliseconds(8))));
+            ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), BSONObj(), Milliseconds(8))));
     }
     _net->runUntil(startDate + Milliseconds(10));
     _net->exitNetwork();
@@ -308,7 +310,7 @@ TEST_F(CheckQuorumForInitiate, QuorumCheckFailedDueToOneDownNode) {
             _net->scheduleResponse(
                 noi,
                 startDate + Milliseconds(10),
-                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), Milliseconds(8))));
+                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), BSONObj(), Milliseconds(8))));
         }
     }
     _net->runUntil(startDate + Milliseconds(10));
@@ -358,15 +360,16 @@ TEST_F(CheckQuorumForInitiate, QuorumCheckFailedDueToSetNameMismatch) {
         ASSERT(seenHosts.insert(request.target).second) << "Already saw "
                                                         << request.target.toString();
         if (request.target == HostAndPort("h4", 1)) {
-            _net->scheduleResponse(noi,
-                                   startDate + Milliseconds(10),
-                                   ResponseStatus(RemoteCommandResponse(
-                                       BSON("ok" << 0 << "mismatch" << true), Milliseconds(8))));
+            _net->scheduleResponse(
+                noi,
+                startDate + Milliseconds(10),
+                ResponseStatus(RemoteCommandResponse(
+                    BSON("ok" << 0 << "mismatch" << true), BSONObj(), Milliseconds(8))));
         } else {
             _net->scheduleResponse(
                 noi,
                 startDate + Milliseconds(10),
-                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), Milliseconds(8))));
+                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), BSONObj(), Milliseconds(8))));
         }
     }
     _net->runUntil(startDate + Milliseconds(10));
@@ -419,12 +422,13 @@ TEST_F(CheckQuorumForInitiate, QuorumCheckFailedDueToInitializedNode) {
                                    ResponseStatus(RemoteCommandResponse(BSON("ok" << 0 << "set"
                                                                                   << "rs0"
                                                                                   << "v" << 1),
+                                                                        BSONObj(),
                                                                         Milliseconds(8))));
         } else {
             _net->scheduleResponse(
                 noi,
                 startDate + Milliseconds(10),
-                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), Milliseconds(8))));
+                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), BSONObj(), Milliseconds(8))));
         }
     }
     _net->runUntil(startDate + Milliseconds(10));
@@ -479,6 +483,7 @@ TEST_F(CheckQuorumForInitiate, QuorumCheckFailedDueToInitializedNodeOnlyOneRespo
                                    ResponseStatus(RemoteCommandResponse(BSON("ok" << 0 << "set"
                                                                                   << "rs0"
                                                                                   << "v" << 1),
+                                                                        BSONObj(),
                                                                         Milliseconds(8))));
         } else {
             _net->blackHole(noi);
@@ -532,10 +537,10 @@ TEST_F(CheckQuorumForInitiate, QuorumCheckFailedDueToNodeWithData) {
         hbResp.setConfigVersion(0);
         hbResp.noteHasData();
         if (request.target == HostAndPort("h5", 1)) {
-            _net->scheduleResponse(
-                noi,
-                startDate + Milliseconds(10),
-                ResponseStatus(RemoteCommandResponse(hbResp.toBSON(false), Milliseconds(8))));
+            _net->scheduleResponse(noi,
+                                   startDate + Milliseconds(10),
+                                   ResponseStatus(RemoteCommandResponse(
+                                       hbResp.toBSON(false), BSONObj(), Milliseconds(8))));
         } else {
             _net->blackHole(noi);
         }
@@ -585,6 +590,7 @@ TEST_F(CheckQuorumForReconfig, QuorumCheckVetoedDueToHigherConfigVersion) {
                                    ResponseStatus(RemoteCommandResponse(BSON("ok" << 0 << "set"
                                                                                   << "rs0"
                                                                                   << "v" << 5),
+                                                                        BSONObj(),
                                                                         Milliseconds(8))));
         } else {
             _net->blackHole(noi);
@@ -630,10 +636,11 @@ TEST_F(CheckQuorumForReconfig, QuorumCheckVetoedDueToIncompatibleSetName) {
         ASSERT(seenHosts.insert(request.target).second) << "Already saw "
                                                         << request.target.toString();
         if (request.target == HostAndPort("h2", 1)) {
-            _net->scheduleResponse(noi,
-                                   startDate + Milliseconds(10),
-                                   ResponseStatus(RemoteCommandResponse(
-                                       BSON("ok" << 0 << "mismatch" << true), Milliseconds(8))));
+            _net->scheduleResponse(
+                noi,
+                startDate + Milliseconds(10),
+                ResponseStatus(RemoteCommandResponse(
+                    BSON("ok" << 0 << "mismatch" << true), BSONObj(), Milliseconds(8))));
         } else {
             _net->scheduleResponse(noi,
                                    startDate + Milliseconds(10),
@@ -690,7 +697,7 @@ TEST_F(CheckQuorumForReconfig, QuorumCheckFailsDueToInsufficientVoters) {
             _net->scheduleResponse(
                 noi,
                 startDate + Milliseconds(10),
-                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), Milliseconds(8))));
+                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), BSONObj(), Milliseconds(8))));
         } else {
             _net->scheduleResponse(noi,
                                    startDate + Milliseconds(10),
@@ -747,7 +754,7 @@ TEST_F(CheckQuorumForReconfig, QuorumCheckFailsDueToNoElectableNodeResponding) {
             _net->scheduleResponse(
                 noi,
                 startDate + Milliseconds(10),
-                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), Milliseconds(8))));
+                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), BSONObj(), Milliseconds(8))));
         } else {
             _net->scheduleResponse(noi,
                                    startDate + Milliseconds(10),
@@ -800,7 +807,7 @@ TEST_F(CheckQuorumForReconfig, QuorumCheckSucceedsWithAsSoonAsPossible) {
             _net->scheduleResponse(
                 noi,
                 startDate + Milliseconds(10),
-                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), Milliseconds(8))));
+                ResponseStatus(RemoteCommandResponse(BSON("ok" << 1), BSONObj(), Milliseconds(8))));
         } else {
             _net->blackHole(noi);
         }

@@ -36,6 +36,28 @@ variables:
       resmoke_args: --help
       run_multiple_jobs: false
 
+- &debug_symbol_variants
+  - enterprise-linux-64-amazon-ami
+  - enterprise-rhel-57-64-bit
+  - enterprise-rhel-62-64-bit
+  - enterprise-rhel-70-64-bit
+  - enterprise-suse11-64
+  - enterprise-ubuntu1204-64
+  - enterprise-ubuntu1404-64
+  - enterprise-debian71-64
+  - linux-32
+  - linux-64
+  - amazon
+  - rhel55
+  - rhel62
+  - rhel70
+  - suse11
+  - ubuntu1204
+  - ubuntu1404
+  - debian71
+  - solaris-64-bit
+  - osx
+
 #######################################
 #            Functions                #
 #######################################
@@ -98,25 +120,7 @@ functions:
       permissions: public-read
       content_type: ${content_type|application/x-gzip}
       build_variants:
-        ['enterprise-linux-64-amazon-ami',
-         'enterprise-rhel-57-64-bit',
-         'enterprise-rhel-62-64-bit',
-         'enterprise-rhel-70-64-bit',
-         'enterprise-suse11-64',
-         'enterprise-ubuntu1204-64',
-         'enterprise-ubuntu1404-64',
-         'enterprise-debian71-64',
-         'linux-32',
-         'linux-64',
-         'amazon',
-         'rhel55',
-         'rhel62',
-         'rhel70',
-         'suse11',
-         'ubuntu1204',
-         'ubuntu1404',
-         'debian71',
-         'solaris-64-bit']
+        *debug_symbol_variants
 
   "fetch debugsymbols archive" :
     command: s3.get
@@ -127,25 +131,7 @@ functions:
       bucket: mciuploads
       local_file: src/mongo-debugsymbols.tgz
       build_variants:
-        ['enterprise-linux-64-amazon-ami',
-         'enterprise-rhel-57-64-bit',
-         'enterprise-rhel-62-64-bit',
-         'enterprise-rhel-70-64-bit',
-         'enterprise-suse11-64',
-         'enterprise-ubuntu1204-64',
-         'enterprise-ubuntu1404-64',
-         'enterprise-debian71-64',
-         'linux-32',
-         'linux-64',
-         'amazon',
-         'rhel55',
-         'rhel62',
-         'rhel70',
-         'suse11',
-         'ubuntu1204',
-         'ubuntu1404',
-         'debian71',
-         'solaris-64-bit']
+        *debug_symbol_variants
 
   "build rocksdb" :
     command: shell.exec
@@ -180,7 +166,7 @@ functions:
             set -o igncr
         fi;
 
-        git checkout r3.1.4
+        git checkout r3.1.6
         . ./${set_tools_gopath|set_gopath.sh}
 
         # In RHEL 5.5, /usr/bin/ld can't handle --build-id parameters, so
@@ -197,30 +183,12 @@ functions:
         done
         exit 0
 
-  # TODO: Remove the "install_pyyaml" function after PyYAML is installed on all build variants.
-  "install pyyaml" : &install_pyyaml
-    command: shell.exec
-    params:
-      working_dir: src
-      script: |
-        if [ ${has_pyyaml_installed|false} = false ]; then
-          curl -s http://pyyaml.org/download/pyyaml/PyYAML-3.11.tar.gz --output PyYAML-3.11.tar.gz
-          ${decompress} PyYAML-3.11.tar.gz
-          # 7-Zip decompresses and untars as two separate steps.
-          if [ ${is_windows|false} = true ]; then
-            ${decompress} dist/PyYAML-3.11.tar
-          fi
-          cd PyYAML-3.11
-          ${python|python} setup.py install --user
-        fi
-
   "do setup" :
   - *fetch_artifacts
   - *fetch_binaries
   - *extract_binaries
   - *get_buildnumber
   - *setup_credentials
-  - *install_pyyaml
 
   "run tests" :
     command: shell.exec
@@ -243,7 +211,7 @@ pre:
     params:
       silent: true
       script: |
-        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lock_mgr_test; pkill -9 background_job_test; pkill -9 repl_coordinator_impl_heartbeat_test} >/dev/null 2>&1
+        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lldb; pkill -9 lock_mgr_test; pkill -9 background_job_test; pkill -9 repl_coordinator_impl_heartbeat_test; pkill -9 repl_coordinator_impl_test} >/dev/null 2>&1
         rm -rf src /data/db/*
         exit 0
 
@@ -255,7 +223,7 @@ post:
     params:
       silent: true
       script: |
-        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lock_mgr_test; pkill -9 background_job_test; pkill -9 repl_coordinator_impl_heartbeat_test} >/dev/null 2>&1
+        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lldb; pkill -9 lock_mgr_test; pkill -9 background_job_test; pkill -9 repl_coordinator_impl_heartbeat_test; pkill -9 repl_coordinator_impl_test} >/dev/null 2>&1
         exit 0
   - command: shell.cleanup
 
@@ -265,7 +233,7 @@ timeout:
       working_dir: src
       script: |
         echo "Calling the hang analyzer..."
-        python buildscripts/hang_analyzer.py
+        PATH=/opt/mongodbtoolchain/bin:$PATH python buildscripts/hang_analyzer.py
 
 #######################################
 #               Tasks                 #
@@ -285,7 +253,6 @@ tasks:
         directory: src
     - func: "get buildnumber"
     - func: "setup credentials"
-    - func: "install pyyaml"
     - func: "build new tools" # noop if ${newtools} is not "true"
     - func: "build rocksdb" # noop if ${build_rocksdb} is not "true"
     - command: shell.exec
@@ -296,17 +263,16 @@ tasks:
           set -o verbose
 
           rm -rf ${install_directory|/data/mongo-install-directory}
-          ${scons|scons} ${compile_flags|} --use-new-tools all dist distsrc-${ext|tgz} ${msi_target|}
+          ${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
 
           ${python|python} buildscripts/generate_compile_expansions.py version.json | \
             tee compile_expansions.yml
 
-          if [ "${has_debugsymbols|}" = "true" ]; then ${scons|scons} ${compile_flags|} --nostrip --use-new-tools dist; original_filename=$(ls | grep debugsymbols); mv $original_filename $(echo $original_filename | sed 's/debugsymbols-//' | sed 's/mongodb/debugsymbols-mongodb/'); fi
           ${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
 
           mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
+          mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
-          mv debugsymbols-*.${ext|tgz} mongo-debugsymbols.tgz || true
 
     - command: archive.targz_pack
       params:
@@ -382,6 +348,65 @@ tasks:
           set -o errexit
           set -o verbose
           ${scons|scons} ${compile_flags|} lint
+
+## jstestfuzz ##
+- name: jstestfuzz
+  depends_on:
+  - name: compile
+  commands:
+    - func: "do setup"
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
+          set -o errexit
+          set -o verbose
+
+          git clone git@github.com:10gen/jstestfuzz.git
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
+          set -o errexit
+          set -o verbose
+
+          curl --silent --max-time 600 http://boxes.10gen.com/build/node-v0.12.4-linux-x64.tar.gz --output node.tar.gz
+          ${decompress} node.tar.gz
+    - command: shell.exec
+      params:
+        working_dir: src/jstestfuzz
+        script: |
+          set -o errexit
+          set -o verbose
+
+          export PATH="$PATH":${workdir}/src/node-v0.12.4-linux-x64/bin
+
+          # Create an output directory for the generated test cases and ensure it always contains at least one JS file
+          # for resmoke to run so that glob expansion cannot result in an error.
+          mkdir -p out
+          touch out/dummy.js
+
+          npm install || true
+          npm start -- --jsTestsDir ../jstests || true
+    - command: archive.targz_pack
+      params:
+        target: "jstests.tgz"
+        source_dir: "src/jstestfuzz"
+        include:
+          - "out/*.js"
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        local_file: jstests.tgz
+        remote_file: mongodb-mongo-master/${build_variant}/${revision}/jstestfuzz/jstestfuzz-${build_id}.tgz
+        bucket: mciuploads
+        permissions: public-read
+        content_type: ${content_type|application/x-gzip}
+        display_name: Generated Tests
+    - func: "run tests"
+      vars:
+        resmoke_args: --suites=jstestfuzz
 
 ## integration test suites ##
 
@@ -480,6 +505,14 @@ tasks:
   - func: "run tests"
     vars:
       resmoke_args: --suites=dur_jscore_passthrough
+
+- <<: *task_template
+  name: ese_WT
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=ese --storageEngine=wiredTiger
 
 - <<: *task_template
   name: failpoints
@@ -612,6 +645,14 @@ tasks:
       run_multiple_jobs: true
 
 - <<: *task_template
+  name: jsCore_WT_ese
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=core_ese --storageEngine=wiredTiger
+
+- <<: *task_template
   name: jsCore_compatibility
   commands:
   - func: "do setup"
@@ -639,21 +680,21 @@ tasks:
       run_multiple_jobs: true
 
 - <<: *task_template
-  name: jsCore_op_command
+  name: jsCore_op_query
   commands:
   - func: "do setup"
   - func: "run tests"
     vars:
-      resmoke_args: --suites=core_op_command --storageEngine=mmapv1
+      resmoke_args: --suites=core_op_query --storageEngine=mmapv1
       run_multiple_jobs: true
 
 - <<: *task_template
-  name: jsCore_op_command_WT
+  name: jsCore_op_query_WT
   commands:
   - func: "do setup"
   - func: "run tests"
     vars:
-      resmoke_args: --suites=core_op_command --storageEngine=wiredTiger
+      resmoke_args: --suites=core_op_query --storageEngine=wiredTiger
       run_multiple_jobs: true
 
 - <<: *task_template
@@ -874,6 +915,38 @@ tasks:
       resmoke_args: --suites=concurrency --storageEngine=wiredTiger
 
 - <<: *task_template
+  name: concurrency_replication
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=concurrency_replication --storageEngine=mmapv1
+
+- <<: *task_template
+  name: concurrency_replication_WT
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=concurrency_replication --storageEngine=wiredTiger
+
+- <<: *task_template
+  name: concurrency_sharded
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=concurrency_sharded --storageEngine=mmapv1
+
+- <<: *task_template
+  name: concurrency_sharded_WT
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=concurrency_sharded --storageEngine=wiredTiger
+
+- <<: *task_template
   name: rlp
   commands:
   - func: "do setup"
@@ -904,6 +977,14 @@ tasks:
   - func: "run tests"
     vars:
       resmoke_args: --suites=replica_sets --storageEngine=wiredTiger
+
+- <<: *task_template
+  name: replica_sets_WT_ese
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=replica_sets_ese --storageEngine=wiredTiger
 
 - <<: *task_template
   name: replicasets_auth
@@ -962,12 +1043,28 @@ tasks:
       resmoke_args: --suites=sharding --storageEngine=wiredTiger
 
 - <<: *task_template
+  name: sharding_WT_ese
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=sharding_ese --storageEngine=wiredTiger
+
+- <<: *task_template
   name: sharding_auth
   commands:
   - func: "do setup"
   - func: "run tests"
     vars:
       resmoke_args: --suites=sharding_auth
+
+- <<: *task_template
+  name: sharding_legacy
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=sharding_legacy
 
 - <<: *task_template
   name: snmp
@@ -1072,7 +1169,7 @@ tasks:
           mv distsrc.${ext|tgz} mongodb-src-${src_suffix}.${ext|tar.gz} || true
           /usr/bin/find build/ -type f | grep msi$ | xargs -I original_filename cp original_filename mongodb-win32-${push_arch}-${suffix}.msi || true
 
-          notary-client.py --key-name "server-2.8" --auth-token-file ./signing_auth_token --comment "MCI Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tar.gz}
+          notary-client.py --key-name "${signing_key_name}" --auth-token-file ./signing_auth_token --comment "MCI Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tar.gz}
           rm signing_auth_token
 
     # Put the binaries tarball/zipfile
@@ -1102,7 +1199,7 @@ tasks:
       params:
         aws_secret: ${aws_secret}
         aws_key: ${aws_key}
-        build_variants: ["enterprise-linux-64-amazon-ami", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "enterprise-suse11-64", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-debian71-64", "linux-32", "linux-64", "amazon", "rhel55", "rhel62", "rhel70", "suse11", "ubuntu1204", "ubuntu1404", "debian71", "solaris-64-bit"]
+        build_variants: *debug_symbol_variants
         permissions: public-read
         local_file: src/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}
         bucket: build-push-testing
@@ -1137,7 +1234,7 @@ tasks:
       params:
         aws_secret: ${aws_secret}
         aws_key: ${aws_key}
-        build_variants: ["enterprise-linux-64-amazon-ami", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "enterprise-suse11-64", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-debian71-64", "linux-32", "linux-64", "amazon", "rhel55", "rhel62", "rhel70", "suse11", "ubuntu1204", "ubuntu1404", "debian71", "solaris-64-bit"]
+        build_variants: *debug_symbol_variants
         permissions: public-read
         local_file: src/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sig
         bucket: build-push-testing
@@ -1184,7 +1281,7 @@ tasks:
       params:
         aws_secret: ${aws_secret}
         aws_key: ${aws_key}
-        build_variants: ["enterprise-linux-64-amazon-ami", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "enterprise-suse11-64", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-debian71-64", "linux-32", "linux-64", "amazon", "rhel55", "rhel62", "rhel70", "suse11", "ubuntu1204", "ubuntu1404", "debian71", "solaris-64-bit"]
+        build_variants: *debug_symbol_variants
         permissions: public-read
         local_file: src/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha1
         bucket: build-push-testing
@@ -1230,7 +1327,7 @@ tasks:
     - command: s3.put
       params:
         aws_secret: ${aws_secret}
-        build_variants: ["enterprise-linux-64-amazon-ami", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "enterprise-suse11-64", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-debian71-64", "linux-32", "linux-64", "amazon", "rhel55", "rhel62", "rhel70", "suse11", "ubuntu1204", "ubuntu1404", "debian71", "solaris-64-bit"]
+        build_variants: *debug_symbol_variants
         local_file: src/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha256
         aws_key: ${aws_key}
         bucket: build-push-testing
@@ -1278,7 +1375,7 @@ tasks:
       params:
         aws_key: ${aws_key}
         aws_secret: ${aws_secret}
-        build_variants: ["enterprise-linux-64-amazon-ami", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "enterprise-suse11-64", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "linux-32", "linux-64", "amazon", "rhel55", "rhel62", "rhel70", "suse11", "ubuntu1204", "ubuntu1404", "debian71", "solaris-64-bit"]
+        build_variants: *debug_symbol_variants
         local_file: src/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.md5
         bucket: build-push-testing
         content_type: text/plain
@@ -1315,25 +1412,7 @@ tasks:
             #Debug Symbols
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}', 'bucket': '${push_bucket}'},
-               'build_variants':
-                  ['enterprise-linux-64-amazon-ami',
-                   'enterprise-rhel-57-64-bit',
-                   'enterprise-rhel-62-64-bit',
-                   'enterprise-suse11-64',
-                   'enterprise-ubuntu1204-64',
-                   'enterprise-ubuntu1404-64',
-                   'enterprise-debian71-64',
-                   'linux-32',
-                   'linux-64',
-                   'amazon',
-                   'rhel55',
-                   'rhel62',
-                   'rhel70',
-                   'suse11',
-                   'ubuntu1204',
-                   'ubuntu1404',
-                   'debian71',
-                   'solaris-64-bit']
+               'build_variants': *debug_symbol_variants
               }
 
             #MSI (Windows only)
@@ -1348,25 +1427,7 @@ tasks:
             #Debug Symbols Signature
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sig', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sig', 'bucket': '${push_bucket}'},
-               'build_variants':
-                  ['enterprise-linux-64-amazon-ami',
-                   'enterprise-rhel-57-64-bit',
-                   'enterprise-rhel-62-64-bit',
-                   'enterprise-suse11-64',
-                   'enterprise-ubuntu1204-64',
-                   'enterprise-ubuntu1404-64',
-                   'enterprise-debian71-64',
-                   'linux-32',
-                   'linux-64',
-                   'amazon',
-                   'rhel55',
-                   'rhel62',
-                   'rhel70',
-                   'suse11',
-                   'ubuntu1204',
-                   'ubuntu1404',
-                   'debian71',
-                   'solaris-64-bit']
+               'build_variants': *debug_symbol_variants
               }
 
             #Source tarball signature
@@ -1388,26 +1449,7 @@ tasks:
             #SHA1 for debug symbols
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha1', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha1', 'bucket': '${push_bucket}'},
-               'build_variants': [
-                   'enterprise-linux-64-amazon-ami',
-                   'enterprise-rhel-57-64-bit',
-                   'enterprise-rhel-62-64-bit',
-                   'enterprise-suse11-64',
-                   'enterprise-ubuntu1204-64',
-                   'enterprise-ubuntu1404-64',
-                   'enterprise-debian71-64',
-                   'linux-32',
-                   'linux-64',
-                   'amazon',
-                   'rhel55',
-                   'rhel62',
-                   'rhel70',
-                   'suse11',
-                   'ubuntu1204',
-                   'ubuntu1404',
-                   'debian71',
-                   'solaris-64-bit'
-                ]
+               'build_variants': *debug_symbol_variants
               }
 
             #SHA1 for MSI
@@ -1428,26 +1470,7 @@ tasks:
             #SHA256 for debugsymbols
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha256', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha256', 'bucket': '${push_bucket}'},
-               'build_variants': [
-                   'enterprise-linux-64-amazon-ami',
-                   'enterprise-rhel-57-64-bit',
-                   'enterprise-rhel-62-64-bit',
-                   'enterprise-suse11-64',
-                   'enterprise-ubuntu1204-64',
-                   'enterprise-ubuntu1404-64',
-                   'enterprise-debian71-64',
-                   'linux-32',
-                   'linux-64',
-                   'amazon',
-                   'rhel55',
-                   'rhel62',
-                   'rhel70',
-                   'suse11',
-                   'ubuntu1204',
-                   'ubuntu1404',
-                   'debian71',
-                   'solaris-64-bit'
-               ]}
+               'build_variants': *debug_symbol_variants}
 
             #SHA256 for MSI files
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.sha256', 'bucket': 'build-push-testing'},
@@ -1468,24 +1491,7 @@ tasks:
             #MD5 for debugsymbols
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.md5', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.md5', 'bucket': '${push_bucket}'},
-               'build_variants': [
-                  'enterprise-linux-64-amazon-ami',
-                  'enterprise-rhel-57-64-bit',
-                  'enterprise-rhel-62-64-bit',
-                  'enterprise-suse11-64',
-                  'enterprise-ubuntu1204-64',
-                  'enterprise-ubuntu1404-64',
-                  'linux-32',
-                  'linux-64',
-                  'amazon',
-                  'rhel55',
-                  'rhel62',
-                  'rhel70',
-                  'suse11',
-                  'ubuntu1204',
-                  'ubuntu1404',
-                  'debian71',
-                  'solaris-64-bit']
+               'build_variants': *debug_symbol_variants
                 }
 
             #MD5 for MSIs
@@ -1540,7 +1546,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -1574,14 +1579,15 @@ buildvariants:
   - name: jsCore
   - name: jsCore_WT
   - name: jsCore_auth
-  - name: jsCore_op_command
-  - name: jsCore_op_command_WT
+  - name: jsCore_op_query
+  - name: jsCore_op_query_WT
   - name: jsCore_compatibility
   - name: jsCore_compatibility_WT
   - name: jsCore_small_oplog
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -1597,6 +1603,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -1604,6 +1614,7 @@ buildvariants:
   - name: replication_WT
   - name: replication_auth
   - name: sharding
+  - name: sharding_legacy
   - name: sharding_WT
   - name: sharding_auth
   - name: slow1
@@ -1635,7 +1646,6 @@ buildvariants:
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
     compile_flags: --dbg=on --opt=on -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -1674,6 +1684,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -1681,6 +1695,7 @@ buildvariants:
   - name: replication_WT
   - name: replication_auth
   - name: sharding
+  - name: sharding_legacy
   - name: sharding_WT
   - name: sharding_auth
   - name: slow1
@@ -1706,7 +1721,6 @@ buildvariants:
     push_name: linux-duroff
     push_arch: x86_64
     compile_flags: -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
-    has_debugsymbols: true
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure --nojournal
@@ -1728,6 +1742,7 @@ buildvariants:
   - name: jsCore_compatibility
   - name: jsCore_small_oplog
   - name: jsCore_small_oplog_rs
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: noPassthrough
@@ -1736,6 +1751,8 @@ buildvariants:
   - name: parallel
   - name: parallel_compatibility
   - name: concurrency
+  - name: concurrency_replication
+  - name: concurrency_sharded
   - name: replicasets
   - name: replicasets_auth
   - name: replication
@@ -1777,12 +1794,15 @@ buildvariants:
   - name: jsCore_compatibility_WT
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: noPassthrough_WT
   - name: noPassthroughWithMongod_WT
   - name: bulk_gle_passthrough_WT
   - name: parallel_WT
   - name: parallel_compatibility_WT
   - name: concurrency_WT
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded_WT
   - name: replicasets_WT
   - name: replication_WT
   - name: sharding_WT
@@ -1806,7 +1826,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -1844,6 +1863,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mongosTest
   - name: mmap
   - name: multiversion
@@ -1859,6 +1879,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -1897,7 +1921,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -1935,6 +1958,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -1950,6 +1974,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -1989,7 +2017,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -2003,6 +2030,7 @@ buildvariants:
   - name: dbtest_WT
   - name: failpoints_auth
   - name: jsCore_auth
+  - name: jstestfuzz
   - name: mmap
   - name: noPassthrough
   - name: noPassthrough_WT
@@ -2043,7 +2071,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -2081,6 +2108,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -2096,6 +2124,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -2135,64 +2167,18 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure --storageEngine=mmapv1 -j1  # Avoid starting too many mongod's on 32-bit systems.
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
     - rhel55
-  - name: aggregation
-  - name: auth
   - name: dbtest
   - name: disk
-  - name: durability
-  - name: failpoints
   - name: jsCore
   - name: jsCore_compatibility
   - name: mmap
-  - name: mongosTest
-  - name: replicasets
-  - name: replication
-  - name: sharding
-  - name: tool
   - name: push
     distros:
     - rhel55-test
-
-- name: linux-32-debug
-  display_name: Linux 32-bit DEBUG
-  modules: ~
-  run_on:
-  - rhel55-32
-  expansions:
-    gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
-    gorootvars: GOROOT=/opt/go32 PATH=/opt/go32/bin:$PATH
-    push_path: linux
-    push_bucket: downloads.mongodb.org
-    push_name: linux-debug
-    push_arch: i686
-    num_cores: $(grep -c ^processor /proc/cpuinfo)
-    num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
-    test_flags: --continueOnFailure --storageEngine=mmapv1 -j1  # Avoid starting too many mongod's on 32-bit systems.
-    has_debugsymbols: true
-    compile_flags: --dbg=on --distarch=i686 --opt=on -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ --wiredtiger=off CCFLAGS="-m32" LINKFLAGS="-m32"
-  tasks:
-  - name: compile
-    distros:
-    - rhel55
-  - name: aggregation
-  - name: auth
-  - name: dbtest
-  - name: disk
-  - name: durability
-  - name: failpoints
-  - name: jsCore
-  - name: jsCore_compatibility
-  - name: mmap
-  - name: mongosTest
-  - name: replicasets
-  - name: replication
-  - name: sharding
-  - name: tool
 
 ###########################################
 #         Windows buildvariants           #
@@ -2216,8 +2202,6 @@ buildvariants:
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
     ext: zip
-    # TODO: Remove the "is_windows" expansion after PyYAML is installed on all build variants.
-    is_windows: true
   tasks:
   - name: compile
     distros:
@@ -2265,6 +2249,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replication
@@ -2301,8 +2289,6 @@ buildvariants:
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
     ext: zip
-    # TODO: Remove the "is_windows" expansion after PyYAML is installed on all build variants.
-    is_windows: true
   tasks:
   - name: compile
     distros:
@@ -2338,6 +2324,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replication
@@ -2373,8 +2363,6 @@ buildvariants:
     test_flags: --continueOnFailure
     compile_flags: --dbg=on --opt=on --win-version-min=ws08r2 -j$(grep -c ^processor /proc/cpuinfo) --distmod=2008plus
     ext: zip
-    # TODO: Remove the "is_windows" expansion after PyYAML is installed on all build variants.
-    is_windows: true
   tasks:
   - name: compile
     distros:
@@ -2410,6 +2398,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replication
@@ -2440,8 +2432,6 @@ buildvariants:
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
     ext: zip
-    # TODO: Remove the "is_windows" expansion after PyYAML is installed on all build variants.
-    is_windows: true
   tasks:
   - name: compile
     distros:
@@ -2450,6 +2440,10 @@ buildvariants:
   - name: audit_WT
   - name: dbtest
   - name: dbtest_WT
+  - name: ese_WT
+  - name: jsCore_WT_ese
+  - name: replica_sets_WT_ese
+  - name: sharding_WT_ese
   - name: jsCore_auth
   - name: mmap
   - name: replicasets_auth
@@ -2483,8 +2477,6 @@ buildvariants:
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
     ext: zip
-    # TODO: Remove the "is_windows" expansion after PyYAML is installed on all build variants.
-    is_windows: true
   tasks:
   - name: compile
     distros:
@@ -2520,6 +2512,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replication
@@ -2559,26 +2555,15 @@ buildvariants:
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure --storageEngine=mmapv1 -j1  # Avoid starting too many mongod's on 32-bit systems.
     ext: zip
-    # TODO: Remove the "is_windows" expansion after PyYAML is installed on all build variants.
-    is_windows: true
   tasks:
   - name: compile
     distros:
     - windows-64-vs2013-compile
-  - name: aggregation
-  - name: auth
   - name: dbtest
   - name: disk
-  - name: durability
-  - name: failpoints
   - name: jsCore
   - name: jsCore_compatibility
   - name: mmap
-  - name: mongosTest
-  - name: replicasets
-  - name: replication
-  - name: sharding
-  - name: tool
   - name: push
     distros:
     - rhel55-test
@@ -2646,6 +2631,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replication
@@ -2724,6 +2713,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replication
@@ -2806,7 +2799,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -2817,6 +2809,7 @@ buildvariants:
   - name: dbtest
   - name: dbtest_WT
   - name: jsCore_auth
+  - name: jstestfuzz
   - name: mmap
   - name: replicasets_auth
   - name: sasl
@@ -2847,7 +2840,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -2856,6 +2848,11 @@ buildvariants:
   - name: audit_WT
   - name: dbtest
   - name: dbtest_WT
+  - name: ese_WT
+  - name: jsCore_WT_ese
+  - name: jstestfuzz
+  - name: replica_sets_WT_ese
+  - name: sharding_WT_ese
   - name: mmap
   - name: jsCore_auth
   - name: replicasets_auth
@@ -2888,7 +2885,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
   - name: audit
@@ -2896,6 +2892,7 @@ buildvariants:
   - name: dbtest
   - name: dbtest_WT
   - name: jsCore_auth
+  - name: jstestfuzz
   - name: mmap
   - name: replicasets_auth
   - name: sasl
@@ -2926,7 +2923,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -2964,6 +2960,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -2979,6 +2976,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -3018,7 +3019,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -3056,6 +3056,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -3071,6 +3072,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -3110,7 +3115,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -3148,6 +3152,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -3163,6 +3168,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -3207,7 +3216,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -3217,6 +3225,7 @@ buildvariants:
   - name: dbtest
   - name: dbtest_WT
   - name: jsCore_auth
+  - name: jstestfuzz
   - name: mmap
   - name: replicasets_auth
   - name: sasl
@@ -3246,7 +3255,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -3256,6 +3264,7 @@ buildvariants:
   - name: dbtest
   - name: dbtest_WT
   - name: jsCore_auth
+  - name: jstestfuzz
   - name: mmap
   - name: replicasets_auth
   - name: sasl
@@ -3289,9 +3298,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
-    # TODO: Remove the "has_pyyaml_installed" expansion after PyYAML is installed on all build variants.
-    has_pyyaml_installed: true
   tasks:
   - name: compile
     distros:
@@ -3301,6 +3307,7 @@ buildvariants:
   - name: dbtest
   - name: dbtest_WT
   - name: jsCore_auth
+  - name: jstestfuzz
   - name: replicasets_auth
   - name: sasl
   - name: sharding_auth
@@ -3329,9 +3336,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
-    # TODO: Remove the "has_pyyaml_installed" expansion after PyYAML is installed on all build variants.
-    has_pyyaml_installed: true
   tasks:
   - name: compile
     distros:
@@ -3369,6 +3373,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -3384,6 +3389,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -3421,38 +3430,61 @@ buildvariants:
     push_bucket: downloads.mongodb.org
     push_name: sunos5
     push_arch: x86_64
-    compile_flags: CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ -j$(kstat cpu | sort -u | grep -c "^module") --release CCFLAGS="-m64" LINKFLAGS="-m64 -static-libstdc++ -static-libgcc"
+    compile_flags: CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ -j$(kstat cpu | sort -u | grep -c "^module") --release CCFLAGS="-m64" LINKFLAGS="-m64 -static-libstdc++ -static-libgcc" OBJCOPY=/opt/mongodbtoolchain/bin/objcopy
     num_cores: $(kstat cpu | sort -u | grep -c "^module")
     num_jobs_unittests: $(kstat cpu | sort -u | grep -c "^module")
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
   - name: aggregation
+  - name: aggregation_WT
   - name: auth
+  - name: auth_WT
+  - name: bulk_gle_passthrough
+  - name: bulk_gle_passthrough_WT
+  - name: concurrency
+  - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: dbtest
+  - name: dbtest_WT
   - name: disk
   - name: durability
   - name: failpoints
   - name: jsCore
   - name: jsCore_compatibility
+  - name: jsCore_compatibility_WT
   - name: jsCore_small_oplog
   - name: jsCore_small_oplog_rs
+  - name: jsCore_small_oplog_rs_WT
+  - name: jsCore_small_oplog_WT
+  - name: jsCore_WT
   - name: mmap
   - name: mongosTest
   - name: noPassthrough
   - name: noPassthroughWithMongod
-  - name: bulk_gle_passthrough
+  - name: noPassthroughWithMongod_WT
+  - name: noPassthrough_WT
   - name: parallel
   - name: parallel_compatibility
-  - name: concurrency
+  - name: parallel_compatibility_WT
+  - name: parallel_WT
   - name: replicasets
+  - name: replicasets_WT
   - name: replication
+  - name: replication_WT
   - name: sharding
-  - name: slow1
-  - name: slow2
   - name: sharding_jscore_passthrough
+  - name: sharding_jscore_passthrough_WT
+  - name: sharding_WT
+  - name: slow1
+  - name: slow1_WT
+  - name: slow2
+  - name: slow2_WT
   - name: tool
+  - name: tool_WT
   - name: push
     distros:
     - rhel55-test
@@ -3478,7 +3510,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -3488,6 +3519,7 @@ buildvariants:
   - name: dbtest
   - name: dbtest_WT
   - name: jsCore_auth
+  - name: jstestfuzz
   - name: mmap
   - name: replicasets_auth
   - name: sasl
@@ -3516,7 +3548,6 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
-    has_debugsymbols: true
   tasks:
   - name: compile
     distros:
@@ -3554,6 +3585,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -3569,6 +3601,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -3633,12 +3669,15 @@ buildvariants:
   - name: jsCore_compatibility
   - name: jsCore_small_oplog
   - name: jsCore_small_oplog_rs
+  - name: jstestfuzz
   - name: noPassthrough
   - name: noPassthroughWithMongod
   - name: bulk_gle_passthrough
   - name: parallel
   - name: parallel_compatibility
   - name: concurrency
+  - name: concurrency_replication
+  - name: concurrency_sharded
   - name: replicasets
   - name: replicasets_auth
   - name: replication
@@ -3716,6 +3755,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -3788,6 +3831,7 @@ buildvariants:
   - name: jsCore_small_oplog_WT
   - name: jsCore_small_oplog_rs
   - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
   - name: mmap
   - name: mongosTest
   - name: multiversion
@@ -3803,6 +3847,10 @@ buildvariants:
   - name: parallel_compatibility_WT
   - name: concurrency
   - name: concurrency_WT
+  - name: concurrency_replication
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded
+  - name: concurrency_sharded_WT
   - name: replicasets
   - name: replicasets_WT
   - name: replicasets_auth
@@ -3825,3 +3873,83 @@ buildvariants:
   - name: push
     distros:
     - rhel55-test
+
+- name: ubuntu1404-asio
+  display_name: z ASIO SSL Ubuntu 1404 64-bit
+  modules: ~
+  run_on:
+  - ubuntu1404-test
+  expansions:
+    tooltags: "-tags ssl"
+    compile_flags: --ssl --distmod=ubuntu1404 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
+    num_cores: $(grep -c ^processor /proc/cpuinfo)
+    num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
+    test_flags: "--continueOnFailure --mongosSetParameters='{outboundNetworkImpl: 'ASIO'}' --mongodSetParameters='{outboundNetworkImpl: 'ASIO'}'"
+  tasks:
+  - name: compile
+    distros:
+    - ubuntu1404-build
+  - name: aggregation_WT
+  - name: aggregation_auth
+  - name: auth_WT
+  - name: jsCore_small_oplog_rs_WT
+  - name: jstestfuzz
+  - name: mongosTest
+  - name: multiversion
+  - name: noPassthrough_WT
+  - name: noPassthroughWithMongod_WT
+  - name: bulk_gle_passthrough_WT
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded_WT
+  - name: replicasets_WT
+  - name: replicasets_auth
+  - name: replication_WT
+  - name: replication_auth
+  - name: sharding_WT
+  - name: sharding_auth
+  - name: slow1_WT
+  - name: slow2_WT
+  - name: sharding_jscore_passthrough_WT
+  - name: ssl
+  - name: sslSpecial
+  - name: tool_WT
+
+- name: windows-64-2k8-ssl-asio
+  display_name: z ASIO SSL Windows 64-bit 2008R2+
+  modules: ~
+  run_on:
+  - windows-64-vs2013-test
+  expansions:
+    exe: ".exe"
+    gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'
+    tooltags: "-tags ssl"
+    msi_target: msi
+    content_type: application/zip
+    compile_flags: --release --ssl --distmod=2008plus-ssl CPPPATH="c:/openssl/include" LIBPATH="c:/openssl/lib" -j$(grep -c ^processor /proc/cpuinfo) --dynamic-windows --win-version-min=ws08r2 VARIANT_DIR=win32
+    num_cores: $(grep -c ^processor /proc/cpuinfo)
+    num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
+    test_flags: "--continueOnFailure --mongosSetParameters='{outboundNetworkImpl: 'ASIO'}' --mongodSetParameters='{outboundNetworkImpl: 'ASIO'}'"
+    ext: zip
+  tasks:
+  - name: compile
+    distros:
+    - windows-64-vs2013-compile
+  - name: aggregation_WT
+  - name: auth_WT
+  - name: dbtest_WT
+  - name: jsCore_small_oplog_rs_WT
+  - name: mongosTest
+  - name: noPassthrough_WT
+  - name: noPassthroughWithMongod_WT
+  - name: bulk_gle_passthrough_WT
+  - name: concurrency_replication_WT
+  - name: concurrency_sharded_WT
+  - name: replicasets_WT
+  - name: replication_WT
+  - name: sharding_WT
+  - name: slow1_WT
+  - name: slow2_WT
+  - name: sharding_jscore_passthrough_WT
+  - name: tool_WT
+  - name: ssl
+  - name: sslSpecial

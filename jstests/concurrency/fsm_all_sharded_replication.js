@@ -6,6 +6,7 @@ var dir = 'jstests/concurrency/fsm_workloads';
 
 var blacklist = [
     // Disabled due to known bugs
+    'agg_base.js', // SERVER-19418 Mongod termination while executing aggregation pipeline
     'agg_match.js', // SERVER-3645 .count() can be wrong on sharded collections
     'count.js', // SERVER-3645 .count() can be wrong on sharded collections
     'count_limit_skip.js', // SERVER-3645 .count() can be wrong on sharded collections
@@ -13,6 +14,7 @@ var blacklist = [
     'distinct.js', // SERVER-13116 distinct isn't sharding aware
     'distinct_noindex.js', // SERVER-13116 distinct isn't sharding aware
     'distinct_projection.js', // SERVER-13116 distinct isn't sharding aware
+    'reindex_background.js', // SERVER-19128 Fatal assertion during secondary index build
     'yield_sort.js', // SERVER-17011 Cursor can return objects out of order if updated during query
     'yield_sort_merge.js', // SERVER-17011 also applies, since this query uses SORT stage,
                            // not SORT_MERGE stage in sharded environment
@@ -27,7 +29,6 @@ var blacklist = [
     'auth_drop_role.js',
     'auth_drop_user.js', // SERVER-16739 OpenSSL libcrypto crash
 
-    'agg_base.js', // SERVER-18878 previous workload has not finished executing on the secondaries
     'agg_group_external.js', // uses >100MB of data, and is flaky
     'agg_sort_external.js', // uses >100MB of data, and is flaky
     'compact.js', // compact can only be run against a standalone mongod
@@ -68,4 +69,4 @@ var blacklist = [
 
 runWorkloadsSerially(ls(dir).filter(function(file) {
     return !Array.contains(blacklist, file);
-}), { sharded: true, replication: true });
+}), { sharded: true, replication: true, useLegacyConfigServers: false });

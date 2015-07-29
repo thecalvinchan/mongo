@@ -316,7 +316,7 @@ TEST(RecordStoreTestHarness, RecordIteratorEOF) {
         ASSERT_OK(res.getStatus());
         uow.commit();
 
-        ASSERT(cursor->restore(opCtx.get()));
+        ASSERT(cursor->restore());
 
         // Iterator should still be EOF.
         ASSERT(!cursor->next());
@@ -369,7 +369,7 @@ TEST(RecordStoreTestHarness, RecordIteratorSavePositionedRestore) {
         for (int i = 0; i < nToInsert; i++) {
             cursor->savePositioned();
             cursor->savePositioned();  // It is legal to save twice in a row.
-            cursor->restore(opCtx.get());
+            cursor->restore();
 
             const auto record = cursor->next();
             ASSERT(record);
@@ -379,10 +379,65 @@ TEST(RecordStoreTestHarness, RecordIteratorSavePositionedRestore) {
 
         cursor->savePositioned();
         cursor->savePositioned();  // It is legal to save twice in a row.
-        cursor->restore(opCtx.get());
+        cursor->restore();
 
         ASSERT(!cursor->next());
     }
+}
+
+// Insert two records, and iterate a cursor to EOF. Seek the same cursor to the first and ensure
+// that next() returns the second record.
+TEST(RecordStoreTestHarness, SeekAfterEofAndContinue) {
+    unique_ptr<HarnessHelper> harnessHelper(newHarnessHelper());
+    unique_ptr<RecordStore> rs(harnessHelper->newNonCappedRecordStore());
+
+    unique_ptr<OperationContext> opCtx(harnessHelper->newOperationContext());
+
+    const int nToInsert = 2;
+    RecordId locs[nToInsert];
+    std::string datas[nToInsert];
+    for (int i = 0; i < nToInsert; i++) {
+        StringBuilder sb;
+        sb << "record " << i;
+        string data = sb.str();
+
+        WriteUnitOfWork uow(opCtx.get());
+        StatusWith<RecordId> res =
+            rs->insertRecord(opCtx.get(), data.c_str(), data.size() + 1, false);
+        ASSERT_OK(res.getStatus());
+        locs[i] = res.getValue();
+        datas[i] = data;
+        uow.commit();
+    }
+
+
+    // Get a forward iterator starting at the beginning of the record store.
+    auto cursor = rs->getCursor(opCtx.get());
+
+    // Iterate, checking EOF along the way.
+    for (int i = 0; i < nToInsert; i++) {
+        const auto record = cursor->next();
+        ASSERT(record);
+        ASSERT_EQUALS(locs[i], record->id);
+        ASSERT_EQUALS(datas[i], record->data.data());
+    }
+    ASSERT(!cursor->next());
+
+    {
+        const auto record = cursor->seekExact(locs[0]);
+        ASSERT(record);
+        ASSERT_EQUALS(locs[0], record->id);
+        ASSERT_EQUALS(datas[0], record->data.data());
+    }
+
+    {
+        const auto record = cursor->next();
+        ASSERT(record);
+        ASSERT_EQUALS(locs[1], record->id);
+        ASSERT_EQUALS(datas[1], record->data.data());
+    }
+
+    ASSERT(!cursor->next());
 }
 
 }  // namespace mongo

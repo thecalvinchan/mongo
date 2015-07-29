@@ -94,7 +94,6 @@ void truncateAndResetOplog(OperationContext* txn,
     // because the bgsync thread, while running, may update the blacklist.
     replCoord->resetMyLastOptime();
     bgsync->stop();
-    bgsync->setLastAppliedHash(0);
     bgsync->clearBuffer();
 
     replCoord->clearSyncSourceBlacklist();
@@ -186,7 +185,7 @@ bool _initialSyncClone(OperationContext* txn,
         options.useReplAuth = true;
         options.snapshot = false;
         options.mayYield = true;
-        options.mayBeInterrupted = false;
+        options.mayBeInterrupted = true;
         options.syncData = dataPass;
         options.syncIndexes = !dataPass;
 
@@ -345,13 +344,11 @@ Status _initialSync() {
     truncateAndResetOplog(&txn, replCoord, bgsync);
 
     OplogReader r;
-    Timestamp now(duration_cast<Seconds>(Milliseconds(curTimeMillis64())), 0);
-    OpTime nowOpTime(now, std::numeric_limits<long long>::max());
 
     while (r.getHost().empty()) {
         // We must prime the sync source selector so that it considers all candidates regardless
-        // of oplog position, by passing in "now" with max term as the last op fetched time.
-        r.connectToSyncSource(&txn, nowOpTime, replCoord);
+        // of oplog position, by passing in null OpTime as the last op fetched time.
+        r.connectToSyncSource(&txn, OpTime(), replCoord);
         if (r.getHost().empty()) {
             std::string msg =
                 "no valid sync sources found in current replset to do an initial sync";

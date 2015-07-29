@@ -141,9 +141,13 @@ struct Cloner::Fun {
                                   << "]",
                     !createdCollection);
             MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
+                if (_mayBeInterrupted) {
+                    txn->checkForInterrupt();
+                }
+
                 WriteUnitOfWork wunit(txn);
-                collection = db->createCollection(txn, to_collection.ns(), CollectionOptions());
-                verify(collection);
+                Status s = userCreateNS(txn, db, to_collection.toString(), from_options, false);
+                verify(s.isOK());
                 wunit.commit();
             }
             MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "createCollection", to_collection.ns());
@@ -212,6 +216,10 @@ struct Cloner::Fun {
 
             ++numSeen;
             MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
+                if (_mayBeInterrupted) {
+                    txn->checkForInterrupt();
+                }
+
                 WriteUnitOfWork wunit(txn);
 
                 BSONObj doc = tmp;
@@ -237,6 +245,7 @@ struct Cloner::Fun {
 
     int64_t numSeen;
     NamespaceString from_collection;
+    BSONObj from_options;
     NamespaceString to_collection;
     time_t saveLast;
     bool _mayYield;
@@ -248,6 +257,7 @@ struct Cloner::Fun {
 void Cloner::copy(OperationContext* txn,
                   const string& toDBName,
                   const NamespaceString& from_collection,
+                  const BSONObj& from_opts,
                   const NamespaceString& to_collection,
                   bool masterSameProcess,
                   bool slaveOk,
@@ -260,6 +270,7 @@ void Cloner::copy(OperationContext* txn,
     Fun f(txn, toDBName);
     f.numSeen = 0;
     f.from_collection = from_collection;
+    f.from_options = from_opts;
     f.to_collection = to_collection;
     f.saveLast = time(0);
     f._mayYield = mayYield;
@@ -269,7 +280,7 @@ void Cloner::copy(OperationContext* txn,
     {
         Lock::TempRelease tempRelease(txn->lockState());
         _conn->query(stdx::function<void(DBClientCursorBatchIterator&)>(f),
-                     from_collection,
+                     from_collection.ns(),
                      query,
                      0,
                      options);
@@ -285,6 +296,7 @@ void Cloner::copy(OperationContext* txn,
 void Cloner::copyIndexes(OperationContext* txn,
                          const string& toDBName,
                          const NamespaceString& from_collection,
+                         const BSONObj& from_opts,
                          const NamespaceString& to_collection,
                          bool masterSameProcess,
                          bool slaveOk,
@@ -298,7 +310,7 @@ void Cloner::copyIndexes(OperationContext* txn,
     {
         Lock::TempRelease tempRelease(txn->lockState());
         list<BSONObj> sourceIndexes =
-            _conn->getIndexSpecs(from_collection, slaveOk ? QueryOption_SlaveOk : 0);
+            _conn->getIndexSpecs(from_collection.ns(), slaveOk ? QueryOption_SlaveOk : 0);
         for (list<BSONObj>::const_iterator it = sourceIndexes.begin(); it != sourceIndexes.end();
              ++it) {
             indexesToBuild.push_back(fixindex(to_collection.db().toString(), *it));
@@ -322,8 +334,14 @@ void Cloner::copyIndexes(OperationContext* txn,
     Collection* collection = db->getCollection(to_collection);
     if (!collection) {
         MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
+            if (mayBeInterrupted) {
+                txn->checkForInterrupt();
+            }
+
             WriteUnitOfWork wunit(txn);
-            collection = db->createCollection(txn, to_collection.ns(), CollectionOptions());
+            Status s = userCreateNS(txn, db, to_collection.toString(), from_opts, false);
+            invariant(s.isOK());
+            collection = db->getCollection(to_collection);
             invariant(collection);
             wunit.commit();
         }
@@ -383,25 +401,40 @@ bool Cloner::copyCollection(OperationContext* txn,
     // config
     BSONObj filter = BSON("name" << nss.coll().toString());
     list<BSONObj> collList = _conn->getCollectionInfos(dbname, filter);
+    BSONObj options;
     if (!collList.empty()) {
         invariant(collList.size() <= 1);
         BSONObj col = collList.front();
         if (col["options"].isABSONObj()) {
+            options = col["options"].Obj();
             MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
+                if (mayBeInterrupted)
+                    txn->checkForInterrupt();
+
                 WriteUnitOfWork wunit(txn);
-                Status status = userCreateNS(txn, db, ns, col["options"].Obj(), 0);
+                Status status = userCreateNS(txn, db, ns, options, false);
                 if (!status.isOK()) {
                     errmsg = status.toString();
+                    // abort write unit of work
                     return false;
                 }
                 wunit.commit();
             }
-            MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "createUser", ns);
+            MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "createCollection", ns);
         }
     }
 
     // main data
-    copy(txn, dbname, nss, nss, false, true, mayYield, mayBeInterrupted, Query(query).snapshot());
+    copy(txn,
+         dbname,
+         nss,
+         options,
+         nss,
+         false,
+         true,
+         mayYield,
+         mayBeInterrupted,
+         Query(query).snapshot());
 
     /* TODO : copyIndexes bool does not seem to be implemented! */
     if (!shouldCopyIndexes) {
@@ -412,6 +445,7 @@ bool Cloner::copyCollection(OperationContext* txn,
     copyIndexes(txn,
                 dbname,
                 NamespaceString(ns),
+                options,
                 NamespaceString(ns),
                 false,
                 true,
@@ -561,6 +595,10 @@ Status Cloner::copyDb(OperationContext* txn,
 
             {
                 MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
+                    if (opts.mayBeInterrupted) {
+                        txn->checkForInterrupt();
+                    }
+
                     WriteUnitOfWork wunit(txn);
 
                     // we defer building id index for performance - building it in batch is much
@@ -572,7 +610,7 @@ Status Cloner::copyDb(OperationContext* txn,
 
                     wunit.commit();
                 }
-                MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "createUser", to_name.ns());
+                MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "createCollection", to_name.ns());
             }
 
             LOG(1) << "\t\t cloning " << from_name << " -> " << to_name << endl;
@@ -583,6 +621,7 @@ Status Cloner::copyDb(OperationContext* txn,
             copy(txn,
                  toDBName,
                  from_name,
+                 options,
                  to_name,
                  masterSameProcess,
                  opts.slaveOk,
@@ -604,8 +643,9 @@ Status Cloner::copyDb(OperationContext* txn,
                 set<RecordId> dups;
 
                 MultiIndexBlock indexer(txn, c);
-                if (opts.mayBeInterrupted)
+                if (opts.mayBeInterrupted) {
                     indexer.allowInterruption();
+                }
 
                 uassertStatusOK(indexer.init(c->getIndexCatalog()->getDefaultIdIndexSpec()));
                 uassertStatusOK(indexer.insertAllDocumentsInCollection(&dups));
@@ -652,6 +692,7 @@ Status Cloner::copyDb(OperationContext* txn,
             copyIndexes(txn,
                         toDBName,
                         from_name,
+                        collection.getObjectField("options"),
                         to_name,
                         masterSameProcess,
                         opts.slaveOk,

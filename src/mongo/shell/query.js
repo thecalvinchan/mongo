@@ -41,6 +41,8 @@ DBQuery.prototype.help = function () {
     print("\t.max(idxDoc)")
     print("\t.comment(comment)")
     print("\t.snapshot()")
+    print("\t.returnKey()")
+    print("\t.maxScan(n)")
     print("\t.readPref(mode, tagset)")
     
     print("\nCursor methods");
@@ -93,10 +95,10 @@ DBQuery.prototype._exec = function(){
         assert.eq( 0 , this._numReturned );
         this._cursorSeen = 0;
 
-        if (this._mongo.useFindCommand() && this._canUseFindCommand()) {
+        if (this._mongo.useReadCommands() && this._canUseFindCommand()) {
             var findCmd = this._convertToCommand();
             var cmdRes = this._db.runCommand(findCmd);
-            this._cursor = new DBCommandCursor(this._mongo, cmdRes);
+            this._cursor = new DBCommandCursor(this._mongo, cmdRes, this._batchSize);
         }
         else {
             this._cursor = this._mongo.find(this._ns,
@@ -147,7 +149,7 @@ DBQuery.prototype._convertToCommand = function() {
         }
     }
 
-    if (this._query.orderby) {
+    if ("orderby" in this._query) {
         cmd["sort"] = this._query.orderby;
     }
 
@@ -155,43 +157,43 @@ DBQuery.prototype._convertToCommand = function() {
         cmd["projection"] = this._fields;
     }
 
-    if (this._query.$hint) {
+    if ("$hint" in this._query) {
         cmd["hint"] = this._query.$hint;
     }
 
-    if (this._query.$readPreference) {
+    if ("$readPreference" in this._query) {
        cmd["$readPreference"] = this._query.$readPreference;
     }
 
-    if (this._query.$comment) {
+    if ("$comment" in this._query) {
         cmd["comment"] = this._query.$comment;
     }
 
-    if (this._query.$maxScan) {
+    if ("$maxScan" in this._query) {
         cmd["maxScan"] = this._query.$maxScan;
     }
 
-    if (this._query.$maxTimeMS) {
+    if ("$maxTimeMS" in this._query) {
         cmd["maxTimeMS"] = this._query.$maxTimeMS;
     }
 
-    if (this._query.$max) {
+    if ("$max" in this._query) {
         cmd["max"] = this._query.$max;
     }
 
-    if (this._query.$min) {
+    if ("$min" in this._query) {
         cmd["min"] = this._query.$min;
     }
 
-    if (this._query.$returnKey) {
+    if ("$returnKey" in this._query) {
         cmd["returnKey"] = this._query.$returnKey;
     }
 
-    if (this._query.$showDiskLoc) {
+    if ("$showDiskLoc" in this._query) {
         cmd["showRecordId"] = this._query.$showDiskLoc;
     }
 
-    if (this._query.$snapshot) {
+    if ("$snapshot" in this._query) {
         cmd["snapshot"] = this._query.$snapshot;
     }
 
@@ -265,8 +267,9 @@ DBQuery.prototype.next = function(){
         throw Error( "error hasNext: " + o );
     
     var ret = this._cursor.next();
-    if ( ret.$err )
-        throw Error( "error: " + tojson( ret ) );
+    if ( ret.$err ) {
+        throw _getErrorWithCode(ret, "error: " + tojson( ret ));
+    }
 
     this._numReturned++;
     return ret;
@@ -277,7 +280,7 @@ DBQuery.prototype.objsLeftInBatch = function(){
 
     var ret = this._cursor.objsLeftInBatch();
     if ( ret.$err )
-        throw Error( "error: " + tojson( ret ) );
+        throw _getErrorWithCode(ret,  "error: " + tojson( ret ));
 
     return ret;
 }
@@ -333,7 +336,7 @@ DBQuery.prototype.count = function( applySkipLimit ) {
 
     var res = this._db.runCommand( cmd );
     if( res && res.n != null ) return res.n;
-    throw Error( "count failed: " + tojson( res ) );
+    throw _getErrorWithCode(res, "count failed: " + tojson( res ));
 }
 
 DBQuery.prototype.size = function(){
@@ -360,6 +363,15 @@ DBQuery.prototype.itcount = function(){
     while ( this.hasNext() ){
         num++;
         this.next();
+
+        // This function can be called with some very large cursors.
+        // SpiderMonkey appears happy to allow these objects to accumulate, so
+        // regular gc() avoids an overly large memory footprint.
+        //
+        // TODO: migrate this function into c++
+        if (num % 10000 == 0) {
+            gc();
+        }
     }
     return num;
 }
@@ -455,6 +467,14 @@ DBQuery.prototype.snapshot = function(){
     return this._addSpecial( "$snapshot" , true );
 }
 
+DBQuery.prototype.returnKey = function(){
+    return this._addSpecial( "$returnKey" , true );
+}
+
+DBQuery.prototype.maxScan = function(n){
+    return this._addSpecial( "$maxScan" , n );
+}
+
 DBQuery.prototype.pretty = function(){
     this._prettyShell = true;
     return this;
@@ -516,29 +536,109 @@ DBQuery.Option = {
 
 function DBCommandCursor(mongo, cmdResult, batchSize) {
     assert.commandWorked(cmdResult)
-    this._firstBatch = cmdResult.cursor.firstBatch.reverse(); // modifies input to allow popping
-    this._cursor = mongo.cursorFromId(cmdResult.cursor.ns, cmdResult.cursor.id, batchSize);
+    this._batch = cmdResult.cursor.firstBatch.reverse(); // modifies input to allow popping
+
+    if (mongo.useReadCommands()) {
+        this._useReadCommands = true;
+        this._cursorid = cmdResult.cursor.id.toNumber();
+        this._batchSize = batchSize;
+
+        this._ns = cmdResult.cursor.ns;
+        this._db = mongo.getDB(this._ns.substr(0, this._ns.indexOf(".")));
+        this._collName = this._ns.substr(this._ns.indexOf(".") + 1);
+    }
+    else {
+        this._cursor = mongo.cursorFromId(cmdResult.cursor.ns, cmdResult.cursor.id, batchSize);
+    }
 }
 
 DBCommandCursor.prototype = {};
-DBCommandCursor.prototype.hasNext = function() {
-    return this._firstBatch.length || this._cursor.hasNext();
+
+/**
+ * Fills out this._batch by running a getMore command. If the cursor is exhausted, also resets
+ * this._cursorid to 0.
+ *
+ * Throws on error.
+ */
+DBCommandCursor.prototype._runGetMoreCommand = function() {
+    // Construct the getMore command.
+    var getMoreCmd = {
+        getMore: NumberLong(this._cursorid.toString()),
+        collection: this._collName
+    };
+
+    if (this._batchSize) {
+        getMoreCmd["batchSize"] = this._batchSize;
+    }
+
+    // Deliver the getMore command, and check for errors in the response.
+    var cmdRes = this._db.runCommand(getMoreCmd);
+    assert.commandWorked(cmdRes);
+
+    if (this._ns !== cmdRes.cursor.ns) {
+        throw Error("unexpected collection in getMore response: " +
+                    this._ns + " != " + cmdRes.cursor.ns);
+    }
+
+    if (cmdRes.cursor.id.toNumber() === 0) {
+        this._cursorid = 0;
+    }
+    else if (this._cursorid !== cmdRes.cursor.id.toNumber()) {
+        throw Error("unexpected cursor id: " + this._cursorid + " != " + cmdRes.cursor.id);
+    }
+
+    // Successfully retrieved the next batch.
+    this._batch = cmdRes.cursor.nextBatch.reverse();
 }
+
+DBCommandCursor.prototype._hasNextUsingCommands = function() {
+    assert(this._useReadCommands);
+
+    if (!this._batch.length) {
+        if (this._cursorid === 0) {
+            return false;
+        }
+
+        this._runGetMoreCommand();
+    }
+
+    return this._batch.length > 0;
+}
+
+DBCommandCursor.prototype.hasNext = function() {
+    if (this._useReadCommands) {
+        return this._hasNextUsingCommands();
+    }
+
+    return this._batch.length || this._cursor.hasNext();
+}
+
 DBCommandCursor.prototype.next = function() {
-    if (this._firstBatch.length) {
+    if (this._batch.length) {
         // $err wouldn't be in _firstBatch since ok was true.
-        return this._firstBatch.pop();
+        return this._batch.pop();
+    }
+    else if (this._useReadCommands) {
+        // Have to call hasNext() here, as this is where we may issue a getMore in order to retrieve
+        // the next batch of results.
+        if (!this.hasNext()) throw Error("error hasNext: false");
+        return this._batch.pop();
     }
     else {
+        if (!this._cursor.hasNext()) throw Error("error hasNext: false");
+
         var ret = this._cursor.next();
         if ( ret.$err )
-            throw Error( "error: " + tojson( ret ) );
+            throw _getErrorWithCode(ret, "error: " + tojson(ret));
         return ret;
     }
 }
 DBCommandCursor.prototype.objsLeftInBatch = function() {
-    if (this._firstBatch.length) {
-        return this._firstBatch.length;
+    if (this._useReadCommands) {
+        return this._batch.length;
+    }
+    else if (this._batch.length) {
+        return this._batch.length;
     }
     else {
         return this._cursor.objsLeftInBatch();

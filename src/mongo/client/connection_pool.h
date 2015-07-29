@@ -53,7 +53,6 @@ public:
      * Information about a connection in the pool.
      */
     struct ConnectionInfo {
-        ConnectionInfo() : conn(NULL) {}
         ConnectionInfo(DBClientConnection* theConn, Date_t date)
             : conn(theConn), creationDate(date) {}
 
@@ -61,7 +60,7 @@ public:
         DBClientConnection* const conn;
 
         // The date at which the connection was created.
-        Date_t creationDate;
+        const Date_t creationDate;
     };
 
     typedef stdx::list<ConnectionInfo> ConnectionList;
@@ -97,6 +96,12 @@ public:
          */
         ~ConnectionPtr();
 
+        // We need to provide user defined move operations as we need to set the pool
+        // pointer to nullptr on the moved-from object.
+        ConnectionPtr(ConnectionPtr&&);
+
+        ConnectionPtr& operator=(ConnectionPtr&&);
+
         /**
          * Obtains the underlying connection which can be used for making calls to the server.
          */
@@ -111,7 +116,7 @@ public:
 
     private:
         ConnectionPool* _pool;
-        const ConnectionList::iterator _connInfo;
+        ConnectionList::iterator _connInfo;
     };
 
 
@@ -168,11 +173,6 @@ private:
      * Apply cleanup policy to any host(s) not active in the last kCleanupInterval milliseconds.
      */
     void _cleanUpStaleHosts_inlock(Date_t now);
-
-    /**
-     * Implementation of cleanUpOlderThan which assumes that _mutex is already held.
-     */
-    void _cleanUpOlderThan_inlock(Date_t now);
 
     /**
      * Reaps connections in "hostConns" that are too old or have been in the pool too long as of

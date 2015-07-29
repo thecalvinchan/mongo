@@ -39,6 +39,7 @@
 #include "mongo/db/concurrency/write_conflict_exception.h"
 #include "mongo/db/catalog/collection.h"
 #include "mongo/db/storage/record_fetcher.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/fail_point_service.h"
 #include "mongo/util/log.h"
 
@@ -48,6 +49,7 @@ namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* CollectionScan::kStageType = "COLLSCAN";
@@ -56,21 +58,15 @@ CollectionScan::CollectionScan(OperationContext* txn,
                                const CollectionScanParams& params,
                                WorkingSet* workingSet,
                                const MatchExpression* filter)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _workingSet(workingSet),
       _filter(filter),
       _params(params),
       _isDead(false),
-      _wsidForFetch(_workingSet->allocate()),
-      _commonStats(kStageType) {
+      _wsidForFetch(_workingSet->allocate()) {
     // Explain reports the direction of the collection scan.
     _specificStats.direction = params.direction;
-
-    // We pre-allocate a WSM and use it to pass up fetch requests. This should never be used
-    // for anything other than passing up NEED_YIELD. We use the loc and owned obj state, but
-    // the loc isn't really pointing at any obj. The obj field of the WSM should never be used.
-    WorkingSetMember* member = _workingSet->get(_wsidForFetch);
-    member->state = WorkingSetMember::LOC_AND_OWNED_OBJ;
 }
 
 PlanStage::StageState CollectionScan::work(WorkingSetID* out) {
@@ -80,7 +76,11 @@ PlanStage::StageState CollectionScan::work(WorkingSetID* out) {
     ScopedTimer timer(&_commonStats.executionTimeMillis);
 
     if (_isDead) {
-        Status status(ErrorCodes::InternalError, "CollectionScan died");
+        Status status(
+            ErrorCodes::CappedPositionLost,
+            str::stream()
+                << "CollectionScan died due to position in capped collection being deleted. "
+                << "Last seen record id: " << _lastSeenId);
         *out = WorkingSetCommon::allocateStatusMember(_workingSet, status);
         return PlanStage::DEAD;
     }
@@ -110,8 +110,10 @@ PlanStage::StageState CollectionScan::work(WorkingSetID* out) {
                 // time we'd need to create a cursor after already getting a record out of it.
                 if (!_cursor->seekExact(_lastSeenId)) {
                     _isDead = true;
-                    Status status(ErrorCodes::InternalError,
-                                  "CollectionScan died: Unexpected RecordId");
+                    Status status(ErrorCodes::CappedPositionLost,
+                                  str::stream() << "CollectionScan died due to failure to restore "
+                                                << "tailable cursor position. "
+                                                << "Last seen record id: " << _lastSeenId);
                     *out = WorkingSetCommon::allocateStatusMember(_workingSet, status);
                     return PlanStage::DEAD;
                 }
@@ -164,7 +166,7 @@ PlanStage::StageState CollectionScan::work(WorkingSetID* out) {
     WorkingSetMember* member = _workingSet->get(id);
     member->loc = record->id;
     member->obj = {_txn->recoveryUnit()->getSnapshotId(), record->data.releaseToBson()};
-    member->state = WorkingSetMember::LOC_AND_UNOWNED_OBJ;
+    _workingSet->transitionToLocAndObj(id);
 
     return returnIfMatches(member, id, out);
 }
@@ -189,9 +191,9 @@ bool CollectionScan::isEOF() {
     return _commonStats.isEOF || _isDead;
 }
 
-void CollectionScan::invalidate(OperationContext* txn, const RecordId& id, InvalidationType type) {
-    ++_commonStats.invalidates;
-
+void CollectionScan::doInvalidate(OperationContext* txn,
+                                  const RecordId& id,
+                                  InvalidationType type) {
     // We don't care about mutations since we apply any filters to the result when we (possibly)
     // return it.
     if (INVALIDATION_DELETION != type) {
@@ -212,33 +214,35 @@ void CollectionScan::invalidate(OperationContext* txn, const RecordId& id, Inval
     }
 }
 
-void CollectionScan::saveState() {
-    _txn = NULL;
-    ++_commonStats.yields;
+void CollectionScan::doSaveState() {
     if (_cursor) {
         _cursor->savePositioned();
     }
 }
 
-void CollectionScan::restoreState(OperationContext* opCtx) {
-    invariant(_txn == NULL);
-    _txn = opCtx;
-    ++_commonStats.unyields;
+void CollectionScan::doRestoreState() {
     if (_cursor) {
-        if (!_cursor->restore(opCtx)) {
-            warning() << "Collection dropped or state deleted during yield of CollectionScan: "
-                      << opCtx->getNS();
+        if (!_cursor->restore()) {
+            warning() << "Could not restore RecordCursor for CollectionScan: " << _txn->getNS();
             _isDead = true;
         }
     }
 }
 
-vector<PlanStage*> CollectionScan::getChildren() const {
-    vector<PlanStage*> empty;
-    return empty;
+void CollectionScan::doDetachFromOperationContext() {
+    _txn = NULL;
+    if (_cursor)
+        _cursor->detachFromOperationContext();
 }
 
-PlanStageStats* CollectionScan::getStats() {
+void CollectionScan::doReattachToOperationContext(OperationContext* opCtx) {
+    invariant(_txn == NULL);
+    _txn = opCtx;
+    if (_cursor)
+        _cursor->reattachToOperationContext(opCtx);
+}
+
+unique_ptr<PlanStageStats> CollectionScan::getStats() {
     // Add a BSON representation of the filter to the stats tree, if there is one.
     if (NULL != _filter) {
         BSONObjBuilder bob;
@@ -246,13 +250,9 @@ PlanStageStats* CollectionScan::getStats() {
         _commonStats.filter = bob.obj();
     }
 
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_COLLSCAN));
-    ret->specific.reset(new CollectionScanStats(_specificStats));
-    return ret.release();
-}
-
-const CommonStats* CollectionScan::getCommonStats() const {
-    return &_commonStats;
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_COLLSCAN);
+    ret->specific = make_unique<CollectionScanStats>(_specificStats);
+    return ret;
 }
 
 const SpecificStats* CollectionScan::getSpecificStats() const {

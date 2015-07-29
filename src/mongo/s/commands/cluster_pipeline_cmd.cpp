@@ -31,6 +31,7 @@
 #include "mongo/platform/basic.h"
 
 #include <boost/intrusive_ptr.hpp>
+#include <initializer_list>
 #include <string>
 #include <utility>
 #include <vector>
@@ -150,13 +151,11 @@ public:
             commandBuilder.setField("cursor", Value(cmdObj["cursor"]));
         }
 
-        if (cmdObj.hasField("$queryOptions")) {
-            commandBuilder.setField("$queryOptions", Value(cmdObj["$queryOptions"]));
-        }
-
-        if (cmdObj.hasField(LiteParsedQuery::cmdOptionMaxTimeMS)) {
-            commandBuilder.setField(LiteParsedQuery::cmdOptionMaxTimeMS,
-                                    Value(cmdObj[LiteParsedQuery::cmdOptionMaxTimeMS]));
+        const std::initializer_list<StringData> fieldsToPropagateToShards = {
+            "$queryOptions", "$readMajorityTemporaryName", LiteParsedQuery::cmdOptionMaxTimeMS,
+        };
+        for (auto&& field : fieldsToPropagateToShards) {
+            commandBuilder[field] = Value(cmdObj[field]);
         }
 
         BSONObj shardedCommand = commandBuilder.freeze().toBson();
@@ -212,6 +211,8 @@ public:
                 Value(cmdObj[LiteParsedQuery::cmdOptionMaxTimeMS]);
         }
 
+        // Not propagating $readMajorityTemporaryName to merger since it doesn't do local reads.
+
         string outputNsOrEmpty;
         if (DocumentSourceOut* out = dynamic_cast<DocumentSourceOut*>(pipeline->output())) {
             outputNsOrEmpty = out->getOutputNs().ns();
@@ -246,7 +247,10 @@ private:
     // returned cursors with mongos's cursorCache.
     BSONObj aggRunCommand(DBClientBase* conn, const string& db, BSONObj cmd, int queryOptions);
 
-    bool aggPassthrough(DBConfigPtr conf, BSONObj cmd, BSONObjBuilder& result, int queryOptions);
+    bool aggPassthrough(shared_ptr<DBConfig> conf,
+                        BSONObj cmd,
+                        BSONObjBuilder& result,
+                        int queryOptions);
 } clusterPipelineCmd;
 
 DocumentSourceMergeCursors::CursorIds PipelineCommand::parseCursors(
@@ -380,7 +384,7 @@ BSONObj PipelineCommand::aggRunCommand(DBClientBase* conn,
     return result;
 }
 
-bool PipelineCommand::aggPassthrough(DBConfigPtr conf,
+bool PipelineCommand::aggPassthrough(shared_ptr<DBConfig> conf,
                                      BSONObj cmd,
                                      BSONObjBuilder& out,
                                      int queryOptions) {

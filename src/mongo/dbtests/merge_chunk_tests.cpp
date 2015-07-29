@@ -26,14 +26,17 @@
  *    then also delete it in the license file.
  */
 
+#include "mongo/platform/basic.h"
+
 #include "mongo/db/range_arithmetic.h"
+#include "mongo/db/service_context.h"
+#include "mongo/db/s/collection_metadata.h"
+#include "mongo/db/s/sharding_state.h"
 #include "mongo/dbtests/config_server_fixture.h"
 #include "mongo/s/catalog/type_chunk.h"
 #include "mongo/s/catalog/type_collection.h"
-#include "mongo/s/chunk.h"  // for genID
+#include "mongo/s/chunk.h"
 #include "mongo/s/chunk_version.h"
-#include "mongo/s/collection_metadata.h"
-#include "mongo/s/d_state.h"
 #include "mongo/s/d_merge.h"
 #include "mongo/unittest/unittest.h"
 
@@ -42,13 +45,13 @@ namespace mongo {
 using std::string;
 using std::vector;
 
+namespace {
+
 /**
  * Specialization of the config server fixture with helpers for the tests below.
  */
 class MergeChunkFixture : public ConfigServerFixture {
 public:
-    MergeChunkFixture() : ConfigServerFixture() {}
-
     /**
      * Stores ranges for a particular collection and shard starting from some version
      */
@@ -69,7 +72,7 @@ public:
         DBDirectClient client(&_txn);
 
         client.update(CollectionType::ConfigNS,
-                      BSON(CollectionType::fullNs(coll.getNs())),
+                      BSON(CollectionType::fullNs(coll.getNs().ns())),
                       coll.toBSON(),
                       true,
                       false);
@@ -79,7 +82,7 @@ public:
             ChunkType chunk;
             // TODO: We should not rely on the serialized ns, minkey being unique in the future,
             // causes problems since it links string serialization to correctness.
-            chunk.setName(Chunk::genID(nss, it->minKey));
+            chunk.setName(Chunk::genID(nss.ns(), it->minKey));
             chunk.setShard(shardName);
             chunk.setNS(nss.ns());
             chunk.setVersion(nextVersion);
@@ -141,8 +144,8 @@ TEST_F(MergeChunkTests, FailedMerge) {
     vector<KeyRange> ranges;
 
     // Setup chunk metadata
-    ranges.push_back(KeyRange(nss, BSON("x" << 0), BSON("x" << 10), kp));
-    ranges.push_back(KeyRange(nss, BSON("x" << 10), BSON("x" << 20), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 0), BSON("x" << 10), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 10), BSON("x" << 20), kp));
     storeCollectionRanges(nss, shardName(), ranges, ChunkVersion(1, 0, epoch));
 
     // Do bad merges
@@ -182,8 +185,8 @@ TEST_F(MergeChunkTests, FailedMergeHole) {
     vector<KeyRange> ranges;
 
     // Setup chunk metadata
-    ranges.push_back(KeyRange(nss, BSON("x" << 0), BSON("x" << 10), kp));
-    ranges.push_back(KeyRange(nss, BSON("x" << 11), BSON("x" << 20), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 0), BSON("x" << 10), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 11), BSON("x" << 20), kp));
     storeCollectionRanges(nss, shardName(), ranges, ChunkVersion(1, 0, epoch));
 
     // Do bad merge with hole
@@ -201,8 +204,8 @@ TEST_F(MergeChunkTests, FailedMergeMinMax) {
     vector<KeyRange> ranges;
 
     // Setup chunk metadata
-    ranges.push_back(KeyRange(nss, BSON("x" << MINKEY), BSON("x" << 0), kp));
-    ranges.push_back(KeyRange(nss, BSON("x" << 0), BSON("x" << MAXKEY), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << MINKEY), BSON("x" << 0), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 0), BSON("x" << MAXKEY), kp));
     storeCollectionRanges(nss, shardName(), ranges, ChunkVersion(1, 0, epoch));
 
     // Do bad merge with hole
@@ -224,14 +227,15 @@ TEST_F(MergeChunkTests, BasicMerge) {
     vector<KeyRange> ranges;
 
     // Setup chunk metadata
-    ranges.push_back(KeyRange(nss, BSON("x" << 0), BSON("x" << 1), kp));
-    ranges.push_back(KeyRange(nss, BSON("x" << 1), BSON("x" << 2), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 0), BSON("x" << 1), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 1), BSON("x" << 2), kp));
     storeCollectionRanges(nss, shardName(), ranges, ChunkVersion(1, 0, epoch));
 
     // Get latest version
     ChunkVersion latestVersion;
-    shardingState.refreshMetadataNow(&_txn, nss, &latestVersion);
-    shardingState.resetMetadata(nss);
+    ShardingState::get(getGlobalServiceContext())
+        ->refreshMetadataNow(&_txn, nss.ns(), &latestVersion);
+    ShardingState::get(getGlobalServiceContext())->resetMetadata(nss.ns());
 
     // Do merge
     string errMsg;
@@ -240,7 +244,8 @@ TEST_F(MergeChunkTests, BasicMerge) {
     ASSERT(result);
 
     // Verify result
-    CollectionMetadataPtr metadata = shardingState.getCollectionMetadata(nss);
+    CollectionMetadataPtr metadata =
+        ShardingState::get(getGlobalServiceContext())->getCollectionMetadata(nss.ns());
 
     ChunkType chunk;
     ASSERT(metadata->getNextChunk(BSON("x" << 0), &chunk));
@@ -261,14 +266,15 @@ TEST_F(MergeChunkTests, BasicMergeMinMax) {
     vector<KeyRange> ranges;
 
     // Setup chunk metadata
-    ranges.push_back(KeyRange(nss, BSON("x" << MINKEY), BSON("x" << 0), kp));
-    ranges.push_back(KeyRange(nss, BSON("x" << 0), BSON("x" << MAXKEY), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << MINKEY), BSON("x" << 0), kp));
+    ranges.push_back(KeyRange(nss.ns(), BSON("x" << 0), BSON("x" << MAXKEY), kp));
     storeCollectionRanges(nss, shardName(), ranges, ChunkVersion(1, 0, epoch));
 
     // Get latest version
     ChunkVersion latestVersion;
-    shardingState.refreshMetadataNow(&_txn, nss, &latestVersion);
-    shardingState.resetMetadata(nss);
+    ShardingState::get(getGlobalServiceContext())
+        ->refreshMetadataNow(&_txn, nss.ns(), &latestVersion);
+    ShardingState::get(getGlobalServiceContext())->resetMetadata(nss.ns());
 
     // Do merge
     string errMsg;
@@ -277,7 +283,8 @@ TEST_F(MergeChunkTests, BasicMergeMinMax) {
     ASSERT(result);
 
     // Verify result
-    CollectionMetadataPtr metadata = shardingState.getCollectionMetadata(nss);
+    CollectionMetadataPtr metadata =
+        ShardingState::get(getGlobalServiceContext())->getCollectionMetadata(nss.ns());
 
     ChunkType chunk;
     ASSERT(metadata->getNextChunk(BSON("x" << MINKEY), &chunk));
@@ -298,14 +305,17 @@ TEST_F(MergeChunkTests, CompoundMerge) {
     vector<KeyRange> ranges;
 
     // Setup chunk metadata
-    ranges.push_back(KeyRange(nss, BSON("x" << 0 << "y" << 1), BSON("x" << 1 << "y" << 0), kp));
-    ranges.push_back(KeyRange(nss, BSON("x" << 1 << "y" << 0), BSON("x" << 2 << "y" << 1), kp));
+    ranges.push_back(
+        KeyRange(nss.ns(), BSON("x" << 0 << "y" << 1), BSON("x" << 1 << "y" << 0), kp));
+    ranges.push_back(
+        KeyRange(nss.ns(), BSON("x" << 1 << "y" << 0), BSON("x" << 2 << "y" << 1), kp));
     storeCollectionRanges(nss, shardName(), ranges, ChunkVersion(1, 0, epoch));
 
     // Get latest version
     ChunkVersion latestVersion;
-    shardingState.refreshMetadataNow(&_txn, nss, &latestVersion);
-    shardingState.resetMetadata(nss);
+    ShardingState::get(getGlobalServiceContext())
+        ->refreshMetadataNow(&_txn, nss.ns(), &latestVersion);
+    ShardingState::get(getGlobalServiceContext())->resetMetadata(nss.ns());
 
     // Do merge
     string errMsg;
@@ -315,7 +325,8 @@ TEST_F(MergeChunkTests, CompoundMerge) {
     ASSERT(result);
 
     // Verify result
-    CollectionMetadataPtr metadata = shardingState.getCollectionMetadata(nss);
+    CollectionMetadataPtr metadata =
+        ShardingState::get(getGlobalServiceContext())->getCollectionMetadata(nss.ns());
 
     ChunkType chunk;
     ASSERT(metadata->getNextChunk(BSON("x" << 0 << "y" << 1), &chunk));
@@ -329,4 +340,5 @@ TEST_F(MergeChunkTests, CompoundMerge) {
     assertWrittenAsMerged(ranges);
 }
 
-}  // end namespace
+}  // namespace
+}  // namespace mongo

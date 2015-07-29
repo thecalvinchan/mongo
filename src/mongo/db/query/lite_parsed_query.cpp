@@ -35,14 +35,16 @@
 #include "mongo/client/dbclientinterface.h"
 #include "mongo/db/dbmessage.h"
 #include "mongo/db/namespace_string.h"
-#include "mongo/db/repl/read_after_optime_args.h"
+#include "mongo/db/repl/read_concern_args.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
 
-using std::unique_ptr;
 using std::string;
+using std::unique_ptr;
+
+const char* LiteParsedQuery::kFindCommandReadPrefField("$readPreference");
 
 const string LiteParsedQuery::cmdOptionMaxTimeMS("maxTimeMS");
 const string LiteParsedQuery::queryOptionMaxTimeMS("$maxTimeMS");
@@ -53,7 +55,7 @@ const string LiteParsedQuery::metaGeoNearPoint("geoNearPoint");
 const string LiteParsedQuery::metaRecordId("recordId");
 const string LiteParsedQuery::metaIndexKey("indexKey");
 
-const int LiteParsedQuery::kDefaultBatchSize = 101;
+const long long LiteParsedQuery::kDefaultBatchSize = 101;
 
 namespace {
 
@@ -69,7 +71,6 @@ Status checkFieldType(const BSONElement& el, BSONType type) {
 }
 
 // Find command field names.
-const char kCmdName[] = "find";
 const char kFilterField[] = "filter";
 const char kProjectionField[] = "projection";
 const char kSortField[] = "sort";
@@ -90,14 +91,19 @@ const char kOplogReplayField[] = "oplogReplay";
 const char kNoCursorTimeoutField[] = "noCursorTimeout";
 const char kAwaitDataField[] = "awaitData";
 const char kPartialField[] = "partial";
+const char kTermField[] = "term";
 
 }  // namespace
 
+const char LiteParsedQuery::kFindCommandName[] = "find";
+
+LiteParsedQuery::LiteParsedQuery(NamespaceString nss) : _nss(std::move(nss)) {}
+
 // static
-StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
-    const NamespaceString& nss, const BSONObj& cmdObj, bool isExplain) {
-    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery());
-    pq->_ns = nss.ns();
+StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(NamespaceString nss,
+                                                                             const BSONObj& cmdObj,
+                                                                             bool isExplain) {
+    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery(std::move(nss)));
     pq->_fromCommand = true;
     pq->_explain = isExplain;
 
@@ -106,7 +112,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
     while (it.more()) {
         BSONElement el = it.next();
         const char* fieldName = el.fieldName();
-        if (str::equals(fieldName, kCmdName)) {
+        if (str::equals(fieldName, kFindCommandName)) {
             Status status = checkFieldType(el, String);
             if (!status.isOK()) {
                 return status;
@@ -158,7 +164,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
                 return Status(ErrorCodes::FailedToParse, ss);
             }
 
-            int skip = el.numberInt();
+            long long skip = el.numberLong();
             if (skip < 0) {
                 return Status(ErrorCodes::BadValue, "skip value must be non-negative");
             }
@@ -172,7 +178,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
                 return Status(ErrorCodes::FailedToParse, ss);
             }
 
-            int limit = el.numberInt();
+            long long limit = el.numberLong();
             if (limit <= 0) {
                 return Status(ErrorCodes::BadValue, "limit value must be positive");
             }
@@ -186,7 +192,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
                 return Status(ErrorCodes::FailedToParse, ss);
             }
 
-            int batchSize = el.numberInt();
+            long long batchSize = el.numberLong();
             if (batchSize < 0) {
                 return Status(ErrorCodes::BadValue, "batchSize value must be non-negative");
             }
@@ -262,7 +268,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
             }
 
             pq->_snapshot = el.boolean();
-        } else if (str::equals(fieldName, "$readPreference")) {
+        } else if (str::equals(fieldName, kFindCommandReadPrefField)) {
             pq->_hasReadPref = true;
         } else if (str::equals(fieldName, kTailableField)) {
             Status status = checkFieldType(el, Bool);
@@ -329,10 +335,16 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
                                             << ". "
                                             << "You may need to update your shell or driver.");
             }
-        } else if (str::equals(fieldName, repl::ReadAfterOpTimeArgs::kRootFieldName.c_str())) {
-            // read after optime parsing is handled elsewhere.
+        } else if (str::equals(fieldName, repl::ReadConcernArgs::kReadConcernFieldName.c_str())) {
+            // read concern parsing is handled elsewhere.
             continue;
-        } else {
+        } else if (str::equals(fieldName, kTermField)) {
+            Status status = checkFieldType(el, NumberLong);
+            if (!status.isOK()) {
+                return status;
+            }
+            pq->_replicationTerm = el._numberLong();
+        } else if (!str::startsWith(fieldName, '$')) {
             return Status(ErrorCodes::FailedToParse,
                           str::stream() << "Failed to parse: " << cmdObj.toString() << ". "
                                         << "Unrecognized field '" << fieldName << "'.");
@@ -350,7 +362,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeFromFindCommand(
 }
 
 // static
-StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsOpQuery(const string& ns,
+StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsOpQuery(NamespaceString nss,
                                                                        int ntoskip,
                                                                        int ntoreturn,
                                                                        int queryOptions,
@@ -362,7 +374,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsOpQuery(const str
                                                                        const BSONObj& maxObj,
                                                                        bool snapshot,
                                                                        bool explain) {
-    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery());
+    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery(std::move(nss)));
     pq->_sort = sort.getOwned();
     pq->_hint = hint.getOwned();
     pq->_min = minObj.getOwned();
@@ -370,7 +382,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsOpQuery(const str
     pq->_snapshot = snapshot;
     pq->_explain = explain;
 
-    Status status = pq->init(ns, ntoskip, ntoreturn, queryOptions, query, proj, false);
+    Status status = pq->init(ntoskip, ntoreturn, queryOptions, query, proj, false);
     if (!status.isOK()) {
         return status;
     }
@@ -379,19 +391,19 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsOpQuery(const str
 }
 
 // static
-StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsFindCmd(const NamespaceString& ns,
-                                                                       const BSONObj& query,
-                                                                       const BSONObj& sort,
-                                                                       boost::optional<int> limit) {
-    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery());
+StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsFindCmd(
+    NamespaceString nss,
+    const BSONObj& query,
+    const BSONObj& sort,
+    boost::optional<long long> limit) {
+    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery(std::move(nss)));
 
     pq->_fromCommand = true;
-    pq->_ns = ns.ns();
     pq->_filter = query.getOwned();
     pq->_sort = sort.getOwned();
 
     if (limit) {
-        if (limit <= 0) {
+        if (*limit <= 0) {
             return Status(ErrorCodes::BadValue, "limit value must be positive");
         }
 
@@ -411,8 +423,7 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::makeAsFindCmd(const Nam
 BSONObj LiteParsedQuery::asFindCommand() const {
     BSONObjBuilder bob;
 
-    const NamespaceString nss(_ns);
-    bob.append(kCmdName, nss.coll());
+    bob.append(kFindCommandName, _nss.coll());
 
     if (!_filter.isEmpty()) {
         bob.append(kFilterField, _filter);
@@ -498,6 +509,10 @@ BSONObj LiteParsedQuery::asFindCommand() const {
         bob.append(kPartialField, true);
     }
 
+    if (_replicationTerm) {
+        bob.append(kTermField, *_replicationTerm);
+    }
+
     return bob.obj();
 }
 
@@ -555,10 +570,10 @@ Status LiteParsedQuery::validate() const {
 
     if (_snapshot) {
         if (!_sort.isEmpty()) {
-            return Status(ErrorCodes::BadValue, "E12001 can't use sort with $snapshot");
+            return Status(ErrorCodes::BadValue, "E12001 can't use sort with snapshot");
         }
         if (!_hint.isEmpty()) {
-            return Status(ErrorCodes::BadValue, "E12002 can't use hint with $snapshot");
+            return Status(ErrorCodes::BadValue, "E12002 can't use hint with snapshot");
         }
     }
 
@@ -696,10 +711,9 @@ bool LiteParsedQuery::isQueryIsolated(const BSONObj& query) {
 // static
 StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::fromLegacyQueryMessage(
     const QueryMessage& qm) {
-    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery());
+    unique_ptr<LiteParsedQuery> pq(new LiteParsedQuery(NamespaceString(qm.ns)));
 
-    Status status =
-        pq->init(qm.ns, qm.ntoskip, qm.ntoreturn, qm.queryOptions, qm.query, qm.fields, true);
+    Status status = pq->init(qm.ntoskip, qm.ntoreturn, qm.queryOptions, qm.query, qm.fields, true);
     if (!status.isOK()) {
         return status;
     }
@@ -707,14 +721,12 @@ StatusWith<unique_ptr<LiteParsedQuery>> LiteParsedQuery::fromLegacyQueryMessage(
     return std::move(pq);
 }
 
-Status LiteParsedQuery::init(const string& ns,
-                             int ntoskip,
+Status LiteParsedQuery::init(int ntoskip,
                              int ntoreturn,
                              int queryOptions,
                              const BSONObj& queryObj,
                              const BSONObj& proj,
                              bool fromQueryMessage) {
-    _ns = ns;
     _skip = ntoskip;
     _proj = proj.getOwned();
 

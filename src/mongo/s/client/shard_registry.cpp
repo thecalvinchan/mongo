@@ -34,13 +34,15 @@
 
 #include "mongo/client/connection_string.h"
 #include "mongo/client/query_fetcher.h"
-#include "mongo/client/remote_command_runner_impl.h"
 #include "mongo/client/remote_command_targeter.h"
 #include "mongo/client/remote_command_targeter_factory.h"
+#include "mongo/client/replica_set_monitor.h"
 #include "mongo/executor/task_executor.h"
+#include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/s/catalog/catalog_manager.h"
 #include "mongo/s/catalog/type_shard.h"
 #include "mongo/s/client/shard.h"
+#include "mongo/s/client/shard_connection.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/stdx/mutex.h"
 #include "mongo/util/log.h"
@@ -58,22 +60,37 @@ using RemoteCommandCallbackArgs = TaskExecutor::RemoteCommandCallbackArgs;
 
 namespace {
 const Seconds kConfigCommandTimeout{30};
+const int kNotMasterNumRetries = 3;
+const Milliseconds kNotMasterRetryInterval{500};
 }  // unnamed namespace
 
 ShardRegistry::ShardRegistry(std::unique_ptr<RemoteCommandTargeterFactory> targeterFactory,
-                             std::unique_ptr<RemoteCommandRunner> commandRunner,
                              std::unique_ptr<executor::TaskExecutor> executor,
-                             CatalogManager* catalogManager)
+                             executor::NetworkInterface* network)
     : _targeterFactory(std::move(targeterFactory)),
-      _commandRunner(std::move(commandRunner)),
       _executor(std::move(executor)),
-      _catalogManager(catalogManager) {
+      _network(network),
+      _catalogManager(nullptr) {}
+
+ShardRegistry::~ShardRegistry() = default;
+
+void ShardRegistry::init(CatalogManager* catalogManager) {
+    invariant(!_catalogManager);
+    _catalogManager = catalogManager;
+
     // add config shard registry entry so know it's always there
-    std::lock_guard<std::mutex> lk(_mutex);
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
     _addConfigShard_inlock();
 }
 
-ShardRegistry::~ShardRegistry() = default;
+void ShardRegistry::startup() {
+    _executor->startup();
+}
+
+void ShardRegistry::shutdown() {
+    _executor->shutdown();
+    _executor->join();
+}
 
 void ShardRegistry::reload() {
     vector<ShardType> shards;
@@ -84,7 +101,7 @@ void ShardRegistry::reload() {
 
     LOG(1) << "found " << numShards << " shards listed on config server(s)";
 
-    std::lock_guard<std::mutex> lk(_mutex);
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
 
     _lookup.clear();
     _rsLookup.clear();
@@ -116,15 +133,20 @@ shared_ptr<Shard> ShardRegistry::getShard(const ShardId& shardId) {
     return _findUsingLookUp(shardId);
 }
 
+unique_ptr<Shard> ShardRegistry::createConnection(const ConnectionString& connStr) const {
+    return stdx::make_unique<Shard>(
+        "<unnamed>", connStr, std::move(_targeterFactory->create(connStr)));
+}
+
 shared_ptr<Shard> ShardRegistry::lookupRSName(const string& name) const {
-    std::lock_guard<std::mutex> lk(_mutex);
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
     ShardMap::const_iterator i = _rsLookup.find(name);
 
     return (i == _rsLookup.end()) ? nullptr : i->second;
 }
 
 void ShardRegistry::remove(const ShardId& id) {
-    std::lock_guard<std::mutex> lk(_mutex);
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
 
     for (ShardMap::iterator i = _lookup.begin(); i != _lookup.end();) {
         shared_ptr<Shard> s = i->second;
@@ -143,13 +165,16 @@ void ShardRegistry::remove(const ShardId& id) {
             ++i;
         }
     }
+
+    shardConnectionPool.removeHost(id);
+    ReplicaSetMonitor::remove(id);
 }
 
 void ShardRegistry::getAllShardIds(vector<ShardId>* all) const {
     std::set<string> seen;
 
     {
-        std::lock_guard<std::mutex> lk(_mutex);
+        stdx::lock_guard<stdx::mutex> lk(_mutex);
         for (ShardMap::const_iterator i = _lookup.begin(); i != _lookup.end(); ++i) {
             const shared_ptr<Shard>& s = i->second;
             if (s->getId() == "config") {
@@ -169,7 +194,7 @@ void ShardRegistry::getAllShardIds(vector<ShardId>* all) const {
 void ShardRegistry::toBSON(BSONObjBuilder* result) {
     BSONObjBuilder b(_lookup.size() + 50);
 
-    std::lock_guard<std::mutex> lk(_mutex);
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
 
     for (ShardMap::const_iterator i = _lookup.begin(); i != _lookup.end(); ++i) {
         b.append(i->first, i->second->getConnString().toString());
@@ -234,7 +259,7 @@ void ShardRegistry::_addShard_inlock(const ShardType& shardType) {
 }
 
 shared_ptr<Shard> ShardRegistry::_findUsingLookUp(const ShardId& shardId) {
-    std::lock_guard<std::mutex> lk(_mutex);
+    stdx::lock_guard<stdx::mutex> lk(_mutex);
     ShardMap::iterator it = _lookup.find(shardId);
     if (it != _lookup.end()) {
         return it->second;
@@ -246,7 +271,8 @@ shared_ptr<Shard> ShardRegistry::_findUsingLookUp(const ShardId& shardId) {
 StatusWith<std::vector<BSONObj>> ShardRegistry::exhaustiveFind(const HostAndPort& host,
                                                                const NamespaceString& nss,
                                                                const BSONObj& query,
-                                                               boost::optional<int> limit) {
+                                                               const BSONObj& sort,
+                                                               boost::optional<long long> limit) {
     // If for some reason the callback never gets invoked, we will return this status
     Status status = Status(ErrorCodes::InternalError, "Internal error running find command");
     vector<BSONObj> results;
@@ -269,8 +295,8 @@ StatusWith<std::vector<BSONObj>> ShardRegistry::exhaustiveFind(const HostAndPort
         status = Status::OK();
     };
 
-    unique_ptr<LiteParsedQuery> findCmd(fassertStatusOK(
-        28688, LiteParsedQuery::makeAsFindCmd(nss, query, BSONObj(), std::move(limit))));
+    unique_ptr<LiteParsedQuery> findCmd(
+        fassertStatusOK(28688, LiteParsedQuery::makeAsFindCmd(nss, query, sort, limit)));
 
     QueryFetcher fetcher(_executor.get(), host, nss, findCmd->asFindCommand(), fetcherCallback);
 
@@ -291,16 +317,15 @@ StatusWith<std::vector<BSONObj>> ShardRegistry::exhaustiveFind(const HostAndPort
 StatusWith<BSONObj> ShardRegistry::runCommand(const HostAndPort& host,
                                               const std::string& dbName,
                                               const BSONObj& cmdObj) {
-    StatusWith<RemoteCommandResponse> responseStatus =
+    StatusWith<executor::RemoteCommandResponse> responseStatus =
         Status(ErrorCodes::InternalError, "Internal error running command");
 
-    RemoteCommandRequest request(host, dbName, cmdObj, kConfigCommandTimeout);
+    executor::RemoteCommandRequest request(host, dbName, cmdObj, kConfigCommandTimeout);
     auto callStatus =
         _executor->scheduleRemoteCommand(request,
                                          [&responseStatus](const RemoteCommandCallbackArgs& args) {
                                              responseStatus = args.response;
                                          });
-
     if (!callStatus.isOK()) {
         return callStatus.getStatus();
     }
@@ -313,6 +338,49 @@ StatusWith<BSONObj> ShardRegistry::runCommand(const HostAndPort& host,
     }
 
     return responseStatus.getValue().data;
+}
+
+StatusWith<BSONObj> ShardRegistry::runCommandWithNotMasterRetries(const ShardId& shardId,
+                                                                  const std::string& dbname,
+                                                                  const BSONObj& cmdObj) {
+    auto targeter = getShard(shardId)->getTargeter();
+    const ReadPreferenceSetting readPref(ReadPreference::PrimaryOnly, TagSet{});
+
+    for (int i = 0; i < kNotMasterNumRetries; ++i) {
+        auto target = targeter->findHost(readPref);
+        if (!target.isOK()) {
+            if (ErrorCodes::NotMaster == target.getStatus()) {
+                if (i == kNotMasterNumRetries - 1) {
+                    // If we're out of retries don't bother sleeping, just return.
+                    return target.getStatus();
+                }
+                sleepmillis(kNotMasterRetryInterval.count());
+                continue;
+            }
+            return target.getStatus();
+        }
+
+        auto response = runCommand(target.getValue(), dbname, cmdObj);
+        if (!response.isOK()) {
+            return response.getStatus();
+        }
+
+        Status commandStatus = getStatusFromCommandResult(response.getValue());
+        if (ErrorCodes::NotMaster == commandStatus ||
+            ErrorCodes::NotMasterNoSlaveOkCode == commandStatus) {
+            targeter->markHostNotMaster(target.getValue());
+            if (i == kNotMasterNumRetries - 1) {
+                // If we're out of retries don't bother sleeping, just return.
+                return commandStatus;
+            }
+            sleepmillis(kNotMasterRetryInterval.count());
+            continue;
+        }
+
+        return response.getValue();
+    }
+
+    MONGO_UNREACHABLE;
 }
 
 }  // namespace mongo

@@ -706,6 +706,128 @@ TEST_F(QueryPlannerTest, OrOfAnd6) {
         " b: [[1,1,true,true], [5,5,true,true]]}}}]}}}}");
 }
 
+// We do collapse OR of ANDs if branches of the OR plan are using identical index scans.
+TEST_F(QueryPlannerTest, RootedOrOfAndCollapseIndenticalScans) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    runQuery(fromjson("{$or: [{a:1, b:2}, {a:1, b:2}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: null, node: {ixscan: {pattern: {a: 1, b: 1}},"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]},"
+        "filter: null}}}");
+}
+
+TEST_F(QueryPlannerTest, ContainedOrOfAndCollapseIndenticalScans) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    runQuery(fromjson("{c: 1, $or: [{a:1, b:2}, {a:1, b:2}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: {c: 1}, node: {ixscan: {pattern: {a: 1, b: 1}},"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]},"
+        "filter: null}}}");
+}
+
+TEST_F(QueryPlannerTest, ContainedOrOfAndCollapseIndenticalScansWithFilter) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    runQuery(fromjson("{c: 1, $or: [{a:1, b:2}, {a:1, b:2, d:3}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: {c: 1}, node: {ixscan: {pattern: {a: 1, b: 1}},"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]},"
+        "filter: null}}}");
+}
+
+TEST_F(QueryPlannerTest, ContainedOrOfAndCollapseIndenticalScansWithFilter2) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    runQuery(fromjson("{c: 1, $or: [{a:{$gte:1,$lte:1}, b:2}, {a:1, b:2, d:3}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: {c: 1}, node: {fetch: {filter: null, node: "
+        "{ixscan: {pattern: {a: 1, b: 1}},"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]},"
+        "filter: null}}}}}");
+}
+
+TEST_F(QueryPlannerTest, ContainedOrOfAndCollapseIdenticalScansTwoFilters) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    runQuery(fromjson("{c: 1, $or: [{a:1, b:2, d:3}, {a:1, b:2, e:4}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: {c: 1}, node: {fetch: {filter: {$or:[{e:4},{d:3}]},"
+        "node: {ixscan: {pattern: {a: 1, b: 1}, filter: null,"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]}}}}}}}");
+}
+
+TEST_F(QueryPlannerTest, RootedOrOfAndCollapseScansExistingOrFilter) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    runQuery(fromjson("{$or: [{a:1, b:2, $or: [{c:3}, {d:4}]}, {a:1, b:2, e:5}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: {$or: [{e:5},{c:3},{d:4}]}, node: {ixscan: "
+        "{filter: null, pattern: {a: 1, b: 1}, "
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]}}}}}");
+}
+
+TEST_F(QueryPlannerTest, RootedOrOfAndCollapseTwoScansButNotThird) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    addIndex(BSON("c" << 1 << "d" << 1));
+    runQuery(fromjson("{$or: [{a: 1, b: 2}, {c: 3, d: 4}, {a: 1, b: 2}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: null, node: {or: {nodes: ["
+        "{ixscan: {pattern: {a: 1, b: 1}, filter: null,"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]}}},"
+        "{ixscan: {pattern: {c: 1, d: 1}, filter: null,"
+        "bounds: {c: [[3,3,true,true]], d: [[4,4,true,true]]}}}]}}}}");
+}
+
+TEST_F(QueryPlannerTest, RootedOrOfAndCollapseTwoScansButNotThirdWithFilters) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    addIndex(BSON("c" << 1 << "d" << 1));
+    runQuery(fromjson("{$or: [{a:1, b:2, e:5}, {c:3, d:4}, {a:1, b:2, f:6}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: null, node: {or: {nodes: ["
+        "{fetch: {filter: {$or: [{f:6},{e:5}]}, node: "
+        "{ixscan: {pattern: {a: 1, b: 1}, filter: null,"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]}}}}},"
+        "{ixscan: {pattern: {c: 1, d: 1}, filter: null,"
+        "bounds: {c: [[3,3,true,true]], d: [[4,4,true,true]]}}}]}}}}");
+}
+
+TEST_F(QueryPlannerTest, RootedOrOfAndDontCollapseDifferentBounds) {
+    addIndex(BSON("a" << 1 << "b" << 1));
+    addIndex(BSON("c" << 1 << "d" << 1));
+    runQuery(fromjson("{$or: [{a: 1, b: 2}, {c: 3, d: 4}, {a: 1, b: 99}]}"));
+
+    assertNumSolutions(2U);
+    assertSolutionExists("{cscan: {dir: 1}}");
+    assertSolutionExists(
+        "{fetch: {filter: null, node: {or: {nodes: ["
+        "{ixscan: {pattern: {a: 1, b: 1}, filter: null,"
+        "bounds: {a: [[1,1,true,true]], b: [[2,2,true,true]]}}},"
+        "{ixscan: {pattern: {a: 1, b: 1}, filter: null,"
+        "bounds: {a: [[1,1,true,true]], b: [[99,99,true,true]]}}},"
+        "{ixscan: {pattern: {c: 1, d: 1}, filter: null,"
+        "bounds: {c: [[3,3,true,true]], d: [[4,4,true,true]]}}}]}}}}");
+}
+
 // SERVER-13960: properly handle $or with a mix of exact and inexact predicates.
 TEST_F(QueryPlannerTest, OrInexactWithExact) {
     addIndex(BSON("name" << 1));
@@ -1066,7 +1188,7 @@ TEST_F(QueryPlannerTest, MaxMinBadHintSelectsReverseIndex) {
 
 
 //
-// $snapshot
+// snapshot
 //
 
 TEST_F(QueryPlannerTest, Snapshot) {
@@ -3761,10 +3883,10 @@ TEST(BadInputTest, CacheDataFromTaggedTree) {
     // No relevant index matching the index tag.
     relevantIndices.push_back(IndexEntry(BSON("a" << 1)));
 
-    CanonicalQuery* cq;
-    Status cqStatus = CanonicalQuery::canonicalize("ns", BSON("a" << 3), &cq);
-    ASSERT_OK(cqStatus);
-    std::unique_ptr<CanonicalQuery> scopedCq(cq);
+    auto statusWithCQ =
+        CanonicalQuery::canonicalize(NamespaceString("test.collection"), BSON("a" << 3));
+    ASSERT_OK(statusWithCQ.getStatus());
+    std::unique_ptr<CanonicalQuery> scopedCq = std::move(statusWithCQ.getValue());
     scopedCq->root()->setTag(new IndexTag(1));
 
     s = QueryPlanner::cacheDataFromTaggedTree(scopedCq->root(), relevantIndices, &indexTree);
@@ -3773,10 +3895,11 @@ TEST(BadInputTest, CacheDataFromTaggedTree) {
 }
 
 TEST(BadInputTest, TagAccordingToCache) {
-    CanonicalQuery* cq;
-    Status cqStatus = CanonicalQuery::canonicalize("ns", BSON("a" << 3), &cq);
-    ASSERT_OK(cqStatus);
-    std::unique_ptr<CanonicalQuery> scopedCq(cq);
+    const NamespaceString nss("test.collection");
+
+    auto statusWithCQ = CanonicalQuery::canonicalize(nss, BSON("a" << 3));
+    ASSERT_OK(statusWithCQ.getStatus());
+    std::unique_ptr<CanonicalQuery> scopedCq = std::move(statusWithCQ.getValue());
 
     std::unique_ptr<PlanCacheIndexTree> indexTree(new PlanCacheIndexTree());
     indexTree->setIndexEntry(IndexEntry(BSON("a" << 1)));
@@ -3801,9 +3924,9 @@ TEST(BadInputTest, TagAccordingToCache) {
     ASSERT_OK(s);
 
     // Regenerate canonical query in order to clear tags.
-    cqStatus = CanonicalQuery::canonicalize("ns", BSON("a" << 3), &cq);
-    ASSERT_OK(cqStatus);
-    scopedCq.reset(cq);
+    statusWithCQ = CanonicalQuery::canonicalize(nss, BSON("a" << 3));
+    ASSERT_OK(statusWithCQ.getStatus());
+    scopedCq = std::move(statusWithCQ.getValue());
 
     // Mismatched tree topology.
     PlanCacheIndexTree* child = new PlanCacheIndexTree();

@@ -35,12 +35,15 @@
 #include <iostream>
 #include <map>
 
+#include "mongo/base/checked_cast.h"
 #include "mongo/base/init.h"
 #include "mongo/logger/console_appender.h"
 #include "mongo/logger/log_manager.h"
 #include "mongo/logger/logger.h"
 #include "mongo/logger/message_event_utf8_encoder.h"
 #include "mongo/logger/message_log_domain.h"
+#include "mongo/stdx/memory.h"
+#include "mongo/stdx/mutex.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/log.h"
 #include "mongo/util/timer.h"
@@ -160,11 +163,28 @@ public:
         if (!_encoder.encode(event, _os)) {
             return Status(ErrorCodes::LogWriteFailed, "Failed to append to LogTestAppender.");
         }
-        _lines->push_back(_os.str());
+        stdx::lock_guard<stdx::mutex> lk(_mutex);
+        if (_enabled) {
+            _lines->push_back(_os.str());
+        }
         return Status::OK();
     }
 
+    void enable() {
+        stdx::lock_guard<stdx::mutex> lk(_mutex);
+        invariant(!_enabled);
+        _enabled = true;
+    }
+
+    void disable() {
+        stdx::lock_guard<stdx::mutex> lk(_mutex);
+        invariant(_enabled);
+        _enabled = false;
+    }
+
 private:
+    stdx::mutex _mutex;
+    bool _enabled = false;
     logger::MessageEventDetailsEncoder _encoder;
     std::vector<std::string>* _lines;
 };
@@ -173,14 +193,19 @@ private:
 void Test::startCapturingLogMessages() {
     invariant(!_isCapturingLogMessages);
     _capturedLogMessages.clear();
-    _captureAppenderHandle = logger::globalLogDomain()->attachAppender(
-        logger::MessageLogDomain::AppenderAutoPtr(new StringVectorAppender(&_capturedLogMessages)));
+    if (!_captureAppender) {
+        _captureAppender = stdx::make_unique<StringVectorAppender>(&_capturedLogMessages);
+    }
+    checked_cast<StringVectorAppender*>(_captureAppender.get())->enable();
+    _captureAppenderHandle = logger::globalLogDomain()->attachAppender(std::move(_captureAppender));
     _isCapturingLogMessages = true;
 }
 
 void Test::stopCapturingLogMessages() {
     invariant(_isCapturingLogMessages);
-    logger::globalLogDomain()->detachAppender(_captureAppenderHandle);
+    invariant(!_captureAppender);
+    _captureAppender = logger::globalLogDomain()->detachAppender(_captureAppenderHandle);
+    checked_cast<StringVectorAppender*>(_captureAppender.get())->disable();
     _isCapturingLogMessages = false;
 }
 
@@ -216,8 +241,6 @@ Result* Suite::run(const std::string& filter, int runsPerTest) {
 
         bool passes = false;
 
-        onCurrentTestNameChange(tc->getName());
-
         log() << "\t going to run test: " << tc->getName() << std::endl;
 
         std::stringstream err;
@@ -247,8 +270,6 @@ Result* Suite::run(const std::string& filter, int runsPerTest) {
         r->_rc = 17;
 
     r->_millis = timer.millis();
-
-    onCurrentTestNameChange("");
 
     log() << "\t DONE running tests" << std::endl;
 

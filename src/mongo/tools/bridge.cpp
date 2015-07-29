@@ -94,7 +94,7 @@ public:
 
                 int oldId = m.header().getId();
                 if (m.operation() == dbQuery || m.operation() == dbMsg ||
-                    m.operation() == dbGetMore) {
+                    m.operation() == dbGetMore || m.operation() == dbCommand) {
                     bool exhaust = false;
                     if (m.operation() == dbQuery) {
                         DbMessage d(m);
@@ -105,8 +105,11 @@ public:
                     dest.port().call(m, response);
 
                     // nothing to reply with?
-                    if (response.empty())
-                        cleanup(0);
+                    if (response.empty()) {
+                        cout << "end connection " << dest.toString() << endl;
+                        mp_.shutdown();
+                        break;
+                    }
 
                     mp_.reply(m, response, oldId);
                     while (exhaust) {
@@ -142,6 +145,7 @@ public:
         ports.insert(mp);
         Forwarder f(*mp);
         stdx::thread t(f);
+        t.detach();
     }
 };
 

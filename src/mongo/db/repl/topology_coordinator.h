@@ -132,7 +132,7 @@ public:
     /**
      * Chooses and sets a new sync source, based on our current knowledge of the world.
      */
-    virtual HostAndPort chooseNewSyncSource(Date_t now, const OpTime& lastOpApplied) = 0;
+    virtual HostAndPort chooseNewSyncSource(Date_t now, const Timestamp& lastTimestampApplied) = 0;
 
     /**
      * Suppresses selecting "host" as sync source until "until".
@@ -390,8 +390,8 @@ public:
     /**
      * Prepares a BSONObj describing the current term, primary, and lastOp information.
      */
-    virtual void prepareCursorResponseInfo(BSONObjBuilder* objBuilder,
-                                           const OpTime& lastCommittedOpTime) const = 0;
+    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder,
+                                             const OpTime& lastCommittedOpTime) const = 0;
 
     /**
      * Writes into 'output' all the information needed to generate a summary of the current
@@ -431,6 +431,11 @@ public:
      * Readies the TopologyCoordinator for stepdown.
      */
     virtual void prepareForStepDown() = 0;
+
+    /**
+     * Updates the current primary index.
+     */
+    virtual void setPrimaryIndex(long long primaryIndex) = 0;
 
 protected:
     TopologyCoordinator() {}

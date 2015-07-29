@@ -43,7 +43,7 @@ class RecordCursor;
  * A standalone stage implementing the fast path for key-value retrievals
  * via the _id index.
  */
-class IDHackStage : public PlanStage {
+class IDHackStage final : public PlanStage {
 public:
     /** Takes ownership of all the arguments -collection. */
     IDHackStage(OperationContext* txn,
@@ -53,31 +53,29 @@ public:
 
     IDHackStage(OperationContext* txn, Collection* collection, const BSONObj& key, WorkingSet* ws);
 
-    virtual ~IDHackStage();
+    ~IDHackStage();
 
-    virtual bool isEOF();
-    virtual StageState work(WorkingSetID* out);
+    bool isEOF() final;
+    StageState work(WorkingSetID* out) final;
 
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    void doSaveState() final;
+    void doRestoreState() final;
+    void doDetachFromOperationContext() final;
+    void doReattachToOperationContext(OperationContext* opCtx) final;
+    void doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) final;
 
     /**
      * ID Hack has a very strict criteria for the queries it supports.
      */
     static bool supportsQuery(const CanonicalQuery& query);
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_IDHACK;
     }
 
-    PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats();
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -106,7 +104,7 @@ private:
     // Have we returned our one document?
     bool _done;
 
-    // Do we need to add index key metadata for $returnKey?
+    // Do we need to add index key metadata for returnKey?
     bool _addKeyMetadata;
 
     // If we want to return a RecordId and it points to something that's not in memory,
@@ -115,7 +113,6 @@ private:
     // the fetch request.
     WorkingSetID _idBeingPagedIn;
 
-    CommonStats _commonStats;
     IDHackStats _specificStats;
 };
 

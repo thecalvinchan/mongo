@@ -54,7 +54,7 @@ using std::unique_ptr;
 using std::string;
 using std::stringstream;
 
-class WiredTigerHarnessHelper : public HarnessHelper {
+class WiredTigerHarnessHelper final : public HarnessHelper {
 public:
     static WT_CONNECTION* createConnection(StringData dbpath, StringData extraStrings) {
         WT_CONNECTION* conn = NULL;
@@ -86,10 +86,10 @@ public:
         _conn->close(_conn, NULL);
     }
 
-    virtual RecordStore* newNonCappedRecordStore() {
+    virtual std::unique_ptr<RecordStore> newNonCappedRecordStore() {
         return newNonCappedRecordStore("a.b");
     }
-    RecordStore* newNonCappedRecordStore(const std::string& ns) {
+    std::unique_ptr<RecordStore> newNonCappedRecordStore(const std::string& ns) {
         WiredTigerRecoveryUnit* ru = new WiredTigerRecoveryUnit(_sessionCache);
         OperationContextNoop txn(ru);
         string uri = "table:" + ns;
@@ -106,12 +106,17 @@ public:
             uow.commit();
         }
 
-        return new WiredTigerRecordStore(&txn, ns, uri);
+        return stdx::make_unique<WiredTigerRecordStore>(&txn, ns, uri);
     }
 
-    virtual RecordStore* newCappedRecordStore(const std::string& ns,
-                                              int64_t cappedMaxSize,
-                                              int64_t cappedMaxDocs) {
+    std::unique_ptr<RecordStore> newCappedRecordStore(int64_t cappedSizeBytes,
+                                                      int64_t cappedMaxDocs) final {
+        return newCappedRecordStore("a.b", cappedSizeBytes, cappedMaxDocs);
+    }
+
+    std::unique_ptr<RecordStore> newCappedRecordStore(const std::string& ns,
+                                                      int64_t cappedMaxSize,
+                                                      int64_t cappedMaxDocs) {
         WiredTigerRecoveryUnit* ru = new WiredTigerRecoveryUnit(_sessionCache);
         OperationContextNoop txn(ru);
         string uri = "table:a.b";
@@ -131,11 +136,16 @@ public:
             uow.commit();
         }
 
-        return new WiredTigerRecordStore(&txn, ns, uri, true, cappedMaxSize, cappedMaxDocs);
+        return stdx::make_unique<WiredTigerRecordStore>(
+            &txn, ns, uri, true, cappedMaxSize, cappedMaxDocs);
     }
 
-    virtual RecoveryUnit* newRecoveryUnit() {
+    RecoveryUnit* newRecoveryUnit() final {
         return new WiredTigerRecoveryUnit(_sessionCache);
+    }
+
+    bool supportsDocLocking() final {
+        return true;
     }
 
     WT_CONNECTION* conn() const {
@@ -148,8 +158,8 @@ private:
     WiredTigerSessionCache* _sessionCache;
 };
 
-HarnessHelper* newHarnessHelper() {
-    return new WiredTigerHarnessHelper();
+std::unique_ptr<HarnessHelper> newHarnessHelper() {
+    return stdx::make_unique<WiredTigerHarnessHelper>();
 }
 
 TEST(WiredTigerRecordStoreTest, GenerateCreateStringEmptyDocument) {
@@ -182,13 +192,15 @@ TEST(WiredTigerRecordStoreTest, GenerateCreateStringEmptyConfigString) {
     ASSERT_EQ(result.getValue(), ",");  // "" would also be valid.
 }
 
-TEST(WiredTigerRecordStoreTest, GenerateCreateStringValidConfigFormat) {
-    // TODO eventually this should fail since "abc" is not a valid WT option.
+TEST(WiredTigerRecordStoreTest, GenerateCreateStringInvalidConfigStringOption) {
     BSONObj spec = fromjson("{configString: 'abc=def'}");
-    StatusWith<std::string> result = WiredTigerRecordStore::parseOptionsField(spec);
-    const Status& status = result.getStatus();
-    ASSERT_OK(status);
-    ASSERT_EQ(result.getValue(), "abc=def,");
+    ASSERT_EQ(WiredTigerRecordStore::parseOptionsField(spec), ErrorCodes::BadValue);
+}
+
+TEST(WiredTigerRecordStoreTest, GenerateCreateStringValidConfigStringOption) {
+    BSONObj spec = fromjson("{configString: 'prefix_compression=true'}");
+    ASSERT_EQ(WiredTigerRecordStore::parseOptionsField(spec),
+              std::string("prefix_compression=true,"));
 }
 
 TEST(WiredTigerRecordStoreTest, Isolation1) {
@@ -390,7 +402,7 @@ private:
     virtual void setUp() {
         harnessHelper.reset(new WiredTigerHarnessHelper());
         sizeStorer.reset(new WiredTigerSizeStorer(harnessHelper->conn(), "table:sizeStorer"));
-        rs.reset(harnessHelper->newNonCappedRecordStore());
+        rs = harnessHelper->newNonCappedRecordStore();
         WiredTigerRecordStore* wtrs = checked_cast<WiredTigerRecordStore*>(rs.get());
         wtrs->setSizeStorer(sizeStorer.get());
         uri = wtrs->getURI();
@@ -723,7 +735,7 @@ TEST(WiredTigerRecordStoreTest, CappedCursorRollover) {
     }
 
     // cursor should now be dead
-    ASSERT_FALSE(cursor->restore(cursorCtx.get()));
+    ASSERT_FALSE(cursor->restore());
     ASSERT(!cursor->next());
 }
 
@@ -859,7 +871,7 @@ TEST(WiredTigerRecordStoreTest, CappedCursorYieldFirst) {
     // See that things work if you yield before you first call getNext().
     cursor->savePositioned();
     cursorCtx->recoveryUnit()->abandonSnapshot();
-    ASSERT_TRUE(cursor->restore(cursorCtx.get()));
+    ASSERT_TRUE(cursor->restore());
     auto record = cursor->next();
     ASSERT_EQ(loc1, record->id);
     ASSERT(!cursor->next());

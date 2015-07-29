@@ -43,6 +43,7 @@
 #include "mongo/db/repl/replica_set_config_checks.h"
 #include "mongo/db/repl/replication_coordinator_impl.h"
 #include "mongo/db/repl/replication_executor.h"
+#include "mongo/db/repl/replication_metadata.h"
 #include "mongo/db/repl/topology_coordinator.h"
 #include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/stdx/functional.h"
@@ -60,6 +61,8 @@ namespace {
 typedef ReplicationExecutor::CallbackHandle CBHandle;
 
 }  // namespace
+
+using executor::RemoteCommandRequest;
 
 void ReplicationCoordinatorImpl::_doMemberHeartbeat(ReplicationExecutor::CallbackArgs cbData,
                                                     const HostAndPort& target,
@@ -84,7 +87,8 @@ void ReplicationCoordinatorImpl::_doMemberHeartbeat(ReplicationExecutor::Callbac
         timeout = hbRequest.second;
     }
 
-    const RemoteCommandRequest request(target, "admin", heartbeatObj, timeout);
+    const RemoteCommandRequest request(
+        target, "admin", heartbeatObj, BSON(rpc::kReplicationMetadataFieldName << 1), timeout);
     const ReplicationExecutor::RemoteCommandCallbackFn callback =
         stdx::bind(&ReplicationCoordinatorImpl::_handleHeartbeatResponse,
                    this,
@@ -125,6 +129,9 @@ void ReplicationCoordinatorImpl::_handleHeartbeatResponse(
     if (responseStatus.isOK()) {
         resp = cbData.response.getValue().data;
         responseStatus = hbResponse.initialize(resp, _topCoord->getTerm());
+        ReplicationMetadata replMetadata;
+        replMetadata.initialize(cbData.response.getValue().metadata);
+        _processReplicationMetadata_incallback(replMetadata);
     }
     const Date_t now = _replExecutor.now();
     const OpTime lastApplied = getMyLastOptime();  // Locks and unlocks _mutex.
@@ -384,7 +391,7 @@ void ReplicationCoordinatorImpl::_heartbeatReconfigStore(
 
         lk.unlock();
 
-        _externalState->startThreads();
+        _externalState->startThreads(&_replExecutor);
     }
 
     const stdx::function<void(const ReplicationExecutor::CallbackArgs&)> reconfigFinishFn(

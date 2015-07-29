@@ -37,7 +37,7 @@ functions:
           chmod +x mongo
           git clone https://github.com/mongodb/mongo-perf perf
           cd perf
-          git checkout evergreen
+          git checkout r20150702
     - command: shell.exec
       params:
         background: true
@@ -72,7 +72,7 @@ functions:
           cd perf
           #  give mongod a few seconds to start up so that we can connect.
           sleep 5
-          ${perf_exec_wrapper} python benchrun.py --shell ../mongo -t 1 2 4 8 16 --trialCount 7 -f testcases/*.js --testFilter '${filter}' --out perf.json
+          ${perf_exec_wrapper} python benchrun.py --shell ../mongo -t ${threads} --trialCount 5 -f testcases/*.js --includeFilter ${includeFilter1}  --includeFilter ${includeFilter2} --excludeFilter ${excludeFilter} --out perf.json --exclude-testbed
     - command: "json.send"
       params:
         name: "perf"
@@ -123,7 +123,10 @@ tasks:
     - func: "start server"
     - func: "run perf tests"
       vars:
-        filter: "core-query"
+        includeFilter1: "query"
+        includeFilter2 : "core regression" 
+        excludeFilter : "single_threaded"
+        threads : "1 2 4 8"
 - name: update
   depends_on:
   - name: compile
@@ -131,7 +134,10 @@ tasks:
     - func: "start server"
     - func: "run perf tests"
       vars:
-        filter: "core-update"
+        includeFilter1: "update"
+        includeFilter2 : "core regression" 
+        excludeFilter : "single_threaded"
+        threads : "1 2 4 8"
 - name: insert
   depends_on:
   - name: compile
@@ -139,15 +145,52 @@ tasks:
     - func: "start server"
     - func: "run perf tests"
       vars:
-        filter: "core-insert"
+        includeFilter1: "insert"
+        includeFilter2 : "core regression" 
+        excludeFilter : "single_threaded"
+        threads : "1 2 4 8"
+- name: geo
+  depends_on:
+  - name: compile
+  commands:
+    - func: "start server"
+    - func: "run perf tests"
+      vars:
+        includeFilter1: "geo"
+        includeFilter2 : "core regression" 
+        excludeFilter : "single_threaded"
+        threads : "1 2 4 8"
+- name: misc
+  depends_on:
+  - name: compile
+  commands:
+    - func: "start server"
+    - func: "run perf tests"
+      vars:
+        includeFilter1: "command multi remove mixed"
+        includeFilter2 : "core regression" 
+        excludeFilter : "single_threaded"
+        threads : "1 2 4 8"
+- name: singleThreaded
+  depends_on:
+  - name: compile
+  commands:
+    - func: "start server"
+    - func: "run perf tests"
+      vars:
+        includeFilter1: "single_threaded"
+        includeFilter2 : "core regression" 
+        excludeFilter : "none"
+        threads : "1"
 
 buildvariants:
 - name: linux-wt-standalone
   display_name: Linux WT Standalone
+  batchtime: 90 # 1.5 hours
   expansions:
-    compile_flags: -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ --release
-    mongod_exec_wrapper: "numactl --physcpubind=4,5,6,7 -i 1"
-    perf_exec_wrapper: "numactl --physcpubind=1,2,3 -i 0"
+    compile_flags: &compile_flags -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ --release
+    mongod_exec_wrapper: &exec_wrapper "numactl --physcpubind=4,5,6,7 -i 1"
+    perf_exec_wrapper: &perf_wrapper "numactl --physcpubind=1,2,3 -i 0"
     mongod_flags: "--storageEngine=wiredTiger --logpath ./mongod.log --fork --syncdelay 0 --nojournal --setParameter ttlMonitorEnabled=false --wiredTigerCacheSizeGB 16"
 
   run_on:
@@ -159,14 +202,18 @@ buildvariants:
   - name: query
   - name: update
   - name: insert
+  - name: geo
+  - name: misc
+  - name: singleThreaded
 
-- name: linux-wt-repl
-  display_name: Linux WT 1-Node ReplSet
+- name: linux-mmap-standalone
+  display_name: Linux MMAPv1 Standalone
+  batchtime: 90 # 1.5 hours
   expansions:
-    compile_flags: -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ --release
-    mongod_exec_wrapper: "numactl --physcpubind=4,5,6,7 -i 1"
-    perf_exec_wrapper: "numactl --physcpubind=1,2,3 -i 0"
-    mongod_flags: "--replSet=test --storageEngine=wiredTiger --logpath ./mongod.log --fork --syncdelay 0 --nojournal --setParameter ttlMonitorEnabled=false --wiredTigerCacheSizeGB 16"
+    compile_flags: *compile_flags
+    mongod_exec_wrapper: *exec_wrapper
+    perf_exec_wrapper: *perf_wrapper
+    mongod_flags: "--storageEngine=mmapv1 --logpath ./mongod.log --fork --syncdelay 0 --nojournal --setParameter ttlMonitorEnabled=false"
 
   run_on:
   - "centos6-perf"
@@ -177,3 +224,46 @@ buildvariants:
   - name: query
   - name: update
   - name: insert
+  - name: geo
+  - name: misc
+  - name: singleThreaded
+
+- name: linux-wt-repl
+  display_name: Linux WT 1-Node ReplSet
+  batchtime: 360 # 6 hours
+  expansions:
+    compile_flags: *compile_flags 
+    mongod_exec_wrapper: *exec_wrapper
+    perf_exec_wrapper: *perf_wrapper
+    mongod_flags: "--replSet=test --storageEngine=wiredTiger --logpath ./mongod.log --fork --syncdelay 0 --nojournal --setParameter ttlMonitorEnabled=false --wiredTigerCacheSizeGB 16 --oplogSize 100000"
+
+  run_on:
+  - "centos6-perf"
+  tasks:
+  - name: compile
+    distros:
+    - rhel55
+  - name: update
+  - name: insert
+  - name: misc
+  - name: singleThreaded
+
+- name: linux-mmap-repl
+  display_name: Linux MMapv1 1-Node ReplSet
+  batchtime: 360 # 6 hours
+  expansions:
+    compile_flags: *compile_flags 
+    mongod_exec_wrapper: *exec_wrapper
+    perf_exec_wrapper: *perf_wrapper
+    mongod_flags: "--replSet=test --storageEngine=mmapv1 --logpath ./mongod.log --fork --syncdelay 0 --nojournal --setParameter ttlMonitorEnabled=false --oplogSize 100000"
+
+  run_on:
+  - "centos6-perf"
+  tasks:
+  - name: compile
+    distros:
+    - rhel55
+  - name: update
+  - name: insert
+  - name: misc
+  - name: singleThreaded

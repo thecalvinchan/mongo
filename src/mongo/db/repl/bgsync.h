@@ -28,16 +28,26 @@
 
 #pragma once
 
+#include "mongo/base/status_with.h"
+#include "mongo/client/fetcher.h"
 #include "mongo/db/jsobj.h"
-#include "mongo/db/repl/oplogreader.h"
 #include "mongo/db/repl/optime.h"
 #include "mongo/stdx/condition_variable.h"
+#include "mongo/stdx/functional.h"
 #include "mongo/stdx/mutex.h"
+#include "mongo/util/net/hostandport.h"
 #include "mongo/util/queue.h"
 
 namespace mongo {
 
+class DBClientBase;
 class OperationContext;
+
+namespace executor {
+
+class TaskExecutor;
+
+}  // namespace executor
 
 namespace repl {
 
@@ -90,7 +100,7 @@ public:
     virtual ~BackgroundSync() {}
 
     // starts the producer thread
-    void producerThread();
+    void producerThread(executor::TaskExecutor* taskExecutor);
     // starts the sync target notifying thread
     void notifierThread();
 
@@ -105,10 +115,6 @@ public:
 
     // For monitoring
     BSONObj getCounters();
-
-    long long getLastAppliedHash() const;
-    void setLastAppliedHash(long long oldH);
-    void loadLastAppliedHash(OperationContext* txn);
 
     // Clears any fetched and buffered oplog entries.
     void clearBuffer();
@@ -135,15 +141,12 @@ private:
 
     // Production thread
     BlockingQueue<BSONObj> _buffer;
-    OplogReader _syncSourceReader;
 
     // _mutex protects all of the class variables except _syncSourceReader and _buffer
     mutable stdx::mutex _mutex;
 
     OpTime _lastOpTimeFetched;
 
-    // lastAppliedHash is used to generate a new hash for the following op, when primary.
-    long long _lastAppliedHash;
     // lastFetchedHash is used to match ops to determine if we need to rollback, when
     // a secondary.
     long long _lastFetchedHash;
@@ -161,14 +164,36 @@ private:
     BackgroundSync operator=(const BackgroundSync& s);
 
     // Production thread
-    void _producerThread();
-    // Adds elements to the list, up to maxSize.
-    void produce(OperationContext* txn);
-    // Checks the criteria for rolling back and executes a rollback if warranted.
-    bool _rollbackIfNeeded(OperationContext* txn, OplogReader& r);
+    void _producerThread(executor::TaskExecutor* taskExecutor);
+    void _produce(OperationContext* txn, executor::TaskExecutor* taskExecutor);
+
+    /**
+     * Processes query responses from fetcher.
+     */
+    void _fetcherCallback(const StatusWith<Fetcher::QueryResponse>& result,
+                          BSONObjBuilder* bob,
+                          const HostAndPort& source,
+                          Status* remoteOplogStartStatus);
+
+    /**
+     * Checks the criteria for rolling back.
+     * 'getNextOperation' returns the first result of the oplog tailing query.
+     * Returns RemoteOplogStale if the oplog query has no results.
+     * Returns OplogStartMissing if we cannot find the timestamp of the last fetched operation in
+     * the remote oplog.
+     */
+    Status _checkRemoteOplogStart(stdx::function<StatusWith<BSONObj>()> getNextOperation);
+
+    /**
+     * Executes a rollback.
+     * 'getConnection' returns a connection to the sync source.
+     */
+    void _rollback(OperationContext* txn,
+                   const HostAndPort& source,
+                   stdx::function<DBClientBase*()> getConnection);
 
     // Evaluate if the current sync target is still good
-    bool shouldChangeSyncSource();
+    bool _shouldChangeSyncSource(const HostAndPort& syncSource);
 
     // restart syncing
     void start(OperationContext* txn);

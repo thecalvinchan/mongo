@@ -41,16 +41,16 @@
 #include "mongo/bson/util/bson_extract.h"
 #include "mongo/db/auth/action_set.h"
 #include "mongo/db/auth/action_type.h"
-#include "mongo/db/auth/authorization_manager.h"
 #include "mongo/db/auth/authorization_manager_global.h"
+#include "mongo/db/auth/authorization_manager.h"
 #include "mongo/db/auth/privilege.h"
 #include "mongo/db/background.h"
 #include "mongo/db/catalog/apply_ops.h"
 #include "mongo/db/catalog/capped_utils.h"
-#include "mongo/db/catalog/create_collection.h"
 #include "mongo/db/catalog/coll_mod.h"
-#include "mongo/db/catalog/collection.h"
 #include "mongo/db/catalog/collection_catalog_entry.h"
+#include "mongo/db/catalog/collection.h"
+#include "mongo/db/catalog/create_collection.h"
 #include "mongo/db/catalog/drop_collection.h"
 #include "mongo/db/catalog/drop_database.h"
 #include "mongo/db/catalog/drop_indexes.h"
@@ -61,25 +61,32 @@
 #include "mongo/db/db_raii.h"
 #include "mongo/db/dbdirectclient.h"
 #include "mongo/db/dbhelpers.h"
-#include "mongo/db/service_context.h"
 #include "mongo/db/global_timestamp.h"
 #include "mongo/db/index_builder.h"
+#include "mongo/db/index/index_access_method.h"
+#include "mongo/db/keypattern.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/op_observer.h"
 #include "mongo/db/operation_context_impl.h"
 #include "mongo/db/ops/delete.h"
-#include "mongo/db/ops/update.h"
 #include "mongo/db/ops/update_lifecycle_impl.h"
+#include "mongo/db/ops/update.h"
 #include "mongo/db/repl/bgsync.h"
+#include "mongo/db/repl/oplogreader.h"
 #include "mongo/db/repl/optime.h"
 #include "mongo/db/repl/repl_client_info.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
+#include "mongo/db/repl/snapshot_thread.h"
+#include "mongo/db/service_context.h"
 #include "mongo/db/stats/counters.h"
-#include "mongo/db/storage/storage_engine.h"
 #include "mongo/db/storage_options.h"
+#include "mongo/db/storage/storage_engine.h"
+#include "mongo/platform/random.h"
 #include "mongo/s/d_state.h"
 #include "mongo/scripting/engine.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/elapsed_tracker.h"
+#include "mongo/util/fail_point_service.h"
 #include "mongo/util/file.h"
 #include "mongo/util/log.h"
 #include "mongo/util/mongoutils/str.h"
@@ -97,10 +104,14 @@ std::string rsOplogName = "local.oplog.rs";
 std::string masterSlaveOplogName = "local.oplog.$main";
 int OPLOG_VERSION = 2;
 
+MONGO_FP_DECLARE(disableSnapshotting);
+
 namespace {
 // cached copies of these...so don't rename them, drop them, etc.!!!
 Database* _localDB = nullptr;
 Collection* _localOplogCollection = nullptr;
+
+PseudoRandom hashGenerator(std::unique_ptr<SecureRandom>(SecureRandom::create())->nextInt64());
 
 // Synchronizes the section where a new Timestamp is generated and when it actually
 // appears in the oplog.
@@ -134,6 +145,8 @@ std::pair<OpTime, long long> getNextOpTime(OperationContext* txn,
                                            const char* ns,
                                            ReplicationCoordinator* replCoord,
                                            const char* opstr) {
+    synchronizeOnCappedInFlightResource(txn->lockState());
+
     stdx::lock_guard<stdx::mutex> lk(newOpMutex);
     Timestamp ts = getNextGlobalTimestamp();
     newTimestampNotifier.notify_all();
@@ -150,23 +163,10 @@ std::pair<OpTime, long long> getNextOpTime(OperationContext* txn,
             term = ReplClientInfo::forClient(txn->getClient()).getTerm();
         }
 
-        hashNew = BackgroundSync::get()->getLastAppliedHash();
-
-        // Check to make sure logOp() is legal at this point.
-        if (*opstr == 'n') {
-            // 'n' operations are always logged
-            invariant(*ns == '\0');
-            // 'n' operations do not advance the hash, since they are not rolled back
-        } else {
-            // Advance the hash
-            hashNew = (hashNew * 131 + ts.asLL()) * 17 + replCoord->getMyId();
-
-            BackgroundSync::get()->setLastAppliedHash(hashNew);
-        }
+        hashNew = hashGenerator.nextInt64();
     }
 
     OpTime opTime(ts, term);
-    replCoord->setMyLastOptime(opTime);
     return std::pair<OpTime, long long>(opTime, hashNew);
 }
 
@@ -314,8 +314,11 @@ void _logOp(OperationContext* txn,
     BSONObj partial = b.done();
 
     OplogDocWriter writer(partial, obj);
+    // This transaction might roll back.
     checkOplogInsert(_localOplogCollection->insertDocument(txn, &writer, false));
 
+    // Set this only after we're sure the insert didn't abort and roll back.
+    replCoord->setMyLastOptime(slot.first);
     ReplClientInfo::forClient(txn->getClient()).setLastOp(slot.first);
 }
 
@@ -361,11 +364,6 @@ OpTime writeOpsToOplog(OperationContext* txn, const std::deque<BSONObj>& ops) {
         wunit.commit();
     }
     MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "writeOps", _localOplogCollection->ns().ns());
-
-    BackgroundSync* bgsync = BackgroundSync::get();
-    // Keep this up-to-date, in case we step up to primary.
-    long long hash = ops.back()["h"].numberLong();
-    bgsync->setLastAppliedHash(hash);
 
     return lastOptime;
 }
@@ -585,11 +583,11 @@ Status applyOperation_inlock(OperationContext* txn,
         if (supportsDocLocking()) {
             // WiredTiger, and others requires MODE_IX since the applier threads driving
             // this allow writes to the same collection on any thread.
-            invariant(txn->lockState()->isCollectionLockedForMode(ns, MODE_IX));
+            dassert(txn->lockState()->isCollectionLockedForMode(ns, MODE_IX));
         } else {
             // mmapV1 ensures that all operations to the same collection are executed from
             // the same worker thread, so it takes an exclusive lock (MODE_X)
-            invariant(txn->lockState()->isCollectionLockedForMode(ns, MODE_X));
+            dassert(txn->lockState()->isCollectionLockedForMode(ns, MODE_X));
         }
     }
     Collection* collection = db->getCollection(ns);
@@ -616,25 +614,49 @@ Status applyOperation_inlock(OperationContext* txn,
                 Status status = builder.buildInForeground(txn, db);
                 uassertStatusOK(status);
             }
-        } else {
-            // do upserts for inserts as we might get replayed more than once
+            // Since this is an index operation we can return without falling through.
+            return Status::OK();
+        }
+
+        uassert(
+            ErrorCodes::NamespaceNotFound,
+            str::stream() << "Failed to apply insert due to missing collection: " << op.toString(),
+            collection);
+
+        // No _id.
+        // This indicates an issue with the upstream server:
+        //     The oplog entry is corrupted; or
+        //     The version of the upstream server is obsolete.
+        uassert(ErrorCodes::NoSuchKey,
+                str::stream() << "Failed to apply insert due to missing _id: " << op.toString(),
+                o.hasField("_id"));
+
+        // 1. Try insert first
+        // 2. If okay, commit
+        // 3. If not, do update (and commit)
+        // 4. If both !Ok, return status
+        StatusWith<RecordId> status{ErrorCodes::NotYetInitialized, ""};
+        {
+            WriteUnitOfWork wuow(txn);
+            try {
+                status = collection->insertDocument(txn, o, true);
+            } catch (DBException dbe) {
+                status = StatusWith<RecordId>(dbe.toStatus());
+            }
+            if (status.isOK()) {
+                wuow.commit();
+            }
+        }
+        // Now see if we need to do an update, based on duplicate _id index key
+        if (!status.isOK()) {
+            if (status.getStatus().code() != ErrorCodes::DuplicateKey) {
+                return status.getStatus();
+            }
+
+            // Do update on DuplicateKey errors.
+            // This will only be on the _id field in replication,
+            // since we disable non-_id unique constraint violations.
             OpDebug debug;
-
-            uassert(ErrorCodes::NamespaceNotFound,
-                    str::stream() << "Failed to apply insert due to missing collection: "
-                                  << op.toString(),
-                    collection);
-
-            // No _id.
-            // This indicates an issue with the upstream server:
-            //     The oplog entry is corrupted; or
-            //     The version of the upstream server is obsolete.
-            uassert(ErrorCodes::NoSuchKey,
-                    str::stream() << "Failed to apply insert due to missing _id: " << op.toString(),
-                    o.hasField("_id"));
-
-            // TODO: It may be better to do an insert here, and then catch the duplicate
-            // key exception and do update then. Very few upserts will not be inserts...
             BSONObjBuilder b;
             b.append(o.getField("_id"));
 
@@ -647,7 +669,12 @@ Status applyOperation_inlock(OperationContext* txn,
             UpdateLifecycleImpl updateLifecycle(true, requestNs);
             request.setLifecycle(&updateLifecycle);
 
-            update(txn, db, request, &debug);
+            UpdateResult res = update(txn, db, request, &debug);
+            if (res.numMatched == 0) {
+                error() << "No document was updated even though we got a DuplicateKey error when"
+                           " inserting";
+                fassertFailedNoTrace(28750);
+            }
         }
     } else if (*opType == 'u') {
         opCounters->gotUpdate();
@@ -723,8 +750,8 @@ Status applyOperation_inlock(OperationContext* txn,
     } else if (*opType == 'n') {
         // no op
     } else {
-        throw MsgAssertionException(14825,
-                                    ErrorMsg("error in applyOperation : unknown opType ", *opType));
+        throw MsgAssertionException(
+            14825, str::stream() << "error in applyOperation : unknown opType " << *opType);
     }
 
     // AuthorizationManager's logOp method registers a RecoveryUnit::Change
@@ -747,10 +774,15 @@ Status applyCommand_inlock(OperationContext* txn, const BSONObj& op) {
     const char* opType = fieldOp.valuestrsafe();
     invariant(*opType == 'c');  // only commands are processed here
 
-    BSONObj o;
-    if (fieldO.isABSONObj()) {
-        o = fieldO.embeddedObject();
+    if (fieldO.eoo()) {
+        return Status(ErrorCodes::NoSuchKey, "Missing expected field 'o'");
     }
+
+    if (!fieldO.isABSONObj()) {
+        return Status(ErrorCodes::BadValue, "Expected object for field 'o'");
+    }
+
+    BSONObj o = fieldO.embeddedObject();
 
     const char* ns = fieldNs.valuestrsafe();
 
@@ -761,7 +793,13 @@ Status applyCommand_inlock(OperationContext* txn, const BSONObj& op) {
     bool done = false;
 
     while (!done) {
-        ApplyOpMetadata curOpToApply = opsMap.find(o.firstElementFieldName())->second;
+        auto op = opsMap.find(o.firstElementFieldName());
+        if (op == opsMap.end()) {
+            return Status(ErrorCodes::BadValue,
+                          mongoutils::str::stream() << "Invalid key '" << o.firstElementFieldName()
+                                                    << "' found in field 'o'");
+        }
+        ApplyOpMetadata curOpToApply = op->second;
         Status status = Status::OK();
         try {
             status = curOpToApply.applyFunc(txn, ns, o);
@@ -816,15 +854,6 @@ Status applyCommand_inlock(OperationContext* txn, const BSONObj& op) {
     return Status::OK();
 }
 
-void waitUpToOneSecondForTimestampChange(const Timestamp& referenceTime) {
-    stdx::unique_lock<stdx::mutex> lk(newOpMutex);
-
-    while (referenceTime == getLastSetTimestamp()) {
-        if (!newTimestampNotifier.timed_wait(lk, boost::posix_time::seconds(1)))
-            return;
-    }
-}
-
 void setNewTimestamp(const Timestamp& newTime) {
     stdx::lock_guard<stdx::mutex> lk(newOpMutex);
     setGlobalTimestamp(newTime);
@@ -856,6 +885,109 @@ void oplogCheckCloseDatabase(OperationContext* txn, Database* db) {
 
     _localDB = nullptr;
     _localOplogCollection = nullptr;
+}
+
+SnapshotThread::SnapshotThread(SnapshotManager* manager)
+    : _manager(manager), _thread([this] { run(); }) {}
+
+void SnapshotThread::run() {
+    Client::initThread("SnapshotThread");
+    auto& client = cc();
+    auto serviceContext = client.getServiceContext();
+    auto replCoord = ReplicationCoordinator::get(serviceContext);
+
+    Timestamp lastTimestamp = {};
+    while (true) {
+        {
+            stdx::unique_lock<stdx::mutex> lock(newOpMutex);
+            while (true) {
+                if (_inShutdown)
+                    return;
+
+                if (_forcedSnapshotPending || lastTimestamp != getLastSetTimestamp()) {
+                    _forcedSnapshotPending = false;
+                    lastTimestamp = getLastSetTimestamp();
+                    break;
+                }
+
+                newTimestampNotifier.wait(lock);
+            }
+        }
+
+        while (MONGO_FAIL_POINT(disableSnapshotting)) {
+            sleepsecs(1);
+            stdx::unique_lock<stdx::mutex> lock(newOpMutex);
+            if (_inShutdown) {
+                return;
+            }
+        }
+
+        try {
+            auto txn = client.makeOperationContext();
+            Lock::GlobalLock globalLock(txn->lockState(), MODE_IS, UINT_MAX);
+
+            if (!replCoord->getMemberState().readable()) {
+                // If our MemberState isn't readable, we may not be in a consistent state so don't
+                // take snapshots. When we transition into a readable state from a non-readable
+                // state, a snapshot is forced to ensure we don't miss the latest write. This must
+                // be checked each time we acquire the global IS lock since that prevents the node
+                // from transitioning to a !readable() state from a readable() one.
+                continue;
+            }
+
+            {
+                // Make sure there are no in-flight capped inserts while we create our snapshot.
+                Lock::ResourceLock cappedInsertLock(
+                    txn->lockState(), resourceCappedInFlight, MODE_X);
+                _manager->prepareForCreateSnapshot(txn.get());
+            }
+
+            auto opTimeOfSnapshot = OpTime();
+            {
+                AutoGetCollectionForRead oplog(txn.get(), rsOplogName);
+                invariant(oplog.getCollection());
+                // Read the latest op from the oplog.
+                auto cursor = oplog.getCollection()->getCursor(txn.get(), /*forward*/ false);
+                auto record = cursor->next();
+                if (!record)
+                    continue;  // oplog is completely empty.
+
+                const auto op = record->data.releaseToBson();
+                opTimeOfSnapshot = extractOpTime(op);
+                invariant(!opTimeOfSnapshot.isNull());
+            }
+
+            _manager->createSnapshot(txn.get(), SnapshotName(opTimeOfSnapshot.getTimestamp()));
+            replCoord->onSnapshotCreate(opTimeOfSnapshot);
+        } catch (const WriteConflictException& wce) {
+            log() << "skipping storage snapshot pass due to write conflict";
+            continue;
+        }
+    }
+}
+
+void SnapshotThread::shutdown() {
+    invariant(_thread.joinable());
+    {
+        stdx::lock_guard<stdx::mutex> lock(newOpMutex);
+        invariant(!_inShutdown);
+        _inShutdown = true;
+        newTimestampNotifier.notify_all();
+    }
+    _thread.join();
+}
+
+void SnapshotThread::forceSnapshot() {
+    stdx::lock_guard<stdx::mutex> lock(newOpMutex);
+    _forcedSnapshotPending = true;
+    newTimestampNotifier.notify_all();
+}
+
+std::unique_ptr<SnapshotThread> SnapshotThread::start(ServiceContext* service) {
+    if (auto manager = service->getGlobalStorageEngine()->getSnapshotManager()) {
+        return std::unique_ptr<SnapshotThread>(new SnapshotThread(manager));
+    }
+    return {};
 }
 
 }  // namespace repl

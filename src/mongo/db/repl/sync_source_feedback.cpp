@@ -42,6 +42,7 @@
 #include "mongo/db/dbhelpers.h"
 #include "mongo/db/operation_context_impl.h"
 #include "mongo/db/repl/bgsync.h"
+#include "mongo/db/repl/oplogreader.h"
 #include "mongo/db/repl/replica_set_config.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
 #include "mongo/db/operation_context.h"
@@ -78,7 +79,7 @@ bool SyncSourceFeedback::_connect(OperationContext* txn, const HostAndPort& host
         return true;
     }
     log() << "setting syncSourceFeedback to " << host.toString();
-    _connection.reset(new DBClientConnection(false, OplogReader::tcp_timeout));
+    _connection.reset(new DBClientConnection(false, OplogReader::kSocketTimeout.count()));
     string errmsg;
     try {
         if (!_connection->connect(host, errmsg) ||

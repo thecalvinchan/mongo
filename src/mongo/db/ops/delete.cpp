@@ -67,12 +67,15 @@ long long deleteObjects(OperationContext* txn,
     ParsedDelete parsedDelete(txn, &request);
     uassertStatusOK(parsedDelete.parseRequest());
 
-    PlanExecutor* rawExec;
-    uassertStatusOK(getExecutorDelete(txn, collection, &parsedDelete, &rawExec));
-    std::unique_ptr<PlanExecutor> exec(rawExec);
+    // Replicated writes are disallowed with deleteObjects, as we are not properly setting
+    // lastOp for no-op deletes.
+    fassert(22001, !txn->writesAreReplicated());
+
+    std::unique_ptr<PlanExecutor> exec =
+        uassertStatusOK(getExecutorDelete(txn, collection, &parsedDelete));
 
     uassertStatusOK(exec->executePlan());
-    return DeleteStage::getNumDeleted(exec.get());
+    return DeleteStage::getNumDeleted(*exec);
 }
 
 }  // namespace mongo

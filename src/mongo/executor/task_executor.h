@@ -1,5 +1,5 @@
 /**
- *    Copyright (C) 2014-2015 MongoDB Inc.
+ *    Copyright (C) 2015 MongoDB Inc.
  *
  *    This program is free software: you can redistribute it and/or  modify
  *    it under the terms of the GNU Affero General Public License, version 3,
@@ -35,7 +35,8 @@
 #include "mongo/base/status.h"
 #include "mongo/base/status_with.h"
 #include "mongo/base/string_data.h"
-#include "mongo/client/remote_command_runner.h"
+#include "mongo/executor/remote_command_request.h"
+#include "mongo/executor/remote_command_response.h"
 #include "mongo/stdx/functional.h"
 #include "mongo/util/time_support.h"
 
@@ -102,9 +103,30 @@ public:
     virtual ~TaskExecutor();
 
     /**
-     * Signals to the executor that it should shut down.
+     * Causes the executor to initialize its internal state (start threads if appropriate, create
+     * network sockets, etc). This method may be called at most once for the lifetime of an
+     * executor.
+     */
+    virtual void startup() = 0;
+
+    /**
+     * Signals to the executor that it should shut down. This method should not block. After
+     * calling shutdown, it is illegal to schedule more tasks on the executor and join should be
+     * called to wait for shutdown to complete.
+     *
+     * It is legal to call this method multiple times, but it should only be called after startup
+     * has been called.
      */
     virtual void shutdown() = 0;
+
+    /**
+     * Waits for the shutdown sequence initiated by an earlier call to shutdown to complete. It is
+     * only legal to call this method if startup has been called earlier.
+     *
+     * If startup is ever called, the code must ensure that join is eventually called once and only
+     * once.
+     */
+    virtual void join() = 0;
 
     /**
      * Returns diagnostic information.
@@ -247,7 +269,6 @@ class TaskExecutor::CallbackHandle {
 
 public:
     CallbackHandle();
-    explicit CallbackHandle(std::shared_ptr<CallbackState> cbData);
 
     bool operator==(const CallbackHandle& other) const {
         return _callback == other._callback;
@@ -262,6 +283,7 @@ public:
     }
 
 private:
+    explicit CallbackHandle(std::shared_ptr<CallbackState> cbData);
     void setCallback(std::shared_ptr<CallbackState> callback) {
         _callback = callback;
     }
@@ -329,8 +351,8 @@ private:
  */
 struct TaskExecutor::CallbackArgs {
     CallbackArgs(TaskExecutor* theExecutor,
-                 const CallbackHandle& theHandle,
-                 const Status& theStatus,
+                 CallbackHandle theHandle,
+                 Status theStatus,
                  OperationContext* txn = NULL);
 
     TaskExecutor* executor;

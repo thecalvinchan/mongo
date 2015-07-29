@@ -30,11 +30,12 @@
 
 #include <boost/optional.hpp>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
+#include "mongo/base/disallow_copying.h"
 #include "mongo/s/client/shard.h"
+#include "mongo/stdx/mutex.h"
 
 namespace mongo {
 
@@ -42,7 +43,6 @@ class BSONObjBuilder;
 class CatalogManager;
 struct HostAndPort;
 class NamespaceString;
-class RemoteCommandRunner;
 class RemoteCommandTargeterFactory;
 class Shard;
 class ShardType;
@@ -52,6 +52,7 @@ class StatusWith;
 
 namespace executor {
 
+class NetworkInterface;
 class TaskExecutor;
 
 }  // namespace executor
@@ -61,6 +62,8 @@ class TaskExecutor;
  * the respective replica sets for membership changes.
  */
 class ShardRegistry {
+    MONGO_DISALLOW_COPYING(ShardRegistry);
+
 public:
     /**
      * Instantiates a new shard registry.
@@ -68,21 +71,38 @@ public:
      * @param targeterFactory Produces targeters for each shard's individual connection string
      * @param commandRunner Command runner for executing commands against hosts
      * @param executor Asynchronous task executor to use for making calls to shards.
+     * @param network Network interface backing executor.
      * @param catalogManager Used to retrieve the list of registered shard. TODO: remove.
      */
     ShardRegistry(std::unique_ptr<RemoteCommandTargeterFactory> targeterFactory,
-                  std::unique_ptr<RemoteCommandRunner> commandRunner,
                   std::unique_ptr<executor::TaskExecutor> executor,
-                  CatalogManager* catalogManager);
+                  executor::NetworkInterface* network);
 
     ~ShardRegistry();
 
-    RemoteCommandRunner* getCommandRunner() const {
-        return _commandRunner.get();
-    }
+    /**
+     * Stores the given CatalogManager into _catalogManager for use for retrieving the list of
+     * registered shards, and creates the hard-coded config shard.
+     */
+    void init(CatalogManager* catalogManager);
+
+    /**
+     * Invokes the executor's startup method, which will start any networking/async execution
+     * threads.
+     */
+    void startup();
+
+    /**
+     * Stops the executor thread and waits for it to join.
+     */
+    void shutdown();
 
     executor::TaskExecutor* getExecutor() const {
         return _executor.get();
+    }
+
+    executor::NetworkInterface* getNetwork() const {
+        return _network;
     }
 
     void reload();
@@ -91,6 +111,16 @@ public:
      * Returns shared pointer to shard object with given shard id.
      */
     std::shared_ptr<Shard> getShard(const ShardId& shardId);
+
+    /**
+     * Instantiates a new detached shard connection, which does not appear in the list of shards
+     * tracked by the registry and as a result will not be returned by getAllShardIds.
+     *
+     * The caller owns the returned shard object and is responsible for disposing of it when done.
+     *
+     * @param connStr Connection string to the shard.
+     */
+    std::unique_ptr<Shard> createConnection(const ConnectionString& connStr) const;
 
     /**
      * Lookup shard by replica set name. Returns nullptr if the name can't be found.
@@ -116,14 +146,31 @@ public:
     StatusWith<std::vector<BSONObj>> exhaustiveFind(const HostAndPort& host,
                                                     const NamespaceString& nss,
                                                     const BSONObj& query,
-                                                    boost::optional<int> limit);
+                                                    const BSONObj& sort,
+                                                    boost::optional<long long> limit);
 
     /**
-     * Runs a command against the specified host and returns the result.
+     * Runs a command against the specified host and returns the result.  It is the responsibility
+     * of the caller to check the returned BSON for command-specific failures.
      */
     StatusWith<BSONObj> runCommand(const HostAndPort& host,
                                    const std::string& dbName,
                                    const BSONObj& cmdObj);
+
+    /**
+     * Helper for running commands against a given shard with logic for retargeting and
+     * retrying the command in the event of a NotMaster response.
+     * Returns ErrorCodes::NotMaster if after the max number of retries we still haven't
+     * successfully delivered the command to a primary.  Can also return a non-ok status in the
+     * event of a network error communicating with the shard.  If we are able to get
+     * a valid response from running the command then we will return it, even if the command
+     * response indicates failure.  Thus the caller is responsible for checking the command
+     * response object for any kind of command-specific failure.  The only exception is
+     * NotMaster errors, which we intercept and follow the rules described above for handling.
+     */
+    StatusWith<BSONObj> runCommandWithNotMasterRetries(const ShardId& shard,
+                                                       const std::string& dbname,
+                                                       const BSONObj& cmdObj);
 
 private:
     typedef std::map<ShardId, std::shared_ptr<Shard>> ShardMap;
@@ -143,19 +190,20 @@ private:
     // Factory to obtain remote command targeters for shards
     const std::unique_ptr<RemoteCommandTargeterFactory> _targeterFactory;
 
-    // API to run remote commands to shards in a synchronous manner
-    const std::unique_ptr<RemoteCommandRunner> _commandRunner;
-
     // Executor for scheduling work and remote commands to shards that run in an asynchronous
     // manner.
     const std::unique_ptr<executor::TaskExecutor> _executor;
 
+    // Network interface being used by _executor.  Used for asking questions about the network
+    // configuration, such as getting the current server's hostname.
+    executor::NetworkInterface* const _network;
+
     // Catalog manager from which to load the shard information. Not owned and must outlive
-    // the shard registry object.
-    CatalogManager* const _catalogManager;
+    // the shard registry object.  Should be set once by a call to init() then never modified again.
+    CatalogManager* _catalogManager;
 
     // Protects the maps below
-    mutable std::mutex _mutex;
+    mutable stdx::mutex _mutex;
 
     // Map of both shardName -> Shard and hostName -> Shard
     ShardMap _lookup;

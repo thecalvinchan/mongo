@@ -115,6 +115,20 @@ struct Record {
  *
  * Implementations may override any default implementation if they can provide a more
  * efficient implementation.
+ *
+ * IMPORTANT NOTE FOR DOCUMENT-LOCKING ENGINES: If you implement capped collections with a
+ * "visibility" system such that documents that exist in your snapshot but were inserted after
+ * the last uncommitted document are hidden, you must follow the following rules:
+ *   - next() must never return invisible documents.
+ *   - If next() on a forward cursor hits an invisible document, it should behave as if it hit
+ *     the end of the collection.
+ *   - When next() on a reverse cursor seeks to the end of the collection it must return the
+ *     newest visible document. This should only return boost::none if there are no visible
+ *     documents in the collection.
+ *   - seekExact() must ignore the visibility filter and return the requested document even if
+ *     it is supposed to be invisible.
+ * TODO SERVER-18934 Handle this above the storage engine layer so storage engines don't have to
+ * deal with capped visibility.
  */
 class RecordCursor {
 public:
@@ -182,7 +196,24 @@ public:
      *
      * This handles restoring after either savePositioned() or saveUnpositioned().
      */
-    virtual bool restore(OperationContext* txn) = 0;
+    virtual bool restore() = 0;
+
+    /**
+     * Detaches from the OperationContext and releases any storage-engine state.
+     *
+     * It is only legal to call this when in a "saved" state. While in the "detached" state, it is
+     * only legal to call reattachToOperationContext or the destructor. It is not legal to call
+     * detachFromOperationContext() while already in the detached state.
+     */
+    virtual void detachFromOperationContext() = 0;
+
+    /**
+     * Reattaches to the OperationContext and reacquires any storage-engine state.
+     *
+     * It is only legal to call this in the "detached" state. On return, the cursor is left in a
+     * "saved" state, so callers must still call restoreState to use this object.
+     */
+    virtual void reattachToOperationContext(OperationContext* opCtx) = 0;
 
     /**
      * Inform the cursor that this id is being invalidated.
@@ -498,6 +529,9 @@ public:
      * When we write to an oplog, we call this so that if the storage engine
      * supports doc locking, it can manage the visibility of oplog entries to ensure
      * they are ordered.
+     *
+     * Since this is called inside of a WriteUnitOfWork while holding a std::mutex, it is
+     * illegal to acquire any LockManager locks inside of this function.
      */
     virtual Status oplogDiskLocRegister(OperationContext* txn, const Timestamp& opTime) {
         return Status::OK();

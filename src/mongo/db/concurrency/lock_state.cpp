@@ -226,7 +226,7 @@ void CondVarLockGrantNotification::clear() {
 LockResult CondVarLockGrantNotification::wait(unsigned timeoutMs) {
     stdx::unique_lock<stdx::mutex> lock(_mutex);
     while (_result == LOCK_INVALID) {
-        if (boost::cv_status::timeout == _cond.wait_for(lock, Milliseconds(timeoutMs))) {
+        if (stdx::cv_status::timeout == _cond.wait_for(lock, Milliseconds(timeoutMs))) {
             // Timeout
             return LOCK_TIMEOUT;
         }
@@ -912,5 +912,7 @@ const ResourceId resourceIdOplog = ResourceId(RESOURCE_COLLECTION, StringData("l
 const ResourceId resourceIdAdminDB = ResourceId(RESOURCE_DATABASE, StringData("admin"));
 const ResourceId resourceIdParallelBatchWriterMode =
     ResourceId(RESOURCE_GLOBAL, ResourceId::SINGLETON_PARALLEL_BATCH_WRITER_MODE);
+const ResourceId resourceCappedInFlight =
+    ResourceId(RESOURCE_METADATA, ResourceId::SINGLETON_CAPPED_IN_FLIGHT);
 
 }  // namespace mongo

@@ -34,11 +34,13 @@
 #include "mongo/db/exec/working_set_computed_data.h"
 #include "mongo/db/index/index_access_method.h"
 #include "mongo/db/index/index_descriptor.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* DistinctScan::kStageType = "DISTINCT_SCAN";
@@ -46,13 +48,13 @@ const char* DistinctScan::kStageType = "DISTINCT_SCAN";
 DistinctScan::DistinctScan(OperationContext* txn,
                            const DistinctParams& params,
                            WorkingSet* workingSet)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _workingSet(workingSet),
       _descriptor(params.descriptor),
       _iam(params.descriptor->getIndexCatalog()->getIndex(params.descriptor)),
       _params(params),
-      _checker(&_params.bounds, _descriptor->keyPattern(), _params.direction),
-      _commonStats(kStageType) {
+      _checker(&_params.bounds, _descriptor->keyPattern(), _params.direction) {
     _specificStats.keyPattern = _params.descriptor->keyPattern();
     _specificStats.indexName = _params.descriptor->indexName();
     _specificStats.indexVersion = _params.descriptor->version();
@@ -113,7 +115,7 @@ PlanStage::StageState DistinctScan::work(WorkingSetID* out) {
             WorkingSetMember* member = _workingSet->get(id);
             member->loc = kv->loc;
             member->keyData.push_back(IndexKeyDatum(_descriptor->keyPattern(), kv->key, _iam));
-            member->state = WorkingSetMember::LOC_AND_IDX;
+            _workingSet->transitionToLocAndIdx(id);
 
             *out = id;
             ++_commonStats.advanced;
@@ -126,41 +128,34 @@ bool DistinctScan::isEOF() {
     return _commonStats.isEOF;
 }
 
-void DistinctScan::saveState() {
-    _txn = NULL;
-    ++_commonStats.yields;
-
+void DistinctScan::doSaveState() {
     // We always seek, so we don't care where the cursor is.
     if (_cursor)
         _cursor->saveUnpositioned();
 }
 
-void DistinctScan::restoreState(OperationContext* opCtx) {
+void DistinctScan::doRestoreState() {
+    if (_cursor)
+        _cursor->restore();
+}
+
+void DistinctScan::doDetachFromOperationContext() {
+    _txn = NULL;
+    if (_cursor)
+        _cursor->detachFromOperationContext();
+}
+
+void DistinctScan::doReattachToOperationContext(OperationContext* opCtx) {
     invariant(_txn == NULL);
     _txn = opCtx;
-    ++_commonStats.unyields;
-
     if (_cursor)
-        _cursor->restore(opCtx);
+        _cursor->reattachToOperationContext(opCtx);
 }
 
-void DistinctScan::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
-}
-
-vector<PlanStage*> DistinctScan::getChildren() const {
-    vector<PlanStage*> empty;
-    return empty;
-}
-
-PlanStageStats* DistinctScan::getStats() {
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_DISTINCT_SCAN));
-    ret->specific.reset(new DistinctScanStats(_specificStats));
-    return ret.release();
-}
-
-const CommonStats* DistinctScan::getCommonStats() const {
-    return &_commonStats;
+unique_ptr<PlanStageStats> DistinctScan::getStats() {
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_DISTINCT_SCAN);
+    ret->specific = make_unique<DistinctScanStats>(_specificStats);
+    return ret;
 }
 
 const SpecificStats* DistinctScan::getSpecificStats() const {

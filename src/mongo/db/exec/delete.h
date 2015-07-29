@@ -76,7 +76,7 @@ struct DeleteStageParams {
  * Callers of work() must be holding a write lock (and, for shouldCallLogOp=true deletes,
  * callers must have had the replication coordinator approve the write).
  */
-class DeleteStage : public PlanStage {
+class DeleteStage final : public PlanStage {
     MONGO_DISALLOW_COPYING(DeleteStage);
 
 public:
@@ -85,26 +85,20 @@ public:
                 WorkingSet* ws,
                 Collection* collection,
                 PlanStage* child);
-    virtual ~DeleteStage();
 
-    virtual bool isEOF();
-    virtual StageState work(WorkingSetID* out);
+    bool isEOF() final;
+    StageState work(WorkingSetID* out) final;
 
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    void doRestoreState() final;
+    void doReattachToOperationContext(OperationContext* opCtx) final;
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_DELETE;
     }
 
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -113,7 +107,7 @@ public:
      *
      * Should only be called if the root plan stage of 'exec' is UPDATE and if 'exec' is EOF.
      */
-    static long long getNumDeleted(PlanExecutor* exec);
+    static long long getNumDeleted(const PlanExecutor& exec);
 
 private:
     // Transactional context.  Not owned by us.
@@ -129,8 +123,6 @@ private:
     // stage.
     Collection* _collection;
 
-    std::unique_ptr<PlanStage> _child;
-
     // If not WorkingSet::INVALID_ID, we use this rather than asking our child what to do next.
     WorkingSetID _idRetrying;
 
@@ -138,7 +130,6 @@ private:
     WorkingSetID _idReturning;
 
     // Stats
-    CommonStats _commonStats;
     DeleteStats _specificStats;
 };
 

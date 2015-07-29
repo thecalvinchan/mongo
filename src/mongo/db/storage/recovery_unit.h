@@ -28,12 +28,13 @@
 
 #pragma once
 
+#include <cstdint>
 #include <stdlib.h>
 #include <string>
 
 #include "mongo/base/disallow_copying.h"
+#include "mongo/base/status.h"
 #include "mongo/db/storage/snapshot.h"
-#include "mongo/platform/cstdint.h"
 
 namespace mongo {
 
@@ -51,9 +52,6 @@ public:
     virtual ~RecoveryUnit() {}
 
     virtual void reportState(BSONObjBuilder* b) const {}
-
-    virtual void beingReleasedFromOperationContext() {}
-    virtual void beingSetOnOperationContext() {}
 
     /**
      * These should be called through WriteUnitOfWork rather than directly.
@@ -87,6 +85,33 @@ public:
      * fail if it is.
      */
     virtual void abandonSnapshot() = 0;
+
+    /**
+     * Informs this RecoveryUnit that all future reads through it should be from a snapshot
+     * marked as Majority Committed. Snapshots should still be separately acquired and newer
+     * committed snapshots should be used if available whenever implementations would normally
+     * change snapshots.
+     *
+     * If no snapshot has yet been marked as Majority Committed, returns a status with error
+     * code ReadConcernNotAvailableYet. After this returns successfully, at any point where
+     * implementations attempt to acquire committed snapshot, if there are none available due to a
+     * call to SnapshotManager::dropAllSnapshots(), a UserException with the same code should be
+     * thrown.
+     *
+     * StorageEngines that don't support a SnapshotManager should use the default
+     * implementation.
+     */
+    virtual Status setReadFromMajorityCommittedSnapshot() {
+        return {ErrorCodes::CommandNotSupported,
+                "Current storage engine does not support $readMajorityTemporaryName"};
+    }
+
+    /**
+     * Returns true if setReadFromMajorityCommittedSnapshot() has been called.
+     */
+    virtual bool isReadingFromMajorityCommittedSnapshot() {
+        return false;
+    }
 
     virtual SnapshotId getSnapshotId() const = 0;
 

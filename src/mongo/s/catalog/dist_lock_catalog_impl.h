@@ -37,14 +37,12 @@
 
 namespace mongo {
 
-class RemoteCommandRunner;
 class RemoteCommandTargeter;
+class ShardRegistry;
 
 class DistLockCatalogImpl final : public DistLockCatalog {
 public:
-    DistLockCatalogImpl(RemoteCommandTargeter* targeter,
-                        RemoteCommandRunner* executor,
-                        Milliseconds writeConcernTimeout);
+    DistLockCatalogImpl(ShardRegistry* shardRegistry, Milliseconds writeConcernTimeout);
 
     virtual ~DistLockCatalogImpl();
 
@@ -78,8 +76,9 @@ public:
     virtual Status stopPing(StringData processId) override;
 
 private:
-    RemoteCommandRunner* _cmdRunner;
-    RemoteCommandTargeter* _targeter;
+    RemoteCommandTargeter* _targeter();
+
+    ShardRegistry* _client;
 
     // These are not static to avoid initialization order fiasco.
     const WriteConcernOptions _writeConcern;

@@ -32,6 +32,7 @@
 
 namespace mongo {
 
+class ConnectionString;
 struct ReadPreferenceSetting;
 struct HostAndPort;
 template <typename T>
@@ -47,6 +48,14 @@ public:
     virtual ~RemoteCommandTargeter() = default;
 
     /**
+     * Retrieves the full connection string for the replica set or standalone host which are
+     * represented by this targeter. This value is always constant for a standalone host and may
+     * vary for replica sets as hosts are added, discovered and removed during the lifetime of the
+     * set.
+     */
+    virtual ConnectionString connectionString() = 0;
+
+    /**
      * Obtains a host, which matches the read preferences specified by readPref.
      *
      * Returns OK and a host and port to use for the specified read preference or any
@@ -56,6 +65,13 @@ public:
      *          and the readPref is anything other than PrimaryOnly
      */
     virtual StatusWith<HostAndPort> findHost(const ReadPreferenceSetting& readPref) = 0;
+
+    /**
+     * Reports to the targeter that a NotMaster response was received when communicating with
+     * "host', and so it should update its bookkeeping to avoid giving out the host again on a
+     * subsequent request for the primary.
+     */
+    virtual void markHostNotMaster(const HostAndPort& host) = 0;
 
 protected:
     RemoteCommandTargeter() = default;

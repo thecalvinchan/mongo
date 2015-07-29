@@ -40,9 +40,9 @@ class StopWords;
 
 /**
  * FTSTokenizer
- * A iterator of "documents" where a document contains space delimited words.
- * For each word returns a stem or lemma version of a word optimized for full text indexing.
- * Supports various options to control how tokens are generated.
+ * A iterator of "documents" where a document contains space delimited words. For each word returns
+ * a stem or lemma version of a word optimized for full text indexing. Supports various options to
+ * control how tokens are generated.
  */
 class FTSTokenizer {
 public:

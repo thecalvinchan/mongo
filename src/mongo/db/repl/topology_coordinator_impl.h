@@ -138,7 +138,7 @@ public:
     virtual long long getTerm() const;
     virtual bool updateTerm(long long term);
     virtual void setForceSyncSourceIndex(int index);
-    virtual HostAndPort chooseNewSyncSource(Date_t now, const OpTime& lastOpApplied);
+    virtual HostAndPort chooseNewSyncSource(Date_t now, const Timestamp& lastTimestampApplied);
     virtual void blacklistSyncSource(const HostAndPort& host, Date_t until);
     virtual void unblacklistSyncSource(const HostAndPort& host, Date_t now);
     virtual void clearSyncSourceBlacklist();
@@ -202,8 +202,8 @@ public:
     virtual bool stepDown(Date_t until, bool force, const OpTime& lastOpApplied);
     virtual bool stepDownIfPending();
     virtual Date_t getStepDownTime() const;
-    virtual void prepareCursorResponseInfo(BSONObjBuilder* objBuilder,
-                                           const OpTime& lastCommitttedOpTime) const;
+    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder,
+                                             const OpTime& lastCommitttedOpTime) const;
     Status processReplSetDeclareElectionWinner(const ReplSetDeclareElectionWinnerArgs& args,
                                                long long* responseTerm);
     virtual void processReplSetRequestVotes(const ReplSetRequestVotesArgs& args,
@@ -215,6 +215,7 @@ public:
     virtual void voteForMyselfV1();
     virtual long long getTerm();
     virtual void prepareForStepDown();
+    virtual void setPrimaryIndex(long long primaryIndex);
 
     ////////////////////////////////////////////////////////////
     //

@@ -35,11 +35,13 @@
 #include "mongo/db/client_basic.h"
 #include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set_common.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 namespace {
 
@@ -75,15 +77,16 @@ GroupStage::GroupStage(OperationContext* txn,
                        const GroupRequest& request,
                        WorkingSet* workingSet,
                        PlanStage* child)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _request(request),
       _ws(workingSet),
-      _commonStats(kStageType),
       _specificStats(),
-      _child(child),
       _groupState(GroupState_Initializing),
       _reduceFunction(0),
-      _keyFunction(0) {}
+      _keyFunction(0) {
+    _children.emplace_back(child);
+}
 
 void GroupStage::initGroupScripting() {
     // Initialize _scope.
@@ -194,7 +197,7 @@ PlanStage::StageState GroupStage::work(WorkingSetID* out) {
     // Otherwise, read from our child.
     invariant(_groupState == GroupState_ReadingFromChild);
     WorkingSetID id = WorkingSet::INVALID_ID;
-    StageState state = _child->work(&id);
+    StageState state = child()->work(&id);
 
     if (PlanStage::NEED_TIME == state) {
         ++_commonStats.needTime;
@@ -243,7 +246,7 @@ PlanStage::StageState GroupStage::work(WorkingSetID* out) {
         *out = _ws->allocate();
         WorkingSetMember* member = _ws->get(*out);
         member->obj = Snapshotted<BSONObj>(SnapshotId(), results);
-        member->state = WorkingSetMember::OWNED_OBJ;
+        member->transitionToOwnedObj();
 
         ++_commonStats.advanced;
         return PlanStage::ADVANCED;
@@ -254,41 +257,16 @@ bool GroupStage::isEOF() {
     return _groupState == GroupState_Done;
 }
 
-void GroupStage::saveState() {
-    _txn = NULL;
-    ++_commonStats.yields;
-    _child->saveState();
-}
-
-void GroupStage::restoreState(OperationContext* opCtx) {
-    invariant(_txn == NULL);
+void GroupStage::doReattachToOperationContext(OperationContext* opCtx) {
     _txn = opCtx;
-    ++_commonStats.unyields;
-    _child->restoreState(opCtx);
 }
 
-void GroupStage::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
-    _child->invalidate(txn, dl, type);
-}
-
-vector<PlanStage*> GroupStage::getChildren() const {
-    vector<PlanStage*> children;
-    children.push_back(_child.get());
-    return children;
-}
-
-PlanStageStats* GroupStage::getStats() {
+unique_ptr<PlanStageStats> GroupStage::getStats() {
     _commonStats.isEOF = isEOF();
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_GROUP));
-    GroupStats* groupStats = new GroupStats(_specificStats);
-    ret->specific.reset(groupStats);
-    ret->children.push_back(_child->getStats());
-    return ret.release();
-}
-
-const CommonStats* GroupStage::getCommonStats() const {
-    return &_commonStats;
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_GROUP);
+    ret->specific = make_unique<GroupStats>(_specificStats);
+    ret->children.push_back(child()->getStats().release());
+    return ret;
 }
 
 const SpecificStats* GroupStage::getSpecificStats() const {

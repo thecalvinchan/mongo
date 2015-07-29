@@ -47,6 +47,8 @@
 
 namespace QueryStageCachedPlan {
 
+static const NamespaceString nss("unittests.QueryStageCachedPlan");
+
 class QueryStageCachedPlanBase {
 public:
     QueryStageCachedPlanBase() {
@@ -57,7 +59,7 @@ public:
         addIndex(BSON("a" << 1));
         addIndex(BSON("b" << 1));
 
-        OldClientWriteContext ctx(&_txn, ns());
+        OldClientWriteContext ctx(&_txn, nss.ns());
         Collection* collection = ctx.getCollection();
         ASSERT(collection);
 
@@ -68,20 +70,19 @@ public:
     }
 
     void addIndex(const BSONObj& obj) {
-        ASSERT_OK(dbtests::createIndex(&_txn, ns(), obj));
+        ASSERT_OK(dbtests::createIndex(&_txn, nss.ns(), obj));
     }
 
     void dropCollection() {
-        const NamespaceString nsString(ns());
         ScopedTransaction transaction(&_txn, MODE_X);
-        Lock::DBLock dbLock(_txn.lockState(), nsString.db(), MODE_X);
-        Database* database = dbHolder().get(&_txn, nsString.db());
+        Lock::DBLock dbLock(_txn.lockState(), nss.db(), MODE_X);
+        Database* database = dbHolder().get(&_txn, nss.db());
         if (!database) {
             return;
         }
 
         WriteUnitOfWork wuow(&_txn);
-        database->dropCollection(&_txn, ns());
+        database->dropCollection(&_txn, nss.ns());
         wuow.commit();
     }
 
@@ -93,10 +94,6 @@ public:
         ASSERT(res.isOK());
 
         wuow.commit();
-    }
-
-    static const char* ns() {
-        return "unittests.QueryStageCachedPlan";
     }
 
 protected:
@@ -111,14 +108,14 @@ protected:
 class QueryStageCachedPlanFailure : public QueryStageCachedPlanBase {
 public:
     void run() {
-        AutoGetCollectionForRead ctx(&_txn, ns());
+        AutoGetCollectionForRead ctx(&_txn, nss.ns());
         Collection* collection = ctx.getCollection();
         ASSERT(collection);
 
         // Query can be answered by either index on "a" or index on "b".
-        CanonicalQuery* rawCq;
-        ASSERT_OK(CanonicalQuery::canonicalize(ns(), fromjson("{a: {$gte: 8}, b: 1}"), &rawCq));
-        const std::unique_ptr<CanonicalQuery> cq(rawCq);
+        auto statusWithCQ = CanonicalQuery::canonicalize(nss, fromjson("{a: {$gte: 8}, b: 1}"));
+        ASSERT_OK(statusWithCQ.getStatus());
+        const std::unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
         // We shouldn't have anything in the plan cache for this shape yet.
         PlanCache* cache = collection->infoCache()->getPlanCache();
@@ -175,14 +172,14 @@ public:
 class QueryStageCachedPlanHitMaxWorks : public QueryStageCachedPlanBase {
 public:
     void run() {
-        AutoGetCollectionForRead ctx(&_txn, ns());
+        AutoGetCollectionForRead ctx(&_txn, nss.ns());
         Collection* collection = ctx.getCollection();
         ASSERT(collection);
 
         // Query can be answered by either index on "a" or index on "b".
-        CanonicalQuery* rawCq;
-        ASSERT_OK(CanonicalQuery::canonicalize(ns(), fromjson("{a: {$gte: 8}, b: 1}"), &rawCq));
-        const std::unique_ptr<CanonicalQuery> cq(rawCq);
+        auto statusWithCQ = CanonicalQuery::canonicalize(nss, fromjson("{a: {$gte: 8}, b: 1}"));
+        ASSERT_OK(statusWithCQ.getStatus());
+        const std::unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
         // We shouldn't have anything in the plan cache for this shape yet.
         PlanCache* cache = collection->infoCache()->getPlanCache();

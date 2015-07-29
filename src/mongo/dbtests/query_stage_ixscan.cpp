@@ -185,20 +185,20 @@ public:
 
         // Expect to get key {'': 5} and then key {'': 6}.
         WorkingSetMember* member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 5));
         member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 6));
 
         // Save state and insert a few indexed docs.
         ixscan->saveState();
         insert(fromjson("{_id: 4, x: 10}"));
         insert(fromjson("{_id: 5, x: 11}"));
-        ixscan->restoreState(&_txn);
+        ixscan->restoreState();
 
         member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 10));
 
         WorkingSetID id;
@@ -222,16 +222,16 @@ public:
 
         // Expect to get key {'': 6}.
         WorkingSetMember* member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 6));
 
         // Save state and insert an indexed doc.
         ixscan->saveState();
         insert(fromjson("{_id: 4, x: 7}"));
-        ixscan->restoreState(&_txn);
+        ixscan->restoreState();
 
         member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 7));
 
         WorkingSetID id;
@@ -255,13 +255,13 @@ public:
 
         // Expect to get key {'': 6}.
         WorkingSetMember* member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 6));
 
         // Save state and insert an indexed doc.
         ixscan->saveState();
         insert(fromjson("{_id: 4, x: 10}"));
-        ixscan->restoreState(&_txn);
+        ixscan->restoreState();
 
         // Ensure that we're EOF and we don't erroneously return {'': 12}.
         WorkingSetID id;
@@ -285,21 +285,21 @@ public:
 
         // Expect to get key {'': 10} and then {'': 8}.
         WorkingSetMember* member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 10));
         member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 8));
 
         // Save state and insert an indexed doc.
         ixscan->saveState();
         insert(fromjson("{_id: 4, x: 6}"));
         insert(fromjson("{_id: 5, x: 9}"));
-        ixscan->restoreState(&_txn);
+        ixscan->restoreState();
 
         // Ensure that we don't erroneously return {'': 9} or {'':3}.
         member = getNext(ixscan.get());
-        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->state);
+        ASSERT_EQ(WorkingSetMember::LOC_AND_IDX, member->getState());
         ASSERT_EQ(member->keyData[0].keyData, BSON("" << 6));
 
         WorkingSetID id;

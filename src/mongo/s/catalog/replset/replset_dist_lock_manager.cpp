@@ -30,16 +30,15 @@
 
 #include "mongo/platform/basic.h"
 
-#include <chrono>
-
 #include "mongo/s/catalog/replset/replset_dist_lock_manager.h"
 
 #include "mongo/base/status.h"
 #include "mongo/base/status_with.h"
 #include "mongo/db/service_context.h"
 #include "mongo/s/catalog/dist_lock_catalog.h"
-#include "mongo/s/type_lockpings.h"
-#include "mongo/s/type_locks.h"
+#include "mongo/s/catalog/type_lockpings.h"
+#include "mongo/s/catalog/type_locks.h"
+#include "mongo/stdx/chrono.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/concurrency/thread_name.h"
 #include "mongo/util/log.h"
@@ -51,7 +50,11 @@ namespace mongo {
 using std::string;
 using std::unique_ptr;
 using stdx::chrono::milliseconds;
-using std::chrono::duration_cast;
+using stdx::chrono::duration_cast;
+
+const stdx::chrono::seconds ReplSetDistLockManager::kDistLockWriteConcernTimeout{5};
+const stdx::chrono::seconds ReplSetDistLockManager::kDistLockPingInterval{30};
+const stdx::chrono::minutes ReplSetDistLockManager::kDistLockExpirationTime{15};
 
 ReplSetDistLockManager::ReplSetDistLockManager(ServiceContext* globalContext,
                                                StringData processID,
@@ -151,10 +154,11 @@ StatusWith<bool> ReplSetDistLockManager::canOvertakeLock(LocksType lockDoc) {
     }
 
     const auto& pingDoc = pingStatus.getValue();
-    string errMsg;
-    if (!pingDoc.isValid(&errMsg)) {
+    Status pingDocValidationStatus = pingDoc.validate();
+    if (!pingDocValidationStatus.isOK()) {
         return {ErrorCodes::UnsupportedFormat,
-                str::stream() << "invalid ping document for " << processID << ": " << errMsg};
+                str::stream() << "invalid ping document for " << processID << ": "
+                              << pingDocValidationStatus.toString()};
     }
 
     Timer timer(_serviceContext->getTickSource());
@@ -347,18 +351,7 @@ void ReplSetDistLockManager::unlock(const DistLockHandle& lockSessionID) {
 }
 
 Status ReplSetDistLockManager::checkStatus(const DistLockHandle& lockHandle) {
-    auto lockStatus = _catalog->getLockByTS(lockHandle);
-
-    if (!lockStatus.isOK()) {
-        return lockStatus.getStatus();
-    }
-
-    auto lockDoc = lockStatus.getValue();
-    if (!lockDoc.isValid(nullptr)) {
-        return {ErrorCodes::LockNotFound, "lock owner changed"};
-    }
-
-    return Status::OK();
+    return _catalog->getLockByTS(lockHandle).getStatus();
 }
 
 void ReplSetDistLockManager::queueUnlock(const DistLockHandle& lockSessionID) {

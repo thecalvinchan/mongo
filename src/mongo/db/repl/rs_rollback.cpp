@@ -232,9 +232,10 @@ Status refetch(FixUpInfo& fixUpInfo, const BSONObj& ourObj) {
                     continue;  // Skipping command name.
                 }
 
-                if (modification == "validator" || modification == "usePowerOf2Sizes" ||
+                if (modification == "validator" || modification == "validationAction" ||
+                    modification == "validationLevel" || modification == "usePowerOf2Sizes" ||
                     modification == "noPadding") {
-                    fixUpInfo.collectionsToResyncMetadata.insert(ns);
+                    fixUpInfo.collectionsToResyncMetadata.insert(ns.ns());
                     continue;
                 }
 
@@ -400,6 +401,18 @@ void syncFixUp(OperationContext* txn,
                 throw RSFatalException(str::stream()
                                        << "Failed to set validator: " << status.toString());
             }
+            status = collection->setValidationAction(txn, options.validationAction);
+            if (!status.isOK()) {
+                throw RSFatalException(str::stream()
+                                       << "Failed to set validationAction: " << status.toString());
+            }
+
+            status = collection->setValidationLevel(txn, options.validationLevel);
+            if (!status.isOK()) {
+                throw RSFatalException(str::stream()
+                                       << "Failed to set validationLevel: " << status.toString());
+            }
+
             wuow.commit();
         }
 
@@ -654,7 +667,6 @@ void syncFixUp(OperationContext* txn,
     // Reload the lastOpTimeApplied value in the replcoord and the lastAppliedHash value in
     // bgsync to reflect our new last op.
     replCoord->resetLastOpTimeFromOplog(txn);
-    BackgroundSync::get()->loadLastAppliedHash(txn);
 
     // done
     if (warn)

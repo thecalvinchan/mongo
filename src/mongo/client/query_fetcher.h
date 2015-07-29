@@ -58,7 +58,8 @@ public:
                  const HostAndPort& source,
                  const NamespaceString& nss,
                  const BSONObj& cmdBSON,
-                 const QueryFetcher::CallbackFn& onBatchAvailable);
+                 const QueryFetcher::CallbackFn& onBatchAvailable,
+                 const BSONObj& metadata = rpc::makeEmptyMetadata());
     virtual ~QueryFetcher() = default;
 
     bool isActive() const {
@@ -77,7 +78,6 @@ public:
     std::string getDiagnosticString() const;
 
 protected:
-    int _getResponses() const;
     void _onFetchCallback(const Fetcher::QueryResponseStatus& fetchResult,
                           Fetcher::NextAction* nextAction,
                           BSONObjBuilder* getMoreBob);
@@ -94,7 +94,6 @@ protected:
 private:
     executor::TaskExecutor* _exec;
     Fetcher _fetcher;
-    int _responses;
     const QueryFetcher::CallbackFn _work;
 };
 

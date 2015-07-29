@@ -35,8 +35,6 @@ namespace mongo {
 using boost::intrusive_ptr;
 using std::vector;
 
-const char DocumentSourceOut::outName[] = "$out";
-
 DocumentSourceOut::~DocumentSourceOut() {
     DESTRUCTOR_GUARD(
         // Make sure we drop the temp collection if anything goes wrong. Errors are ignored
@@ -45,8 +43,10 @@ DocumentSourceOut::~DocumentSourceOut() {
         if (_mongod && _tempNs.size()) _mongod->directClient()->dropCollection(_tempNs.ns());)
 }
 
+REGISTER_DOCUMENT_SOURCE(out, DocumentSourceOut::createFromBson);
+
 const char* DocumentSourceOut::getSourceName() const {
-    return outName;
+    return "$out";
 }
 
 static AtomicUInt32 aggOutCounter;
@@ -91,7 +91,7 @@ void DocumentSourceOut::prepTempCollection() {
     }
 
     // copy indexes on _outputNs to _tempNs
-    const std::list<BSONObj> indexes = conn->getIndexSpecs(_outputNs);
+    const std::list<BSONObj> indexes = conn->getIndexSpecs(_outputNs.ns());
     for (std::list<BSONObj>::const_iterator it = indexes.begin(); it != indexes.end(); ++it) {
         MutableDocument index((Document(*it)));
         index.remove("_id");  // indexes shouldn't have _ids but some existing ones do

@@ -40,6 +40,7 @@
 #include "mongo/db/op_observer.h"
 #include "mongo/db/query/canonical_query.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 #include "mongo/util/scopeguard.h"
 
@@ -47,6 +48,7 @@ namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* DeleteStage::kStageType = "DELETE";
@@ -56,16 +58,15 @@ DeleteStage::DeleteStage(OperationContext* txn,
                          WorkingSet* ws,
                          Collection* collection,
                          PlanStage* child)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _params(params),
       _ws(ws),
       _collection(collection),
-      _child(child),
       _idRetrying(WorkingSet::INVALID_ID),
-      _idReturning(WorkingSet::INVALID_ID),
-      _commonStats(kStageType) {}
-
-DeleteStage::~DeleteStage() {}
+      _idReturning(WorkingSet::INVALID_ID) {
+    _children.emplace_back(child);
+}
 
 bool DeleteStage::isEOF() {
     if (!_collection) {
@@ -75,7 +76,7 @@ bool DeleteStage::isEOF() {
         return true;
     }
     return _idRetrying == WorkingSet::INVALID_ID && _idReturning == WorkingSet::INVALID_ID &&
-        _child->isEOF();
+        child()->isEOF();
 }
 
 PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
@@ -96,7 +97,7 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
         invariant(_params.returnDeleted);
 
         WorkingSetMember* member = _ws->get(_idReturning);
-        invariant(member->state == WorkingSetMember::OWNED_OBJ);
+        invariant(member->getState() == WorkingSetMember::OWNED_OBJ);
 
         *out = _idReturning;
         _idReturning = WorkingSet::INVALID_ID;
@@ -108,7 +109,7 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
     WorkingSetID id;
     StageState status;
     if (_idRetrying == WorkingSet::INVALID_ID) {
-        status = _child->work(&id);
+        status = child()->work(&id);
     } else {
         status = ADVANCED;
         id = _idRetrying;
@@ -139,7 +140,7 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
             std::unique_ptr<RecordCursor> cursor;
             if (_txn->recoveryUnit()->getSnapshotId() != member->obj.snapshotId()) {
                 cursor = _collection->getCursor(_txn);
-                if (!WorkingSetCommon::fetch(_txn, member, cursor)) {
+                if (!WorkingSetCommon::fetch(_txn, _ws, id, cursor)) {
                     // Doc is already deleted. Nothing more to do.
                     ++_commonStats.needTime;
                     return PlanStage::NEED_TIME;
@@ -158,7 +159,7 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
             // saving/restoring state repeatedly?
 
             try {
-                _child->saveState();
+                child()->saveState();
                 if (supportsDocLocking()) {
                     // Doc-locking engines require this after saveState() since they don't use
                     // invalidations.
@@ -173,7 +174,7 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
                 BSONObj deletedDoc = member->obj.value();
                 member->obj.setValue(deletedDoc.getOwned());
                 member->loc = RecordId();
-                member->state = WorkingSetMember::OWNED_OBJ;
+                member->transitionToOwnedObj();
             }
 
             // Do the write, unless this is an explain.
@@ -206,14 +207,14 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
         //  transaction in which they are created, and a WriteUnitOfWork is a
         //  transaction, make sure to restore the state outside of the WritUnitOfWork.
         try {
-            _child->restoreState(_txn);
+            child()->restoreState();
         } catch (const WriteConflictException& wce) {
             // Note we don't need to retry anything in this case since the delete already
             // was committed. However, we still need to return the deleted document
             // (if it was requested).
             if (_params.returnDeleted) {
                 // member->obj should refer to the deleted document.
-                invariant(member->state == WorkingSetMember::OWNED_OBJ);
+                invariant(member->getState() == WorkingSetMember::OWNED_OBJ);
 
                 _idReturning = id;
                 // Keep this member around so that we can return it on the next work() call.
@@ -226,7 +227,7 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
 
         if (_params.returnDeleted) {
             // member->obj should refer to the deleted document.
-            invariant(member->state == WorkingSetMember::OWNED_OBJ);
+            invariant(member->getState() == WorkingSetMember::OWNED_OBJ);
 
             memberFreer.Dismiss();  // Keep this member around so we can return it.
             *out = id;
@@ -256,18 +257,7 @@ PlanStage::StageState DeleteStage::work(WorkingSetID* out) {
     return status;
 }
 
-void DeleteStage::saveState() {
-    _txn = NULL;
-    ++_commonStats.yields;
-    _child->saveState();
-}
-
-void DeleteStage::restoreState(OperationContext* opCtx) {
-    invariant(_txn == NULL);
-    _txn = opCtx;
-    ++_commonStats.unyields;
-    _child->restoreState(opCtx);
-
+void DeleteStage::doRestoreState() {
     const NamespaceString& ns(_collection->ns());
     massert(28537,
             str::stream() << "Demoted from primary while removing from " << ns.ns(),
@@ -275,27 +265,16 @@ void DeleteStage::restoreState(OperationContext* opCtx) {
                 repl::getGlobalReplicationCoordinator()->canAcceptWritesFor(ns));
 }
 
-void DeleteStage::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
-    _child->invalidate(txn, dl, type);
+void DeleteStage::doReattachToOperationContext(OperationContext* opCtx) {
+    _txn = opCtx;
 }
 
-vector<PlanStage*> DeleteStage::getChildren() const {
-    vector<PlanStage*> children;
-    children.push_back(_child.get());
-    return children;
-}
-
-PlanStageStats* DeleteStage::getStats() {
+unique_ptr<PlanStageStats> DeleteStage::getStats() {
     _commonStats.isEOF = isEOF();
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_DELETE));
-    ret->specific.reset(new DeleteStats(_specificStats));
-    ret->children.push_back(_child->getStats());
-    return ret.release();
-}
-
-const CommonStats* DeleteStage::getCommonStats() const {
-    return &_commonStats;
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_DELETE);
+    ret->specific = make_unique<DeleteStats>(_specificStats);
+    ret->children.push_back(child()->getStats().release());
+    return ret;
 }
 
 const SpecificStats* DeleteStage::getSpecificStats() const {
@@ -303,10 +282,10 @@ const SpecificStats* DeleteStage::getSpecificStats() const {
 }
 
 // static
-long long DeleteStage::getNumDeleted(PlanExecutor* exec) {
-    invariant(exec->getRootStage()->isEOF());
-    invariant(exec->getRootStage()->stageType() == STAGE_DELETE);
-    DeleteStage* deleteStage = static_cast<DeleteStage*>(exec->getRootStage());
+long long DeleteStage::getNumDeleted(const PlanExecutor& exec) {
+    invariant(exec.getRootStage()->isEOF());
+    invariant(exec.getRootStage()->stageType() == STAGE_DELETE);
+    DeleteStage* deleteStage = static_cast<DeleteStage*>(exec.getRootStage());
     const DeleteStats* deleteStats =
         static_cast<const DeleteStats*>(deleteStage->getSpecificStats());
     return deleteStats->docsDeleted;

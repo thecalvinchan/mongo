@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <memory>
 
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression.h"
@@ -140,7 +141,7 @@ struct QuerySolutionNode {
             other->children.push_back(this->children[i]->clone());
         }
         if (NULL != this->filter) {
-            other->filter.reset(this->filter->shallowClone());
+            other->filter = std::move(this->filter->shallowClone());
         }
     }
 
@@ -227,8 +228,7 @@ struct TextNode : public QuerySolutionNode {
 
     virtual void appendToString(mongoutils::str::stream* ss, int indent) const;
 
-    // Text's return is LOC_AND_UNOWNED_OBJ or LOC_AND_OWNED_OBJ so it's fetched and has all
-    // fields.
+    // Text's return is LOC_AND_OBJ so it's fetched and has all fields.
     bool fetched() const {
         return true;
     }
@@ -459,6 +459,8 @@ struct IndexScanNode : public QuerySolutionNode {
 
     QuerySolutionNode* clone() const;
 
+    bool operator==(const IndexScanNode& other) const;
+
     BSONObjSet _sorts;
 
     BSONObj indexKeyPattern;
@@ -629,7 +631,7 @@ struct LimitNode : public QuerySolutionNode {
 
     QuerySolutionNode* clone() const;
 
-    int limit;
+    long long limit;
 };
 
 struct SkipNode : public QuerySolutionNode {
@@ -656,7 +658,7 @@ struct SkipNode : public QuerySolutionNode {
 
     QuerySolutionNode* clone() const;
 
-    int skip;
+    long long skip;
 };
 
 // This is a standalone stage.

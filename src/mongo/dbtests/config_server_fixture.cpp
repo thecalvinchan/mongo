@@ -35,17 +35,18 @@
 #include <list>
 
 #include "mongo/dbtests/dbtests.h"
+#include "mongo/db/service_context.h"
+#include "mongo/db/s/sharding_state.h"
 #include "mongo/s/catalog/type_chunk.h"
 #include "mongo/s/catalog/legacy/legacy_dist_lock_manager.h"
-#include "mongo/s/d_state.h"
-#include "mongo/s/type_config_version.h"
+#include "mongo/s/catalog/type_config_version.h"
+#include "mongo/s/client/shard_connection.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
 
 using std::unique_ptr;
-using std::endl;
 using std::list;
 using std::string;
 
@@ -56,6 +57,7 @@ string ConfigServerFixture::shardName() {
 }
 
 void ConfigServerFixture::setUp() {
+    shardConnectionPool.clear();
     DBException::traceExceptions = true;
 
     // Make all connections redirect to the direct client
@@ -75,9 +77,10 @@ void ConfigServerFixture::setUp() {
                              ChunkType::ConfigNS,
                              BSON(ChunkType::ns() << 1 << ChunkType::DEPRECATED_lastmod() << 1)));
 
-    ConnectionString connStr(uassertStatusOK(ConnectionString::parse("$dummy:10000")));
-    shardingState.initialize(connStr.toString());
-    shardingState.gotShardName(shardName());
+    const ConnectionString connStr(uassertStatusOK(ConnectionString::parse("$dummy:10000")));
+
+    ShardingState::get(getGlobalServiceContext())->initialize(connStr.toString());
+    ShardingState::get(getGlobalServiceContext())->gotShardName(shardName());
 }
 
 void ConfigServerFixture::clearServer() {
@@ -89,7 +92,7 @@ void ConfigServerFixture::clearVersion() {
 }
 
 void ConfigServerFixture::dumpServer() {
-    log() << "Dumping virtual config server to log..." << endl;
+    log() << "Dumping virtual config server to log...";
 
     list<string> collectionNames(_client.getCollectionNames("config"));
 
@@ -99,17 +102,17 @@ void ConfigServerFixture::dumpServer() {
         unique_ptr<DBClientCursor> cursor(_client.query(collection, BSONObj()).release());
         ASSERT(cursor.get() != NULL);
 
-        log() << "Dumping collection " << collection << endl;
+        log() << "Dumping collection " << collection;
 
         while (cursor->more()) {
             BSONObj obj = cursor->nextSafe();
-            log() << obj.toString() << endl;
+            log() << obj.toString();
         }
     }
 }
 
 void ConfigServerFixture::tearDown() {
-    shardingState.clearCollectionMetadata();
+    ShardingState::get(getGlobalServiceContext())->clearCollectionMetadata();
     clearServer();
 
     // Make all connections redirect to the direct client
@@ -119,4 +122,5 @@ void ConfigServerFixture::tearDown() {
 
     DBException::traceExceptions = false;
 }
-}
+
+}  // namespace mongo

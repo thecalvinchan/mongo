@@ -8,7 +8,9 @@ env.Library(
         'replset_dist_lock_manager.cpp',
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/s/catalog/dist_lock_catalog',
+        '$BUILD_DIR/mongo/db/service_context',
+        '$BUILD_DIR/mongo/s/catalog/catalog_types',
+        '$BUILD_DIR/mongo/s/catalog/dist_lock_catalog_interface',
         '$BUILD_DIR/mongo/s/catalog/dist_lock_manager'
     ],
 )
@@ -42,21 +44,25 @@ env.Library(
 env.CppUnitTest(
     target='catalog_manager_replica_set_test',
     source=[
-        'catalog_manager_replica_set_test.cpp',
+        'catalog_manager_replica_set_add_shard_test.cpp',
+        'catalog_manager_replica_set_drop_coll_test.cpp',
         'catalog_manager_replica_set_log_action_test.cpp',
+        'catalog_manager_replica_set_log_change_test.cpp',
+        'catalog_manager_replica_set_remove_shard_test.cpp',
+        'catalog_manager_replica_set_shard_collection_test.cpp',
+        'catalog_manager_replica_set_test.cpp',
         'catalog_manager_replica_set_test_fixture.cpp',
+        'catalog_manager_replica_set_upgrade_test.cpp',
     ],
     LIBDEPS=[
         'catalog_manager_replica_set',
-        '$BUILD_DIR/mongo/client/remote_command_runner_mock',
         '$BUILD_DIR/mongo/client/remote_command_targeter_mock',
         '$BUILD_DIR/mongo/db/auth/authorization_manager_mock_init',
-        '$BUILD_DIR/mongo/db/coredb',
-        '$BUILD_DIR/mongo/db/repl/replication_executor',
-        '$BUILD_DIR/mongo/dbtests/mocklib',
-        '$BUILD_DIR/mongo/executor/network_interface_mock',
+        '$BUILD_DIR/mongo/executor/network_test_env',
+        '$BUILD_DIR/mongo/executor/thread_pool_task_executor_test_fixture',
         '$BUILD_DIR/mongo/s/catalog/dist_lock_manager_mock',
         '$BUILD_DIR/mongo/s/coreshard',
         '$BUILD_DIR/mongo/s/mongoscore',
+        '$BUILD_DIR/mongo/util/net/message_port_mock',
     ]
 )

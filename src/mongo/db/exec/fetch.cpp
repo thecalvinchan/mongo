@@ -36,6 +36,7 @@
 #include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set_common.h"
 #include "mongo/db/storage/record_fetcher.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/fail_point_service.h"
 #include "mongo/util/mongoutils/str.h"
 
@@ -43,6 +44,7 @@ namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* FetchStage::kStageType = "FETCH";
@@ -52,13 +54,14 @@ FetchStage::FetchStage(OperationContext* txn,
                        PlanStage* child,
                        const MatchExpression* filter,
                        const Collection* collection)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _collection(collection),
       _ws(ws),
-      _child(child),
       _filter(filter),
-      _idRetrying(WorkingSet::INVALID_ID),
-      _commonStats(kStageType) {}
+      _idRetrying(WorkingSet::INVALID_ID) {
+    _children.emplace_back(child);
+}
 
 FetchStage::~FetchStage() {}
 
@@ -69,7 +72,7 @@ bool FetchStage::isEOF() {
         return false;
     }
 
-    return _child->isEOF();
+    return child()->isEOF();
 }
 
 PlanStage::StageState FetchStage::work(WorkingSetID* out) {
@@ -86,7 +89,7 @@ PlanStage::StageState FetchStage::work(WorkingSetID* out) {
     WorkingSetID id;
     StageState status;
     if (_idRetrying == WorkingSet::INVALID_ID) {
-        status = _child->work(&id);
+        status = child()->work(&id);
     } else {
         status = ADVANCED;
         id = _idRetrying;
@@ -101,7 +104,7 @@ PlanStage::StageState FetchStage::work(WorkingSetID* out) {
             ++_specificStats.alreadyHasObj;
         } else {
             // We need a valid loc to fetch from and this is the only state that has one.
-            verify(WorkingSetMember::LOC_AND_IDX == member->state);
+            verify(WorkingSetMember::LOC_AND_IDX == member->getState());
             verify(member->hasLoc());
 
             try {
@@ -120,7 +123,7 @@ PlanStage::StageState FetchStage::work(WorkingSetID* out) {
 
                 // The doc is already in memory, so go ahead and grab it. Now we have a RecordId
                 // as well as an unowned object
-                if (!WorkingSetCommon::fetch(_txn, member, _cursor)) {
+                if (!WorkingSetCommon::fetch(_txn, _ws, id, _cursor)) {
                     _ws->free(id);
                     _commonStats.needTime++;
                     return NEED_TIME;
@@ -156,28 +159,30 @@ PlanStage::StageState FetchStage::work(WorkingSetID* out) {
     return status;
 }
 
-void FetchStage::saveState() {
-    _txn = NULL;
-    ++_commonStats.yields;
+void FetchStage::doSaveState() {
     if (_cursor)
         _cursor->saveUnpositioned();
-    _child->saveState();
 }
 
-void FetchStage::restoreState(OperationContext* opCtx) {
+void FetchStage::doRestoreState() {
+    if (_cursor)
+        _cursor->restore();
+}
+
+void FetchStage::doDetachFromOperationContext() {
+    _txn = NULL;
+    if (_cursor)
+        _cursor->detachFromOperationContext();
+}
+
+void FetchStage::doReattachToOperationContext(OperationContext* opCtx) {
     invariant(_txn == NULL);
     _txn = opCtx;
-    ++_commonStats.unyields;
     if (_cursor)
-        _cursor->restore(opCtx);
-    _child->restoreState(opCtx);
+        _cursor->reattachToOperationContext(opCtx);
 }
 
-void FetchStage::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
-
-    _child->invalidate(txn, dl, type);
-
+void FetchStage::doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
     // It's possible that the loc getting invalidated is the one we're about to
     // fetch. In this case we do a "forced fetch" and put the WSM in owned object state.
     if (WorkingSet::INVALID_ID != _idRetrying) {
@@ -221,13 +226,7 @@ PlanStage::StageState FetchStage::returnIfMatches(WorkingSetMember* member,
     }
 }
 
-vector<PlanStage*> FetchStage::getChildren() const {
-    vector<PlanStage*> children;
-    children.push_back(_child.get());
-    return children;
-}
-
-PlanStageStats* FetchStage::getStats() {
+unique_ptr<PlanStageStats> FetchStage::getStats() {
     _commonStats.isEOF = isEOF();
 
     // Add a BSON representation of the filter to the stats tree, if there is one.
@@ -237,14 +236,10 @@ PlanStageStats* FetchStage::getStats() {
         _commonStats.filter = bob.obj();
     }
 
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_FETCH));
-    ret->specific.reset(new FetchStats(_specificStats));
-    ret->children.push_back(_child->getStats());
-    return ret.release();
-}
-
-const CommonStats* FetchStage::getCommonStats() const {
-    return &_commonStats;
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_FETCH);
+    ret->specific = make_unique<FetchStats>(_specificStats);
+    ret->children.push_back(child()->getStats().release());
+    return ret;
 }
 
 const SpecificStats* FetchStage::getSpecificStats() const {

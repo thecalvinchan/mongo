@@ -28,6 +28,7 @@
 
 #include "mongo/db/ops/path_support.h"
 
+#include <cstdint>
 #include <string>
 
 #include "mongo/base/error_codes.h"
@@ -43,7 +44,6 @@
 #include "mongo/db/matcher/expression.h"
 #include "mongo/db/matcher/expression_leaf.h"
 #include "mongo/db/matcher/expression_parser.h"
-#include "mongo/platform/cstdint.h"
 #include "mongo/unittest/unittest.h"
 #include "mongo/util/mongoutils/str.h"
 
@@ -491,7 +491,7 @@ TEST_F(ArrayDoc, NonNumericPathInArray) {
 
 static MatchExpression* makeExpr(const BSONObj& exprBSON) {
     static const WhereCallbackNoop callbackNoop;
-    return MatchExpressionParser::parse(exprBSON, callbackNoop).getValue();
+    return MatchExpressionParser::parse(exprBSON, callbackNoop).getValue().release();
 }
 
 static void assertContains(const EqualityMatches& equalities, const BSONObj& wrapped) {

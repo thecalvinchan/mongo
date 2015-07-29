@@ -32,52 +32,13 @@
 #include <vector>
 
 #include "mongo/config.h"
+#include "mongo/util/net/abstract_message_port.h"
 #include "mongo/util/net/message.h"
 #include "mongo/util/net/sock.h"
 
 namespace mongo {
 
 class MessagingPort;
-class PiggyBackData;
-
-class AbstractMessagingPort {
-    MONGO_DISALLOW_COPYING(AbstractMessagingPort);
-
-public:
-    AbstractMessagingPort() : tag(0), _connectionId(0) {}
-    virtual ~AbstractMessagingPort() {}
-    // like the reply below, but doesn't rely on received.data still being available
-    virtual void reply(Message& received, Message& response, MSGID responseTo) = 0;
-    virtual void reply(Message& received, Message& response) = 0;
-
-    virtual HostAndPort remote() const = 0;
-    virtual unsigned remotePort() const = 0;
-    virtual SockAddr remoteAddr() const = 0;
-    virtual SockAddr localAddr() const = 0;
-
-    void setX509SubjectName(const std::string& x509SubjectName) {
-        _x509SubjectName = x509SubjectName;
-    }
-
-    std::string getX509SubjectName() {
-        return _x509SubjectName;
-    }
-
-    long long connectionId() const {
-        return _connectionId;
-    }
-    void setConnectionId(long long connectionId);
-
-public:
-    // TODO make this private with some helpers
-
-    /* ports can be tagged with various classes.  see closeAllSockets(tag). defaults to 0. */
-    unsigned tag;
-
-private:
-    long long _connectionId;
-    std::string _x509SubjectName;
-};
 
 class MessagingPort : public AbstractMessagingPort {
 public:
@@ -116,8 +77,6 @@ public:
      *       horrible things will happen
      */
     bool recv(const Message& sent, Message& response);
-
-    void piggyBack(Message& toSend, int responseTo = 0);
 
     unsigned remotePort() const {
         return psock->remotePort();
@@ -159,16 +118,12 @@ public:
     }
 
 private:
-    PiggyBackData* piggyBackData;
-
     // this is the parsed version of remote
     // mutable because its initialized only on call to remote()
     mutable HostAndPort _remoteParsed;
 
 public:
     static void closeAllSockets(unsigned tagMask = 0xffffffff);
-
-    friend class PiggyBackData;
 };
 
 

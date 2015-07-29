@@ -61,6 +61,9 @@ bool PlanYieldPolicy::yield(RecordFetcher* fetcher) {
     invariant(_planYielding);
     invariant(allowedToYield());
 
+    // Reset the yield timer in order to prevent from yielding again right away.
+    resetTimer();
+
     _forceYield = false;
 
     OperationContext* opCtx = _planYielding->getOpCtx();
@@ -97,7 +100,7 @@ bool PlanYieldPolicy::yield(RecordFetcher* fetcher) {
                 QueryYield::yieldAllLocks(opCtx, fetcher);
             }
 
-            return _planYielding->restoreStateWithoutRetrying(opCtx);
+            return _planYielding->restoreStateWithoutRetrying();
         } catch (const WriteConflictException& wce) {
             CurOp::get(opCtx)->debug().writeConflicts++;
             WriteConflictException::logAndBackoff(

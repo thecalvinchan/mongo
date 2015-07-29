@@ -52,7 +52,7 @@ public:
 
     ReplicationCoordinatorExternalStateMock();
     virtual ~ReplicationCoordinatorExternalStateMock();
-    virtual void startThreads();
+    void startThreads(executor::TaskExecutor* taskExecutor) override;
     virtual void startMasterSlave(OperationContext*);
     virtual void shutdown();
     virtual void initiateOplog(OperationContext* txn);
@@ -72,6 +72,10 @@ public:
     virtual void signalApplierToChooseNewSyncSource();
     virtual OperationContext* createOperationContext(const std::string& threadName);
     virtual void dropAllTempCollections(OperationContext* txn);
+    virtual void dropAllSnapshots();
+    virtual void updateCommittedSnapshot(OpTime newCommitPoint);
+    virtual void forceSnapshotCreation();
+    virtual bool snapshotsEnabled() const;
 
     /**
      * Adds "host" to the list of hosts that this mock will match when responding to "isSelf"

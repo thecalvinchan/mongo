@@ -37,8 +37,8 @@
 #include "mongo/client/connpool.h"
 #include "mongo/db/field_parser.h"
 #include "mongo/s/catalog/catalog_manager.h"
+#include "mongo/s/catalog/type_mongos.h"
 #include "mongo/s/catalog/type_shard.h"
-#include "mongo/s/type_mongos.h"
 #include "mongo/util/log.h"
 #include "mongo/util/stringutils.h"
 
@@ -65,14 +65,13 @@ Status checkClusterMongoVersions(CatalogManager* catalogManager, const string& m
         while (cursor->more()) {
             BSONObj pingDoc = cursor->next();
 
-            MongosType ping;
-            string errMsg;
-            // NOTE: We don't care if the ping is invalid, legacy stuff will be
-            if (!ping.parseBSON(pingDoc, &errMsg)) {
-                warning() << "could not parse ping document: " << pingDoc << causedBy(errMsg)
-                          << endl;
+            auto mongosTypeResult = MongosType::fromBSON(pingDoc);
+            if (!mongosTypeResult.isOK()) {
+                warning() << "could not parse ping document: " << pingDoc << " : "
+                          << mongosTypeResult.getStatus().toString();
                 continue;
             }
+            const MongosType& ping = mongosTypeResult.getValue();
 
             string mongoVersion = "2.0";
             // Hack to determine older mongos versions from ping format

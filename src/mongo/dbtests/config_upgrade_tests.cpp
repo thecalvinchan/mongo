@@ -27,15 +27,16 @@
  */
 
 #include "mongo/dbtests/config_server_fixture.h"
+#include "mongo/s/catalog/config_server_version.h"
 #include "mongo/s/catalog/legacy/cluster_client_internal.h"
 #include "mongo/s/catalog/legacy/config_upgrade.h"
 #include "mongo/s/catalog/type_chunk.h"
+#include "mongo/s/catalog/type_config_version.h"
+#include "mongo/s/catalog/type_mongos.h"
 #include "mongo/s/catalog/type_settings.h"
 #include "mongo/s/catalog/type_shard.h"
 #include "mongo/s/chunk_version.h"
 #include "mongo/s/grid.h"
-#include "mongo/s/type_mongos.h"
-#include "mongo/s/type_config_version.h"
 #include "mongo/unittest/unittest.h"
 #include "mongo/util/version.h"
 
@@ -43,13 +44,13 @@ namespace mongo {
 
 using std::string;
 
+namespace {
+
 /**
  * Specialization of the config server fixture with helpers for the tests below.
  */
 class ConfigUpgradeFixture : public ConfigServerFixture {
 public:
-    ConfigUpgradeFixture() : ConfigServerFixture() {}
-
     void stopBalancer() {
         // Note: The balancer key is needed in the update portion, for some reason related to
         // DBDirectClient
@@ -127,10 +128,13 @@ public:
             client.insert(ShardType::ConfigNS, shard.toBSON());
         }
 
+        time_t started = time(0);
         for (int i = 0; i < numPings; i++) {
             MongosType ping;
             ping.setName((string)(str::stream() << "$dummyMongos:" << (i + 1) << "0000"));
             ping.setPing(jsTime());
+            ping.setUptime(time(0) - started);
+            ping.setWaiting(false);
             ping.setMongoVersion(versionString);
             ping.setConfigVersion(CURRENT_CONFIG_VERSION);
 
@@ -261,4 +265,5 @@ TEST_F(ConfigUpgradeTests, CheckMongoVersion) {
     ASSERT(status.code() == ErrorCodes::RemoteValidationError);
 }
 
-}  // end namespace
+}  // namespace
+}  // namespace mongo

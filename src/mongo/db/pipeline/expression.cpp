@@ -30,20 +30,21 @@
 
 #include "mongo/db/pipeline/expression.h"
 
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
-#include <boost/preprocessor/cat.hpp>  // like the ## operator but works with __LINE__
 #include <cstdio>
+#include <vector>
 
-#include "mongo/base/init.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/pipeline/document.h"
 #include "mongo/db/pipeline/expression_context.h"
 #include "mongo/db/pipeline/value.h"
-#include "mongo/stdx/functional.h"
 #include "mongo/util/string_map.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
+using Parser = Expression::Parser;
+
 using namespace mongoutils;
 
 using boost::intrusive_ptr;
@@ -269,6 +270,10 @@ intrusive_ptr<Expression> Expression::parseObject(BSONObj obj,
                         fieldName, ExpressionFieldPath::parse(fieldElement.str(), vps));
                     break;
                 }
+                case Array:
+                    pExpressionObject->addField(fieldName,
+                                                ExpressionArray::parse(fieldElement, vps));
+                    break;
                 case Bool:
                 case NumberDouble:
                 case NumberLong:
@@ -301,39 +306,22 @@ intrusive_ptr<Expression> Expression::parseObject(BSONObj obj,
 }
 
 namespace {
-typedef stdx::function<intrusive_ptr<Expression>(BSONElement, const VariablesParseState&)>
-    ExpressionParser;
-StringMap<ExpressionParser> expressionParserMap;
+StringMap<Parser> parserMap;
 }
 
-/** Registers an ExpressionParser so it can be called from parseExpression and friends.
- *
- *  As an example, if your expression looks like {"$foo": [1,2,3]} you would add this line:
- *  REGISTER_EXPRESSION("$foo", ExpressionFoo::parse);
- */
-#define REGISTER_EXPRESSION(key, parserFunc)                                                     \
-    MONGO_INITIALIZER(BOOST_PP_CAT(addToExpressionParserMap, __LINE__))(InitializerContext*) {   \
-        /* prevent duplicate expressions */                                                      \
-        StringMap<ExpressionParser>::const_iterator op = expressionParserMap.find(key);          \
-        massert(17064,                                                                           \
-                str::stream() << "Duplicate expression (" << key << ") detected at " << __FILE__ \
-                              << ":" << __LINE__,                                                \
-                op == expressionParserMap.end());                                                \
-        /* register expression */                                                                \
-        expressionParserMap[key] = (parserFunc);                                                 \
-        return Status::OK();                                                                     \
-    }
+void Expression::registerExpression(string key, Parser parser) {
+    auto op = parserMap.find(key);
+    massert(17064,
+            str::stream() << "Duplicate expression (" << key << ") registered.",
+            op == parserMap.end());
+    parserMap[key] = parser;
+}
 
 intrusive_ptr<Expression> Expression::parseExpression(BSONElement exprElement,
                                                       const VariablesParseState& vps) {
-    /* look for the specified operator */
     const char* opName = exprElement.fieldName();
-    StringMap<ExpressionParser>::const_iterator op = expressionParserMap.find(opName);
-    uassert(15999,
-            str::stream() << "invalid operator '" << opName << "'",
-            op != expressionParserMap.end());
-
-    /* make the expression node */
+    auto op = parserMap.find(opName);
+    uassert(15999, str::stream() << "invalid operator '" << opName << "'", op != parserMap.end());
     return op->second(exprElement, vps);
 }
 
@@ -361,6 +349,8 @@ intrusive_ptr<Expression> Expression::parseOperand(BSONElement exprElement,
     } else if (type == Object) {
         ObjectCtx oCtx(ObjectCtx::DOCUMENT_OK);
         return Expression::parseObject(exprElement.Obj(), &oCtx, vps);
+    } else if (type == Array) {
+        return ExpressionArray::parse(exprElement, vps);
     } else {
         return ExpressionConstant::parse(exprElement, vps);
     }
@@ -393,7 +383,7 @@ Value ExpressionAbs::evaluateInternal(Variables* vars) const {
     }
 }
 
-REGISTER_EXPRESSION("$abs", ExpressionAbs::parse);
+REGISTER_EXPRESSION(abs, ExpressionAbs::parse);
 const char* ExpressionAbs::getOpName() const {
     return "$abs";
 }
@@ -453,7 +443,7 @@ Value ExpressionAdd::evaluateInternal(Variables* vars) const {
     }
 }
 
-REGISTER_EXPRESSION("$add", ExpressionAdd::parse);
+REGISTER_EXPRESSION(add, ExpressionAdd::parse);
 const char* ExpressionAdd::getOpName() const {
     return "$add";
 }
@@ -475,7 +465,7 @@ Value ExpressionAllElementsTrue::evaluateInternal(Variables* vars) const {
     return Value(true);
 }
 
-REGISTER_EXPRESSION("$allElementsTrue", ExpressionAllElementsTrue::parse);
+REGISTER_EXPRESSION(allElementsTrue, ExpressionAllElementsTrue::parse);
 const char* ExpressionAllElementsTrue::getOpName() const {
     return "$allElementsTrue";
 }
@@ -547,7 +537,7 @@ Value ExpressionAnd::evaluateInternal(Variables* vars) const {
     return Value(true);
 }
 
-REGISTER_EXPRESSION("$and", ExpressionAnd::parse);
+REGISTER_EXPRESSION(and, ExpressionAnd::parse);
 const char* ExpressionAnd::getOpName() const {
     return "$and";
 }
@@ -569,9 +559,35 @@ Value ExpressionAnyElementTrue::evaluateInternal(Variables* vars) const {
     return Value(false);
 }
 
-REGISTER_EXPRESSION("$anyElementTrue", ExpressionAnyElementTrue::parse);
+REGISTER_EXPRESSION(anyElementTrue, ExpressionAnyElementTrue::parse);
 const char* ExpressionAnyElementTrue::getOpName() const {
     return "$anyElementTrue";
+}
+
+/* ---------------------- ExpressionArray --------------------------- */
+
+Value ExpressionArray::evaluateInternal(Variables* vars) const {
+    vector<Value> values;
+    values.reserve(vpOperand.size());
+    for (auto&& expr : vpOperand) {
+        Value elemVal = expr->evaluateInternal(vars);
+        values.push_back(elemVal.missing() ? Value(BSONNULL) : std::move(elemVal));
+    }
+    return Value(std::move(values));
+}
+
+Value ExpressionArray::serialize(bool explain) const {
+    vector<Value> expressions;
+    expressions.reserve(vpOperand.size());
+    for (auto&& expr : vpOperand) {
+        expressions.push_back(expr->serialize(explain));
+    }
+    return Value(std::move(expressions));
+}
+
+const char* ExpressionArray::getOpName() const {
+    // This should never be called, but is needed to inherit from ExpressionNary.
+    return "$array";
 }
 
 /* ------------------------- ExpressionArrayElemAt -------------------------- */
@@ -609,7 +625,7 @@ Value ExpressionArrayElemAt::evaluateInternal(Variables* vars) const {
     return array[index];
 }
 
-REGISTER_EXPRESSION("$arrayElemAt", ExpressionArrayElemAt::parse);
+REGISTER_EXPRESSION(arrayElemAt, ExpressionArrayElemAt::parse);
 const char* ExpressionArrayElemAt::getOpName() const {
     return "$arrayElemAt";
 }
@@ -660,37 +676,37 @@ Value ExpressionCoerceToBool::serialize(bool explain) const {
 
 /* ----------------------- ExpressionCompare --------------------------- */
 
-REGISTER_EXPRESSION("$cmp",
+REGISTER_EXPRESSION(cmp,
                     stdx::bind(ExpressionCompare::parse,
                                stdx::placeholders::_1,
                                stdx::placeholders::_2,
                                ExpressionCompare::CMP));
-REGISTER_EXPRESSION("$eq",
+REGISTER_EXPRESSION(eq,
                     stdx::bind(ExpressionCompare::parse,
                                stdx::placeholders::_1,
                                stdx::placeholders::_2,
                                ExpressionCompare::EQ));
-REGISTER_EXPRESSION("$gt",
+REGISTER_EXPRESSION(gt,
                     stdx::bind(ExpressionCompare::parse,
                                stdx::placeholders::_1,
                                stdx::placeholders::_2,
                                ExpressionCompare::GT));
-REGISTER_EXPRESSION("$gte",
+REGISTER_EXPRESSION(gte,
                     stdx::bind(ExpressionCompare::parse,
                                stdx::placeholders::_1,
                                stdx::placeholders::_2,
                                ExpressionCompare::GTE));
-REGISTER_EXPRESSION("$lt",
+REGISTER_EXPRESSION(lt,
                     stdx::bind(ExpressionCompare::parse,
                                stdx::placeholders::_1,
                                stdx::placeholders::_2,
                                ExpressionCompare::LT));
-REGISTER_EXPRESSION("$lte",
+REGISTER_EXPRESSION(lte,
                     stdx::bind(ExpressionCompare::parse,
                                stdx::placeholders::_1,
                                stdx::placeholders::_2,
                                ExpressionCompare::LTE));
-REGISTER_EXPRESSION("$ne",
+REGISTER_EXPRESSION(ne,
                     stdx::bind(ExpressionCompare::parse,
                                stdx::placeholders::_1,
                                stdx::placeholders::_2,
@@ -775,7 +791,7 @@ Value ExpressionConcat::evaluateInternal(Variables* vars) const {
     return Value(result.str());
 }
 
-REGISTER_EXPRESSION("$concat", ExpressionConcat::parse);
+REGISTER_EXPRESSION(concat, ExpressionConcat::parse);
 const char* ExpressionConcat::getOpName() const {
     return "$concat";
 }
@@ -803,7 +819,7 @@ Value ExpressionConcatArrays::evaluateInternal(Variables* vars) const {
     return Value(std::move(values));
 }
 
-REGISTER_EXPRESSION("$concatArrays", ExpressionConcatArrays::parse);
+REGISTER_EXPRESSION(concatArrays, ExpressionConcatArrays::parse);
 const char* ExpressionConcatArrays::getOpName() const {
     return "$concatArrays";
 }
@@ -846,7 +862,7 @@ intrusive_ptr<Expression> ExpressionCond::parse(BSONElement expr, const Variable
     return ret;
 }
 
-REGISTER_EXPRESSION("$cond", ExpressionCond::parse);
+REGISTER_EXPRESSION(cond, ExpressionCond::parse);
 const char* ExpressionCond::getOpName() const {
     return "$cond";
 }
@@ -884,15 +900,15 @@ Value ExpressionConstant::serialize(bool explain) const {
     return serializeConstant(pValue);
 }
 
-REGISTER_EXPRESSION("$const", ExpressionConstant::parse);
-REGISTER_EXPRESSION("$literal", ExpressionConstant::parse);  // alias
+REGISTER_EXPRESSION(const, ExpressionConstant::parse);
+REGISTER_EXPRESSION(literal, ExpressionConstant::parse);  // alias
 const char* ExpressionConstant::getOpName() const {
     return "$const";
 }
 
 /* ---------------------- ExpressionDateToString ----------------------- */
 
-REGISTER_EXPRESSION("$dateToString", ExpressionDateToString::parse);
+REGISTER_EXPRESSION(dateToString, ExpressionDateToString::parse);
 intrusive_ptr<Expression> ExpressionDateToString::parse(BSONElement expr,
                                                         const VariablesParseState& vps) {
     verify(str::equals(expr.fieldName(), "$dateToString"));
@@ -1083,7 +1099,7 @@ Value ExpressionDayOfMonth::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$dayOfMonth", ExpressionDayOfMonth::parse);
+REGISTER_EXPRESSION(dayOfMonth, ExpressionDayOfMonth::parse);
 const char* ExpressionDayOfMonth::getOpName() const {
     return "$dayOfMonth";
 }
@@ -1095,7 +1111,7 @@ Value ExpressionDayOfWeek::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$dayOfWeek", ExpressionDayOfWeek::parse);
+REGISTER_EXPRESSION(dayOfWeek, ExpressionDayOfWeek::parse);
 const char* ExpressionDayOfWeek::getOpName() const {
     return "$dayOfWeek";
 }
@@ -1107,7 +1123,7 @@ Value ExpressionDayOfYear::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$dayOfYear", ExpressionDayOfYear::parse);
+REGISTER_EXPRESSION(dayOfYear, ExpressionDayOfYear::parse);
 const char* ExpressionDayOfYear::getOpName() const {
     return "$dayOfYear";
 }
@@ -1133,7 +1149,7 @@ Value ExpressionDivide::evaluateInternal(Variables* vars) const {
     }
 }
 
-REGISTER_EXPRESSION("$divide", ExpressionDivide::parse);
+REGISTER_EXPRESSION(divide, ExpressionDivide::parse);
 const char* ExpressionDivide::getOpName() const {
     return "$divide";
 }
@@ -1320,7 +1336,6 @@ void ExpressionObject::addToDocument(MutableDocument& out,
         // don't add field if nothing was found in the subobject
         if (dynamic_cast<ExpressionObject*>(it->second.get()) && pValue.getDocument().empty())
             continue;
-
 
         out.addField(fieldName, pValue);
     }
@@ -1540,7 +1555,7 @@ Value ExpressionFieldPath::serialize(bool explain) const {
 
 /* ------------------------- ExpressionFilter ----------------------------- */
 
-REGISTER_EXPRESSION("$filter", ExpressionFilter::parse);
+REGISTER_EXPRESSION(filter, ExpressionFilter::parse);
 intrusive_ptr<Expression> ExpressionFilter::parse(BSONElement expr,
                                                   const VariablesParseState& vpsIn) {
     verify(str::equals(expr.fieldName(), "$filter"));
@@ -1639,7 +1654,7 @@ void ExpressionFilter::addDependencies(DepsTracker* deps, vector<string>* path) 
 
 /* ------------------------- ExpressionLet ----------------------------- */
 
-REGISTER_EXPRESSION("$let", ExpressionLet::parse);
+REGISTER_EXPRESSION(let, ExpressionLet::parse);
 intrusive_ptr<Expression> ExpressionLet::parse(BSONElement expr, const VariablesParseState& vpsIn) {
     verify(str::equals(expr.fieldName(), "$let"));
 
@@ -1734,7 +1749,7 @@ void ExpressionLet::addDependencies(DepsTracker* deps, vector<string>* path) con
 
 /* ------------------------- ExpressionMap ----------------------------- */
 
-REGISTER_EXPRESSION("$map", ExpressionMap::parse);
+REGISTER_EXPRESSION(map, ExpressionMap::parse);
 intrusive_ptr<Expression> ExpressionMap::parse(BSONElement expr, const VariablesParseState& vpsIn) {
     verify(str::equals(expr.fieldName(), "$map"));
 
@@ -1832,27 +1847,49 @@ void ExpressionMap::addDependencies(DepsTracker* deps, vector<string>* path) con
 
 /* ------------------------- ExpressionMeta ----------------------------- */
 
-REGISTER_EXPRESSION("$meta", ExpressionMeta::parse);
+REGISTER_EXPRESSION(meta, ExpressionMeta::parse);
 intrusive_ptr<Expression> ExpressionMeta::parse(BSONElement expr,
                                                 const VariablesParseState& vpsIn) {
     uassert(17307, "$meta only supports String arguments", expr.type() == String);
-    uassert(17308, "Unsupported argument to $meta: " + expr.String(), expr.String() == "textScore");
-
-    return new ExpressionMeta();
+    if (expr.valueStringData() == "textScore") {
+        return new ExpressionMeta(MetaType::TEXT_SCORE);
+    } else if (expr.valueStringData() == "randVal") {
+        return new ExpressionMeta(MetaType::RAND_VAL);
+    } else {
+        uasserted(17308, "Unsupported argument to $meta: " + expr.String());
+    }
 }
 
+ExpressionMeta::ExpressionMeta(MetaType metaType) : _metaType(metaType) {}
+
 Value ExpressionMeta::serialize(bool explain) const {
-    return Value(DOC("$meta"
-                     << "textScore"));
+    switch (_metaType) {
+        case MetaType::TEXT_SCORE:
+            return Value(DOC("$meta"
+                             << "textScore"));
+        case MetaType::RAND_VAL:
+            return Value(DOC("$meta"
+                             << "randVal"));
+    }
+    MONGO_UNREACHABLE;
 }
 
 Value ExpressionMeta::evaluateInternal(Variables* vars) const {
     const Document& root = vars->getRoot();
-    return root.hasTextScore() ? Value(root.getTextScore()) : Value();
+    switch (_metaType) {
+        case MetaType::TEXT_SCORE:
+            return root.hasTextScore() ? Value(root.getTextScore()) : Value();
+        case MetaType::RAND_VAL:
+            return root.hasRandMetaField() ? Value(static_cast<long long>(root.getRandMetaField()))
+                                           : Value();
+    }
+    MONGO_UNREACHABLE;
 }
 
 void ExpressionMeta::addDependencies(DepsTracker* deps, vector<string>* path) const {
-    deps->needTextScore = true;
+    if (_metaType == MetaType::TEXT_SCORE) {
+        deps->needTextScore = true;
+    }
 }
 
 /* ------------------------- ExpressionMillisecond ----------------------------- */
@@ -1868,7 +1905,7 @@ int ExpressionMillisecond::extract(const long long date) {
     return ms >= 0 ? ms : 1000 + ms;
 }
 
-REGISTER_EXPRESSION("$millisecond", ExpressionMillisecond::parse);
+REGISTER_EXPRESSION(millisecond, ExpressionMillisecond::parse);
 const char* ExpressionMillisecond::getOpName() const {
     return "$millisecond";
 }
@@ -1880,7 +1917,7 @@ Value ExpressionMinute::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$minute", ExpressionMinute::parse);
+REGISTER_EXPRESSION(minute, ExpressionMinute::parse);
 const char* ExpressionMinute::getOpName() const {
     return "$minute";
 }
@@ -1925,7 +1962,7 @@ Value ExpressionMod::evaluateInternal(Variables* vars) const {
     }
 }
 
-REGISTER_EXPRESSION("$mod", ExpressionMod::parse);
+REGISTER_EXPRESSION(mod, ExpressionMod::parse);
 const char* ExpressionMod::getOpName() const {
     return "$mod";
 }
@@ -1937,7 +1974,7 @@ Value ExpressionMonth::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$month", ExpressionMonth::parse);
+REGISTER_EXPRESSION(month, ExpressionMonth::parse);
 const char* ExpressionMonth::getOpName() const {
     return "$month";
 }
@@ -1983,7 +2020,7 @@ Value ExpressionMultiply::evaluateInternal(Variables* vars) const {
         massert(16418, "$multiply resulted in a non-numeric type", false);
 }
 
-REGISTER_EXPRESSION("$multiply", ExpressionMultiply::parse);
+REGISTER_EXPRESSION(multiply, ExpressionMultiply::parse);
 const char* ExpressionMultiply::getOpName() const {
     return "$multiply";
 }
@@ -1995,7 +2032,7 @@ Value ExpressionHour::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$hour", ExpressionHour::parse);
+REGISTER_EXPRESSION(hour, ExpressionHour::parse);
 const char* ExpressionHour::getOpName() const {
     return "$hour";
 }
@@ -2011,7 +2048,7 @@ Value ExpressionIfNull::evaluateInternal(Variables* vars) const {
     return pRight;
 }
 
-REGISTER_EXPRESSION("$ifNull", ExpressionIfNull::parse);
+REGISTER_EXPRESSION(ifNull, ExpressionIfNull::parse);
 const char* ExpressionIfNull::getOpName() const {
     return "$ifNull";
 }
@@ -2118,7 +2155,7 @@ Value ExpressionNot::evaluateInternal(Variables* vars) const {
     return Value(!b);
 }
 
-REGISTER_EXPRESSION("$not", ExpressionNot::parse);
+REGISTER_EXPRESSION(not, ExpressionNot::parse);
 const char* ExpressionNot::getOpName() const {
     return "$not";
 }
@@ -2186,7 +2223,7 @@ intrusive_ptr<Expression> ExpressionOr::optimize() {
     return pE;
 }
 
-REGISTER_EXPRESSION("$or", ExpressionOr::parse);
+REGISTER_EXPRESSION(or, ExpressionOr::parse);
 const char* ExpressionOr::getOpName() const {
     return "$or";
 }
@@ -2198,7 +2235,7 @@ Value ExpressionSecond::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$second", ExpressionSecond::parse);
+REGISTER_EXPRESSION(second, ExpressionSecond::parse);
 const char* ExpressionSecond::getOpName() const {
     return "$second";
 }
@@ -2243,7 +2280,7 @@ Value ExpressionSetDifference::evaluateInternal(Variables* vars) const {
     return Value(std::move(returnVec));
 }
 
-REGISTER_EXPRESSION("$setDifference", ExpressionSetDifference::parse);
+REGISTER_EXPRESSION(setDifference, ExpressionSetDifference::parse);
 const char* ExpressionSetDifference::getOpName() const {
     return "$setDifference";
 }
@@ -2279,7 +2316,7 @@ Value ExpressionSetEquals::evaluateInternal(Variables* vars) const {
     return Value(true);
 }
 
-REGISTER_EXPRESSION("$setEquals", ExpressionSetEquals::parse);
+REGISTER_EXPRESSION(setEquals, ExpressionSetEquals::parse);
 const char* ExpressionSetEquals::getOpName() const {
     return "$setEquals";
 }
@@ -2325,7 +2362,7 @@ Value ExpressionSetIntersection::evaluateInternal(Variables* vars) const {
     return Value(vector<Value>(currentIntersection.begin(), currentIntersection.end()));
 }
 
-REGISTER_EXPRESSION("$setIntersection", ExpressionSetIntersection::parse);
+REGISTER_EXPRESSION(setIntersection, ExpressionSetIntersection::parse);
 const char* ExpressionSetIntersection::getOpName() const {
     return "$setIntersection";
 }
@@ -2407,11 +2444,10 @@ intrusive_ptr<Expression> ExpressionSetIsSubset::optimize() {
 
         return new Optimized(arrayToSet(rhs), vpOperand);
     }
-
     return optimized;
 }
 
-REGISTER_EXPRESSION("$setIsSubset", ExpressionSetIsSubset::parse);
+REGISTER_EXPRESSION(setIsSubset, ExpressionSetIsSubset::parse);
 const char* ExpressionSetIsSubset::getOpName() const {
     return "$setIsSubset";
 }
@@ -2436,7 +2472,7 @@ Value ExpressionSetUnion::evaluateInternal(Variables* vars) const {
     return Value(vector<Value>(unionedSet.begin(), unionedSet.end()));
 }
 
-REGISTER_EXPRESSION("$setUnion", ExpressionSetUnion::parse);
+REGISTER_EXPRESSION(setUnion, ExpressionSetUnion::parse);
 const char* ExpressionSetUnion::getOpName() const {
     return "$setUnion";
 }
@@ -2448,9 +2484,95 @@ Value ExpressionIsArray::evaluateInternal(Variables* vars) const {
     return Value(argument.getType() == Array);
 }
 
-REGISTER_EXPRESSION("$isArray", ExpressionIsArray::parse);
+REGISTER_EXPRESSION(isArray, ExpressionIsArray::parse);
 const char* ExpressionIsArray::getOpName() const {
     return "$isArray";
+}
+
+/* ----------------------- ExpressionSlice ---------------------------- */
+
+Value ExpressionSlice::evaluateInternal(Variables* vars) const {
+    const size_t n = vpOperand.size();
+
+    Value arrayVal = vpOperand[0]->evaluateInternal(vars);
+    // Could be either a start index or the length from 0.
+    Value arg2 = vpOperand[1]->evaluateInternal(vars);
+
+    if (arrayVal.nullish() || arg2.nullish()) {
+        return Value(BSONNULL);
+    }
+
+    uassert(28724,
+            str::stream() << "First argument to $slice must be an Array, but is"
+                          << " of type: " << typeName(arrayVal.getType()),
+            arrayVal.getType() == Array);
+    uassert(28725,
+            str::stream() << "Second argument to $slice must be a numeric value,"
+                          << " but is of type: " << typeName(arg2.getType()),
+            arg2.numeric());
+    uassert(28726,
+            str::stream() << "Second argument to $slice can't be represented as"
+                          << " a 32-bit integer: " << arg2.coerceToDouble(),
+            arg2.integral());
+
+    const auto& array = arrayVal.getArray();
+    size_t start;
+    size_t end;
+
+    if (n == 2) {
+        // Only count given.
+        int count = arg2.coerceToInt();
+        start = 0;
+        end = array.size();
+        if (count >= 0) {
+            end = std::min(end, size_t(count));
+        } else {
+            // Negative count's start from the back. If a abs(count) is greater
+            // than the
+            // length of the array, return the whole array.
+            start = std::max(0, static_cast<int>(array.size()) + count);
+        }
+    } else {
+        // We have both a start index and a count.
+        int startInt = arg2.coerceToInt();
+        if (startInt < 0) {
+            // Negative values start from the back. If a abs(start) is greater
+            // than the length
+            // of the array, start from 0.
+            start = std::max(0, static_cast<int>(array.size()) + startInt);
+        } else {
+            start = std::min(array.size(), size_t(startInt));
+        }
+
+        Value countVal = vpOperand[2]->evaluateInternal(vars);
+
+        if (countVal.nullish()) {
+            return Value(BSONNULL);
+        }
+
+        uassert(28727,
+                str::stream() << "Third argument to $slice must be numeric, but "
+                              << "is of type: " << typeName(countVal.getType()),
+                countVal.numeric());
+        uassert(28728,
+                str::stream() << "Third argument to $slice can't be represented"
+                              << " as a 32-bit integer: " << countVal.coerceToDouble(),
+                countVal.integral());
+        uassert(28729,
+                str::stream() << "Third argument to $slice must be positive: "
+                              << countVal.coerceToInt(),
+                countVal.coerceToInt() > 0);
+
+        size_t count = size_t(countVal.coerceToInt());
+        end = std::min(start + count, array.size());
+    }
+
+    return Value(vector<Value>(array.begin() + start, array.begin() + end));
+}
+
+REGISTER_EXPRESSION(slice, ExpressionSlice::parse);
+const char* ExpressionSlice::getOpName() const {
+    return "$slice";
 }
 
 /* ----------------------- ExpressionSize ---------------------------- */
@@ -2465,9 +2587,33 @@ Value ExpressionSize::evaluateInternal(Variables* vars) const {
     return Value::createIntOrLong(array.getArray().size());
 }
 
-REGISTER_EXPRESSION("$size", ExpressionSize::parse);
+REGISTER_EXPRESSION(size, ExpressionSize::parse);
 const char* ExpressionSize::getOpName() const {
     return "$size";
+}
+
+/* ----------------------- ExpressionSqrt ---------------------------- */
+
+Value ExpressionSqrt::evaluateInternal(Variables* vars) const {
+    Value argVal = vpOperand[0]->evaluateInternal(vars);
+    if (argVal.nullish())
+        return Value(BSONNULL);
+
+    uassert(28715,
+            str::stream() << "$sqrt only supports numeric types, not "
+                          << typeName(argVal.getType()),
+            argVal.numeric());
+
+    double argDouble = argVal.coerceToDouble();
+    uassert(28714,
+            "$sqrt's argument must be greater than or equal to 0",
+            argDouble >= 0 || std::isnan(argDouble));
+    return Value(sqrt(argDouble));
+}
+
+REGISTER_EXPRESSION(sqrt, ExpressionSqrt::parse);
+const char* ExpressionSqrt::getOpName() const {
+    return "$sqrt";
 }
 
 /* ----------------------- ExpressionStrcasecmp ---------------------------- */
@@ -2489,7 +2635,7 @@ Value ExpressionStrcasecmp::evaluateInternal(Variables* vars) const {
         return Value(-1);
 }
 
-REGISTER_EXPRESSION("$strcasecmp", ExpressionStrcasecmp::parse);
+REGISTER_EXPRESSION(strcasecmp, ExpressionStrcasecmp::parse);
 const char* ExpressionStrcasecmp::getOpName() const {
     return "$strcasecmp";
 }
@@ -2540,7 +2686,7 @@ Value ExpressionSubstr::evaluateInternal(Variables* vars) const {
     return Value(str.substr(lower, length));
 }
 
-REGISTER_EXPRESSION("$substr", ExpressionSubstr::parse);
+REGISTER_EXPRESSION(substr, ExpressionSubstr::parse);
 const char* ExpressionSubstr::getOpName() const {
     return "$substr";
 }
@@ -2586,7 +2732,7 @@ Value ExpressionSubtract::evaluateInternal(Variables* vars) const {
     }
 }
 
-REGISTER_EXPRESSION("$subtract", ExpressionSubtract::parse);
+REGISTER_EXPRESSION(subtract, ExpressionSubtract::parse);
 const char* ExpressionSubtract::getOpName() const {
     return "$subtract";
 }
@@ -2600,7 +2746,7 @@ Value ExpressionToLower::evaluateInternal(Variables* vars) const {
     return Value(str);
 }
 
-REGISTER_EXPRESSION("$toLower", ExpressionToLower::parse);
+REGISTER_EXPRESSION(toLower, ExpressionToLower::parse);
 const char* ExpressionToLower::getOpName() const {
     return "$toLower";
 }
@@ -2614,7 +2760,7 @@ Value ExpressionToUpper::evaluateInternal(Variables* vars) const {
     return Value(str);
 }
 
-REGISTER_EXPRESSION("$toUpper", ExpressionToUpper::parse);
+REGISTER_EXPRESSION(toUpper, ExpressionToUpper::parse);
 const char* ExpressionToUpper::getOpName() const {
     return "$toUpper";
 }
@@ -2646,7 +2792,7 @@ int ExpressionWeek::extract(const tm& tm) {
     return nextSundayWeek;
 }
 
-REGISTER_EXPRESSION("$week", ExpressionWeek::parse);
+REGISTER_EXPRESSION(week, ExpressionWeek::parse);
 const char* ExpressionWeek::getOpName() const {
     return "$week";
 }
@@ -2658,7 +2804,7 @@ Value ExpressionYear::evaluateInternal(Variables* vars) const {
     return Value(extract(pDate.coerceToTm()));
 }
 
-REGISTER_EXPRESSION("$year", ExpressionYear::parse);
+REGISTER_EXPRESSION(year, ExpressionYear::parse);
 const char* ExpressionYear::getOpName() const {
     return "$year";
 }

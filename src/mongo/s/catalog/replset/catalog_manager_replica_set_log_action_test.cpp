@@ -30,9 +30,6 @@
 
 #include "mongo/platform/basic.h"
 
-#include <chrono>
-#include <future>
-
 #include "mongo/client/remote_command_targeter_mock.h"
 #include "mongo/db/commands.h"
 #include "mongo/executor/network_interface_mock.h"
@@ -43,17 +40,20 @@
 #include "mongo/s/client/shard_registry.h"
 #include "mongo/s/write_ops/batched_command_request.h"
 #include "mongo/s/write_ops/batched_command_response.h"
+#include "mongo/stdx/chrono.h"
+#include "mongo/stdx/future.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
 namespace {
 
 using executor::NetworkInterfaceMock;
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 using executor::TaskExecutor;
-using std::async;
 using unittest::assertGet;
 
-static const std::chrono::seconds kFutureTimeout{5};
+static const stdx::chrono::seconds kFutureTimeout{5};
 
 class LogActionTest : public CatalogManagerReplSetTestFixture {
 public:
@@ -74,14 +74,15 @@ public:
 
             BatchedInsertRequest actualBatchedInsert;
             std::string errmsg;
-            ASSERT_TRUE(actualBatchedInsert.parseBSON(request.cmdObj, &errmsg));
-            ASSERT_EQUALS(ActionLogType::ConfigNS, actualBatchedInsert.getCollName());
+            ASSERT_TRUE(actualBatchedInsert.parseBSON(request.dbname, request.cmdObj, &errmsg));
+            ASSERT_EQUALS(ActionLogType::ConfigNS, actualBatchedInsert.getNS().ns());
             auto inserts = actualBatchedInsert.getDocuments();
             ASSERT_EQUALS(1U, inserts.size());
             BSONObj insert = inserts.front();
 
-            ActionLogType actualActionLog;
-            ASSERT_TRUE(actualActionLog.parseBSON(insert, &errmsg));
+            auto actualActionLogRes = ActionLogType::fromBSON(insert);
+            ASSERT_OK(actualActionLogRes.getStatus());
+            const ActionLogType& actualActionLog = actualActionLogRes.getValue();
 
             ASSERT_EQUALS(expectedActionLog.toBSON(), actualActionLog.toBSON());
 
@@ -94,48 +95,44 @@ public:
 };
 
 TEST_F(LogActionTest, LogActionNoRetryAfterSuccessfulCreate) {
-    RemoteCommandTargeterMock* targeter =
-        RemoteCommandTargeterMock::get(shardRegistry()->getShard("config")->getTargeter());
-    targeter->setFindHostReturnValue(HostAndPort("TestHost1"));
+    configTargeter()->setFindHostReturnValue(HostAndPort("TestHost1"));
 
     ActionLogType expectedActionLog;
     expectedActionLog.setServer("server1");
     expectedActionLog.setTime(network()->now());
     expectedActionLog.setWhat("moved a chunk");
+    expectedActionLog.setDetails(boost::none, 0, 1, 1);
 
     auto future =
-        async(std::launch::async,
-              [this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
+        launchAsync([this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
 
     expectActionLogCreate(BSON("ok" << 1));
     expectActionLogInsert(expectedActionLog);
 
     // Now wait for the logAction call to return
-    future.wait_for(kFutureTimeout);
+    future.timed_get(kFutureTimeout);
 
     // Now log another action and confirm that we don't re-attempt to create the collection
-    future = async(std::launch::async,
-                   [this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
+    future =
+        launchAsync([this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
 
     expectActionLogInsert(expectedActionLog);
 
     // Now wait for the logAction call to return
-    future.wait_for(kFutureTimeout);
+    future.timed_get(kFutureTimeout);
 }
 
 TEST_F(LogActionTest, LogActionNoRetryCreateIfAlreadyExists) {
-    RemoteCommandTargeterMock* targeter =
-        RemoteCommandTargeterMock::get(shardRegistry()->getShard("config")->getTargeter());
-    targeter->setFindHostReturnValue(HostAndPort("TestHost1"));
+    configTargeter()->setFindHostReturnValue(HostAndPort("TestHost1"));
 
     ActionLogType expectedActionLog;
     expectedActionLog.setServer("server1");
     expectedActionLog.setTime(network()->now());
     expectedActionLog.setWhat("moved a chunk");
+    expectedActionLog.setDetails(boost::none, 0, 1, 1);
 
     auto future =
-        async(std::launch::async,
-              [this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
+        launchAsync([this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
 
     BSONObjBuilder createResponseBuilder;
     Command::appendCommandStatus(createResponseBuilder,
@@ -144,31 +141,29 @@ TEST_F(LogActionTest, LogActionNoRetryCreateIfAlreadyExists) {
     expectActionLogInsert(expectedActionLog);
 
     // Now wait for the logAction call to return
-    future.wait_for(kFutureTimeout);
+    future.timed_get(kFutureTimeout);
 
     // Now log another action and confirm that we don't re-attempt to create the collection
-    future = async(std::launch::async,
-                   [this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
+    future =
+        launchAsync([this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
 
     expectActionLogInsert(expectedActionLog);
 
     // Now wait for the logAction call to return
-    future.wait_for(kFutureTimeout);
+    future.timed_get(kFutureTimeout);
 }
 
 TEST_F(LogActionTest, LogActionCreateFailure) {
-    RemoteCommandTargeterMock* targeter =
-        RemoteCommandTargeterMock::get(shardRegistry()->getShard("config")->getTargeter());
-    targeter->setFindHostReturnValue(HostAndPort("TestHost1"));
+    configTargeter()->setFindHostReturnValue(HostAndPort("TestHost1"));
 
     ActionLogType expectedActionLog;
     expectedActionLog.setServer("server1");
     expectedActionLog.setTime(network()->now());
     expectedActionLog.setWhat("moved a chunk");
+    expectedActionLog.setDetails(boost::none, 0, 1, 1);
 
     auto future =
-        async(std::launch::async,
-              [this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
+        launchAsync([this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
 
     BSONObjBuilder createResponseBuilder;
     Command::appendCommandStatus(createResponseBuilder,
@@ -177,17 +172,17 @@ TEST_F(LogActionTest, LogActionCreateFailure) {
     // If creating the collection fails we won't perform the insert
 
     // Now wait for the logAction call to return
-    future.wait_for(kFutureTimeout);
+    future.timed_get(kFutureTimeout);
 
     // Now log another action and confirm that we *do* attempt to re-create the collection
-    future = async(std::launch::async,
-                   [this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
+    future =
+        launchAsync([this, &expectedActionLog] { catalogManager()->logAction(expectedActionLog); });
 
     expectActionLogCreate(BSON("ok" << 1));
     expectActionLogInsert(expectedActionLog);
 
     // Now wait for the logAction call to return
-    future.wait_for(kFutureTimeout);
+    future.timed_get(kFutureTimeout);
 }
 
 }  // namespace

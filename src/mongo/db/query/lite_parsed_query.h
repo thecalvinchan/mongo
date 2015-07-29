@@ -32,10 +32,10 @@
 #include <string>
 
 #include "mongo/db/jsobj.h"
+#include "mongo/db/namespace_string.h"
 
 namespace mongo {
 
-class NamespaceString;
 class QueryMessage;
 class Status;
 template <typename T>
@@ -47,6 +47,8 @@ class StatusWith;
  */
 class LiteParsedQuery {
 public:
+    static const char kFindCommandName[];
+
     /**
      * Parses a find command object, 'cmdObj'. Caller must indicate whether or not this lite
      * parsed query is an explained query or not via 'isExplain'.
@@ -54,13 +56,14 @@ public:
      * Returns a heap allocated LiteParsedQuery on success or an error if 'cmdObj' is not well
      * formed.
      */
-    static StatusWith<std::unique_ptr<LiteParsedQuery>> makeFromFindCommand(
-        const NamespaceString& nss, const BSONObj& cmdObj, bool isExplain);
+    static StatusWith<std::unique_ptr<LiteParsedQuery>> makeFromFindCommand(NamespaceString nss,
+                                                                            const BSONObj& cmdObj,
+                                                                            bool isExplain);
 
     /**
      * Constructs a LiteParseQuery object as though it is from a legacy QueryMessage.
      */
-    static StatusWith<std::unique_ptr<LiteParsedQuery>> makeAsOpQuery(const std::string& ns,
+    static StatusWith<std::unique_ptr<LiteParsedQuery>> makeAsOpQuery(NamespaceString nss,
                                                                       int ntoskip,
                                                                       int ntoreturn,
                                                                       int queryoptions,
@@ -77,10 +80,11 @@ public:
      * Constructs a LiteParseQuery object that can be used to serialize to find command
      * BSON object.
      */
-    static StatusWith<std::unique_ptr<LiteParsedQuery>> makeAsFindCmd(const NamespaceString& ns,
-                                                                      const BSONObj& query,
-                                                                      const BSONObj& sort,
-                                                                      boost::optional<int> limit);
+    static StatusWith<std::unique_ptr<LiteParsedQuery>> makeAsFindCmd(
+        NamespaceString nss,
+        const BSONObj& query,
+        const BSONObj& sort,
+        boost::optional<long long> limit);
 
     /**
      * Converts this LPQ into a find command.
@@ -127,6 +131,9 @@ public:
      */
     static bool isQueryIsolated(const BSONObj& query);
 
+    // Name of the find command parameter used to pass read preference.
+    static const char* kFindCommandReadPrefField;
+
     // Names of the maxTimeMS command and query option.
     static const std::string cmdOptionMaxTimeMS;
     static const std::string queryOptionMaxTimeMS;
@@ -138,8 +145,11 @@ public:
     static const std::string metaRecordId;
     static const std::string metaIndexKey;
 
+    const NamespaceString& nss() const {
+        return _nss;
+    }
     const std::string& ns() const {
-        return _ns;
+        return _nss.ns();
     }
 
     const BSONObj& getFilter() const {
@@ -155,15 +165,15 @@ public:
         return _hint;
     }
 
-    static const int kDefaultBatchSize;
+    static const long long kDefaultBatchSize;
 
-    int getSkip() const {
+    long long getSkip() const {
         return _skip;
     }
-    boost::optional<int> getLimit() const {
+    boost::optional<long long> getLimit() const {
         return _limit;
     }
-    boost::optional<int> getBatchSize() const {
+    boost::optional<long long> getBatchSize() const {
         return _batchSize;
     }
     bool wantMore() const {
@@ -230,6 +240,10 @@ public:
         return _partial;
     }
 
+    boost::optional<long long> getReplicationTerm() const {
+        return _replicationTerm;
+    }
+
     /**
      * Return options as a bit vector.
      */
@@ -247,7 +261,7 @@ public:
         const QueryMessage& qm);
 
 private:
-    LiteParsedQuery() = default;
+    LiteParsedQuery(NamespaceString nss);
 
     /**
      * Parsing code calls this after construction of the LPQ is complete. There are additional
@@ -255,8 +269,7 @@ private:
      */
     Status validate() const;
 
-    Status init(const std::string& ns,
-                int ntoskip,
+    Status init(int ntoskip,
                 int ntoreturn,
                 int queryOptions,
                 const BSONObj& queryObj,
@@ -294,7 +307,7 @@ private:
      */
     Status validateFindCmd();
 
-    std::string _ns;
+    const NamespaceString _nss;
 
     BSONObj _filter;
     BSONObj _proj;
@@ -304,11 +317,11 @@ private:
     // {$hint: <String>}, where <String> is the index name hinted.
     BSONObj _hint;
 
-    int _skip = 0;
+    long long _skip = 0;
     bool _wantMore = true;
 
-    boost::optional<int> _limit;
-    boost::optional<int> _batchSize;
+    boost::optional<long long> _limit;
+    boost::optional<long long> _batchSize;
 
     bool _fromCommand = false;
     bool _explain = false;
@@ -334,6 +347,8 @@ private:
     bool _awaitData = false;
     bool _exhaust = false;
     bool _partial = false;
+
+    boost::optional<long long> _replicationTerm;
 };
 
 }  // namespace mongo

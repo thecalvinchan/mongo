@@ -28,10 +28,11 @@
 
 #pragma once
 
-#include <functional>
-#include <thread>
-#include <vector>
+#include <utility>
 
+#include "mongo/db/service_context.h"
+#include "mongo/executor/network_test_env.h"
+#include "mongo/util/net/message_port_mock.h"
 #include "mongo/unittest/unittest.h"
 
 namespace mongo {
@@ -39,16 +40,17 @@ namespace mongo {
 class BSONObj;
 class CatalogManagerReplicaSet;
 class DistLockManagerMock;
-struct RemoteCommandRequest;
-class RemoteCommandRunnerMock;
+class NamespaceString;
+class RemoteCommandTargeterFactoryMock;
+class RemoteCommandTargeterMock;
 class ShardRegistry;
+class ShardType;
 template <typename T>
 class StatusWith;
 
 namespace executor {
-
 class NetworkInterfaceMock;
-
+class TaskExecutor;
 }  // namespace executor
 
 /**
@@ -60,50 +62,97 @@ public:
     ~CatalogManagerReplSetTestFixture();
 
 protected:
-    /**
-     * Shortcut function to be used for generating mock responses to network requests.
-     *
-     * @param dbName Name of the database for which this request came.
-     * @param cmdObj Contents of the request.
-     *
-     * Return the BSON object representing the response(s) or an error, which will be passed
-     * back on the network.
-     */
-    using OnCommandFunction = std::function<StatusWith<BSONObj>(const RemoteCommandRequest&)>;
+    static const stdx::chrono::seconds kFutureTimeout;
 
-    using OnFindCommandFunction =
-        std::function<StatusWith<std::vector<BSONObj>>(const RemoteCommandRequest&)>;
+    template <typename Lambda>
+    executor::NetworkTestEnv::FutureHandle<typename std::result_of<Lambda()>::type> launchAsync(
+        Lambda&& func) const {
+        return _networkTestEnv->launchAsync(std::forward<Lambda>(func));
+    }
 
     CatalogManagerReplicaSet* catalogManager() const;
 
     ShardRegistry* shardRegistry() const;
 
-    RemoteCommandRunnerMock* commandRunner() const;
+    RemoteCommandTargeterFactoryMock* targeterFactory() const;
+
+    RemoteCommandTargeterMock* configTargeter() const;
 
     executor::NetworkInterfaceMock* network() const;
 
+    MessagingPortMock* getMessagingPort() const;
+
     DistLockManagerMock* distLock() const;
+
+    OperationContext* operationContext() const;
 
     /**
      * Blocking methods, which receive one message from the network and respond using the
      * responses returned from the input function. This is a syntactic sugar for simple,
      * single request + response or find tests.
      */
-    void onCommand(OnCommandFunction func);
-    void onFindCommand(OnFindCommandFunction func);
+    void onCommand(executor::NetworkTestEnv::OnCommandFunction func);
+    void onFindCommand(executor::NetworkTestEnv::OnFindCommandFunction func);
 
-private:
+    /**
+     * Setup the shard registry to contain the given shards until the next reload.
+     */
+    void setupShards(const std::vector<ShardType>& shards);
+
+    /**
+     * Wait for the shards listing command to be run and returns the specified set of shards.
+     */
+    void expectGetShards(const std::vector<ShardType>& shards);
+
+    /**
+     * Wait for a single insert request and ensures that the items being inserted exactly match the
+     * expected items. Responds with a success status.
+     */
+    void expectInserts(const NamespaceString& nss, const std::vector<BSONObj>& expected);
+
+    /**
+     * Waits for a count command and returns a response reporting the given number of documents
+     * as the result of the count, or an error.
+     */
+    void expectCount(const HostAndPort& configHost,
+                     const NamespaceString& expectedNs,
+                     const BSONObj& expectedQuery,
+                     const StatusWith<long long>& response);
+    /**
+     * Wait for an operation, which creates the sharding change log collection and return the
+     * specified response.
+     */
+    void expectChangeLogCreate(const HostAndPort& configHost, const BSONObj& response);
+
+    /**
+     * Wait for a single insert in the change log collection with the specified contents and return
+     * a successful response.
+     */
+    void expectChangeLogInsert(const HostAndPort& configHost,
+                               const std::string& clientAddress,
+                               Date_t timestamp,
+                               const std::string& what,
+                               const std::string& ns,
+                               const BSONObj& detail);
+
     void setUp() override;
 
     void tearDown() override;
 
-    // Mocked out network under the task executor. This pointer is owned by the executor on
-    // the ShardRegistry, so it must not be accessed once the executor has been shut down.
-    executor::NetworkInterfaceMock* _mockNetwork;
+    void shutdownExecutor();
 
-    // Thread used to execute the task executor's loop. This thread will be busy until the
-    // shutdown is called on the shard registry's task executor.
-    std::thread _executorThread;
+private:
+    std::unique_ptr<ServiceContext> _service;
+    ServiceContext::UniqueClient _client;
+    ServiceContext::UniqueOperationContext _opCtx;
+    std::unique_ptr<MessagingPortMock> _messagePort;
+
+    RemoteCommandTargeterFactoryMock* _targeterFactory;
+    RemoteCommandTargeterMock* _configTargeter;
+
+    executor::NetworkInterfaceMock* _mockNetwork;
+    executor::TaskExecutor* _executor;
+    std::unique_ptr<executor::NetworkTestEnv> _networkTestEnv;
 };
 
 }  // namespace mongo

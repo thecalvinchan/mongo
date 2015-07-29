@@ -64,28 +64,25 @@ struct CountScanParams {
  * Only created through the getExecutorCount path, as count is the only operation that doesn't
  * care about its data.
  */
-class CountScan : public PlanStage {
+class CountScan final : public PlanStage {
 public:
     CountScan(OperationContext* txn, const CountScanParams& params, WorkingSet* workingSet);
-    virtual ~CountScan() {}
 
-    virtual StageState work(WorkingSetID* out);
-    virtual bool isEOF();
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    StageState work(WorkingSetID* out) final;
+    bool isEOF() final;
+    void doSaveState() final;
+    void doRestoreState() final;
+    void doDetachFromOperationContext() final;
+    void doReattachToOperationContext(OperationContext* opCtx) final;
+    void doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) final;
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_COUNT_SCAN;
     }
 
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -108,7 +105,6 @@ private:
 
     CountScanParams _params;
 
-    CommonStats _commonStats;
     CountScanStats _specificStats;
 };
 

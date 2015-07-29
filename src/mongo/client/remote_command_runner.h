@@ -32,6 +32,9 @@
 
 #include "mongo/base/disallow_copying.h"
 #include "mongo/db/jsobj.h"
+#include "mongo/executor/remote_command_request.h"
+#include "mongo/executor/remote_command_response.h"
+#include "mongo/rpc/metadata.h"
 #include "mongo/util/net/hostandport.h"
 #include "mongo/util/time_support.h"
 
@@ -40,54 +43,8 @@ namespace mongo {
 template <typename T>
 class StatusWith;
 
-/**
- * Type of object describing a command to execute against a remote MongoDB node.
- */
-struct RemoteCommandRequest {
-    // Indicates that there is no timeout for the request to complete
-    static const Milliseconds kNoTimeout;
-
-    // Indicates that there is no expiration time by when the request needs to complete
-    static const Date_t kNoExpirationDate;
-
-    RemoteCommandRequest() : timeout(kNoTimeout), expirationDate(kNoExpirationDate) {}
-
-    RemoteCommandRequest(const HostAndPort& theTarget,
-                         const std::string& theDbName,
-                         const BSONObj& theCmdObj,
-                         const Milliseconds timeoutMillis = kNoTimeout)
-        : target(theTarget), dbname(theDbName), cmdObj(theCmdObj), timeout(timeoutMillis) {
-        if (timeoutMillis == kNoTimeout) {
-            expirationDate = kNoExpirationDate;
-        }
-    }
-
-    std::string toString() const;
-
-    HostAndPort target;
-    std::string dbname;
-    BSONObj cmdObj;
-    Milliseconds timeout;
-
-    // Deadline by when the request must be completed
-    Date_t expirationDate;
-};
-
-
-/**
- * Type of object describing the response of previously sent RemoteCommandRequest.
- */
-struct RemoteCommandResponse {
-    RemoteCommandResponse() : data(), elapsedMillis(Milliseconds(0)) {}
-
-    RemoteCommandResponse(BSONObj obj, Milliseconds millis) : data(obj), elapsedMillis(millis) {}
-
-    std::string toString() const;
-
-    BSONObj data;
-    Milliseconds elapsedMillis;
-};
-
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 
 /**
  * Abstract interface used for executing commands against a MongoDB instance and retrieving

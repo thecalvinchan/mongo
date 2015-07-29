@@ -32,7 +32,7 @@
 
 #include "mongo/s/catalog/legacy/legacy_dist_lock_manager.h"
 
-#include "mongo/s/type_locks.h"
+#include "mongo/s/catalog/type_locks.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 #include "mongo/util/timer.h"
@@ -120,14 +120,14 @@ StatusWith<DistLockManager::ScopedDistLock> LegacyDistLockManager::lock(
         if (acquired) {
             verify(!lockDoc.isEmpty());
 
-            LocksType lock;
-            string errMsg;
-            if (!lock.parseBSON(lockDoc, &errMsg)) {
+            auto locksTypeResult = LocksType::fromBSON(lockDoc);
+            if (!locksTypeResult.isOK()) {
                 return StatusWith<ScopedDistLock>(
                     ErrorCodes::UnsupportedFormat,
-                    str::stream() << "error while parsing lock document: " << errMsg);
+                    str::stream() << "error while parsing lock document: " << lockDoc << " : "
+                                  << locksTypeResult.getStatus().toString());
             }
-
+            const LocksType& lock = locksTypeResult.getValue();
             dassert(lock.isLockIDSet());
 
             {

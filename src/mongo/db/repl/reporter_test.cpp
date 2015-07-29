@@ -39,8 +39,10 @@ namespace {
 using namespace mongo;
 using namespace mongo::repl;
 using executor::NetworkInterfaceMock;
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 
-class MockProgressManager : public ReplicationProgressManager {
+class MockProgressManager {
 public:
     void updateMap(int memberId, const Timestamp& ts) {
         progressMap[memberId] = ts;
@@ -83,6 +85,7 @@ protected:
 
     std::unique_ptr<Reporter> reporter;
     std::unique_ptr<MockProgressManager> posUpdater;
+    Reporter::PrepareReplSetUpdatePositionCommandFn prepareReplSetUpdatePositionCommandFn;
 };
 
 ReporterTest::ReporterTest() {}
@@ -90,7 +93,17 @@ ReporterTest::ReporterTest() {}
 void ReporterTest::setUp() {
     ReplicationExecutorTest::setUp();
     posUpdater.reset(new MockProgressManager());
-    reporter.reset(new Reporter(&getExecutor(), posUpdater.get(), HostAndPort("h1")));
+    prepareReplSetUpdatePositionCommandFn = [this]() -> StatusWith<BSONObj> {
+        BSONObjBuilder bob;
+        if (posUpdater->prepareReplSetUpdatePositionCommand(&bob)) {
+            return bob.obj();
+        }
+        return Status(ErrorCodes::OperationFailed,
+                      "unable to prepare replSetUpdatePosition command object");
+    };
+    reporter.reset(new Reporter(&getReplExecutor(),
+                                [this]() { return prepareReplSetUpdatePositionCommandFn(); },
+                                HostAndPort("h1")));
     launchExecutorThread();
 }
 
@@ -105,7 +118,7 @@ void ReporterTest::scheduleNetworkResponse(const BSONObj& obj) {
     NetworkInterfaceMock* net = getNet();
     ASSERT_TRUE(net->hasReadyRequests());
     Milliseconds millis(0);
-    RemoteCommandResponse response(obj, millis);
+    RemoteCommandResponse response(obj, BSONObj(), millis);
     ReplicationExecutor::ResponseStatus responseStatus(response);
     net->scheduleResponse(net->getNextReadyRequest(), net->now(), responseStatus);
 }
@@ -118,14 +131,20 @@ void ReporterTest::scheduleNetworkResponse(ErrorCodes::Error code, const std::st
 }
 
 TEST_F(ReporterTest, InvalidConstruction) {
-    // null ReplicationProgressManager
-    ASSERT_THROWS(Reporter(&getExecutor(), nullptr, HostAndPort("h1")), UserException);
+    // null PrepareReplSetUpdatePositionCommandFn
+    ASSERT_THROWS(Reporter(&getReplExecutor(),
+                           Reporter::PrepareReplSetUpdatePositionCommandFn(),
+                           HostAndPort("h1")),
+                  UserException);
 
     // null ReplicationExecutor
-    ASSERT_THROWS(Reporter(nullptr, posUpdater.get(), HostAndPort("h1")), UserException);
+    ASSERT_THROWS(Reporter(nullptr, prepareReplSetUpdatePositionCommandFn, HostAndPort("h1")),
+                  UserException);
 
     // empty HostAndPort
-    ASSERT_THROWS(Reporter(&getExecutor(), posUpdater.get(), HostAndPort()), UserException);
+    ASSERT_THROWS(
+        Reporter(&getReplExecutor(), prepareReplSetUpdatePositionCommandFn, HostAndPort()),
+        UserException);
 }
 
 TEST_F(ReporterTest, IsActiveOnceScheduled) {

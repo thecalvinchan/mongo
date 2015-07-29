@@ -1,32 +1,30 @@
-// @file  d_split.cpp
-
 /**
-*    Copyright (C) 2008-2014 MongoDB Inc.
-*
-*    This program is free software: you can redistribute it and/or  modify
-*    it under the terms of the GNU Affero General Public License, version 3,
-*    as published by the Free Software Foundation.
-*
-*    This program is distributed in the hope that it will be useful,
-*    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*    GNU Affero General Public License for more details.
-*
-*    You should have received a copy of the GNU Affero General Public License
-*    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*
-*    As a special exception, the copyright holders give permission to link the
-*    code of portions of this program with the OpenSSL library under certain
-*    conditions as described in each individual source file and distribute
-*    linked combinations including the program with the OpenSSL library. You
-*    must comply with the GNU Affero General Public License in all respects
-*    for all of the code used other than as permitted herein. If you modify
-*    file(s) with this exception, you may extend this exception to your
-*    version of the file(s), but you are not obligated to do so. If you do not
-*    wish to do so, delete this exception statement from your version. If you
-*    delete this exception statement from all source files in the program,
-*    then also delete it in the license file.
-*/
+ *    Copyright (C) 2008-2014 MongoDB Inc.
+ *
+ *    This program is free software: you can redistribute it and/or  modify
+ *    it under the terms of the GNU Affero General Public License, version 3,
+ *    as published by the Free Software Foundation.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU Affero General Public License for more details.
+ *
+ *    You should have received a copy of the GNU Affero General Public License
+ *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the GNU Affero General Public License in all respects for
+ *    all of the code used other than as permitted herein. If you modify file(s)
+ *    with this exception, you may extend this exception to your version of the
+ *    file(s), but you are not obligated to do so. If you do not wish to do so,
+ *    delete this exception statement from your version. If you delete this
+ *    exception statement from all source files in the program, then also delete
+ *    it in the license file.
+ */
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kSharding
 
@@ -53,12 +51,13 @@
 #include "mongo/db/instance.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/query/internal_plans.h"
+#include "mongo/db/s/collection_metadata.h"
+#include "mongo/db/s/sharding_state.h"
 #include "mongo/s/catalog/catalog_manager.h"
 #include "mongo/s/catalog/type_chunk.h"
 #include "mongo/s/chunk.h"
 #include "mongo/s/chunk_version.h"
 #include "mongo/s/config.h"
-#include "mongo/s/d_state.h"
 #include "mongo/s/catalog/dist_lock_manager.h"
 #include "mongo/s/grid.h"
 #include "mongo/s/shard_key_pattern.h"
@@ -74,35 +73,6 @@ using std::set;
 using std::string;
 using std::stringstream;
 using std::vector;
-
-class CmdMedianKey : public Command {
-public:
-    CmdMedianKey() : Command("medianKey") {}
-    virtual bool slaveOk() const {
-        return true;
-    }
-    virtual bool isWriteCommandForConfigServer() const {
-        return false;
-    }
-    virtual void help(stringstream& help) const {
-        help << "Deprecated internal command. Use splitVector command instead. \n";
-    }
-    // No auth required as this command no longer does anything.
-    virtual void addRequiredPrivileges(const std::string& dbname,
-                                       const BSONObj& cmdObj,
-                                       std::vector<Privilege>* out) {}
-    bool run(OperationContext* txn,
-             const string& dbname,
-             BSONObj& jsobj,
-             int,
-             string& errmsg,
-             BSONObjBuilder& result) {
-        errmsg =
-            "medianKey command no longer supported. Calling this indicates mismatch between mongo "
-            "versions.";
-        return false;
-    }
-} cmdMedianKey;
 
 class CheckShardingIndex : public Command {
 public:
@@ -487,8 +457,8 @@ public:
                 log() << "splitVector doing another cycle because of force, keyCount now: "
                       << keyCount << endl;
 
-                exec.reset(InternalPlanner::indexScan(
-                    txn, collection, idx, min, max, false, InternalPlanner::FORWARD));
+                exec = InternalPlanner::indexScan(
+                    txn, collection, idx, min, max, false, InternalPlanner::FORWARD);
 
                 exec->setYieldPolicy(PlanExecutor::YIELD_AUTO);
                 state = exec->getNext(&currKey, NULL);
@@ -615,25 +585,27 @@ public:
         // Get sharding state up-to-date
         //
 
+        ShardingState* shardingState = ShardingState::get(txn);
+
         // This could be the first call that enables sharding - make sure we initialize the
         // sharding state for this shard.
-        if (!shardingState.enabled()) {
+        if (!shardingState->enabled()) {
             if (cmdObj["configdb"].type() != String) {
                 errmsg = "sharding not enabled";
                 warning() << errmsg << endl;
                 return false;
             }
-            string configdb = cmdObj["configdb"].String();
-            ShardingState::initialize(configdb);
+
+            const string configdb = cmdObj["configdb"].String();
+            shardingState->initialize(configdb);
         }
 
         // Initialize our current shard name in the shard state if needed
-        shardingState.gotShardName(shardName);
+        shardingState->gotShardName(shardName);
 
-        ConnectionString configLoc =
-            ConnectionString::parse(shardingState.getConfigServer(), errmsg);
-        if (!configLoc.isValid()) {
-            warning() << errmsg;
+        auto configLocStatus = ConnectionString::parse(shardingState->getConfigServer());
+        if (!configLocStatus.isOK()) {
+            warning() << configLocStatus.getStatus();
             return false;
         }
 
@@ -657,7 +629,8 @@ public:
 
         // Always check our version remotely
         ChunkVersion shardVersion;
-        Status refreshStatus = shardingState.refreshMetadataNow(txn, ns, &shardVersion);
+        Status refreshStatus = ShardingState::get(getGlobalServiceContext())
+                                   ->refreshMetadataNow(txn, ns, &shardVersion);
 
         if (!refreshStatus.isOK()) {
             errmsg = str::stream() << "splitChunk cannot split chunk "
@@ -695,7 +668,8 @@ public:
         }
 
         // Get collection metadata
-        const CollectionMetadataPtr collMetadata(shardingState.getCollectionMetadata(ns));
+        const std::shared_ptr<CollectionMetadata> collMetadata(
+            ShardingState::get(getGlobalServiceContext())->getCollectionMetadata(ns));
         // With nonzero shard version, we must have metadata
         invariant(NULL != collMetadata);
 
@@ -831,12 +805,14 @@ public:
             // other chunk version, so it's also implicitly the newCollVersion
             ChunkVersion newShardVersion = collVersion;
 
-            // Increment the minor version once, shardingState.splitChunk increments once
+            // Increment the minor version once,
+            // ShardingState::get(getGlobalServiceContext())->splitChunk increments once
             // per split point (resulting in the correct final shard/collection version)
             // TODO: Revisit this interface, it's a bit clunky
             newShardVersion.incMinor();
 
-            shardingState.splitChunk(txn, ns, min, max, splitKeys, newShardVersion);
+            ShardingState::get(getGlobalServiceContext())
+                ->splitChunk(txn, ns, min, max, splitKeys, newShardVersion);
         }
 
         //
@@ -848,7 +824,8 @@ public:
             appendShortVersion(logDetail.subobjStart("left"), *newChunks[0]);
             appendShortVersion(logDetail.subobjStart("right"), *newChunks[1]);
 
-            grid.catalogManager()->logChange(txn, "split", ns, logDetail.obj());
+            grid.catalogManager()->logChange(
+                txn->getClient()->clientAddress(true), "split", ns, logDetail.obj());
         } else {
             BSONObj beforeDetailObj = logDetail.obj();
             BSONObj firstDetailObj = beforeDetailObj.getOwned();
@@ -861,7 +838,8 @@ public:
                 chunkDetail.append("of", newChunksSize);
                 appendShortVersion(chunkDetail.subobjStart("chunk"), *newChunks[i]);
 
-                grid.catalogManager()->logChange(txn, "multi-split", ns, chunkDetail.obj());
+                grid.catalogManager()->logChange(
+                    txn->getClient()->clientAddress(true), "multi-split", ns, chunkDetail.obj());
             }
         }
 
