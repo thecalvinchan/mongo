@@ -52,7 +52,6 @@ void testParseTree(string input, string expected) {
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser a(std::move(tokenData));
     std::string res = a.traverse();
-    std::cout << res << std::endl;
     ASSERT_EQ(res,expected);
 }
 

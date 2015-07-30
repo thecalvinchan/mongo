@@ -54,10 +54,8 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
 
     if (isZero(rightValue)) {
         if (isZero(leftValue)) {
-            std::cout << "0/0 " << std::endl;
             return Value(std::nan(""));
         } else {
-            std::cout << "right value is 0 " << std::endl;
             return (isNegative(leftValue) ? Value(-std::numeric_limits<double>::infinity()) : Value(std::numeric_limits<double>::infinity()));
         }
     } else if (leftValue.getType() == NumberDouble) {
