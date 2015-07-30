@@ -2405,11 +2405,8 @@ Export("get_option")
 Export("has_option use_system_version_of_library")
 Export("serverJs")
 Export("usev8")
-<<<<<<< HEAD
 Export("useTinyJS")
-=======
 Export("usemozjs")
->>>>>>> master
 Export("v8version v8suffix")
 Export("boostSuffix")
 Export('module_sconscripts')
