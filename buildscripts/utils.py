@@ -27,7 +27,7 @@ def getAllSourceFiles( arr=None , prefix="." ):
         # XXX: Avoid conflict between v8, v8-3.25 and mozjs source files in
         #      src/mongo/scripting
         #      Remove after v8-3.25 migration.
-        if x.find("v8-3.25") != -1 or x.find("mozjs") != -1:
+        if x.find("v8-3.25") != -1 or x.find("mozjs") != -1 or x.find("tinyjs"):
             continue
         full = prefix + "/" + x
         if os.path.isdir( full ) and not os.path.islink( full ):

@@ -776,7 +776,7 @@ usemozjs = (jsEngine.startswith('mozjs'))
 v8version = jsEngine[3:] if jsEngine.startswith('v8-') else 'none'
 v8suffix = '' if v8version == '3.12' else '-' + v8version
 
-if not serverJs and not usev8 and not usemozjs:
+if not serverJs and not usev8 and not usemozjs and not useTinyJS:
     print("Warning: --server-js=off is not needed with --js-engine=none")
 
 # We defer building the env until we have determined whether we want certain values. Some values

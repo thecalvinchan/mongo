@@ -30,6 +30,9 @@
 #include "mongo/scripting/tinyjs/scope.h"
 
 namespace mongo {
+std::string ScriptEngine::getInterpreterVersionString() {
+    return "tinyJS-0.0.1";
+}
 namespace tinyjs {
 
 class TinyJSEngine : public ScriptEngine {
