@@ -49,25 +49,33 @@ void UnaryOperator::setChild(std::unique_ptr<Node> node) {
     _child = std::move(node);
 }
 
-const Value UnaryOperator::evaluate(Scope* scope) const {
+const Value UnaryOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
     switch (this->getType()) {
-        case TokenType::kReturnKeyword:
-            return evaluateReturn(scope);
+        case TokenType::kReturnKeyword: {
+            Value val = evaluateReturn(scope, returnValue);
+            returnValue = val;
+            return val;
             break;
-        case TokenType::kSubtract:
-            return evaluateNegativeOperator(scope);
+        }
+        case TokenType::kSubtract: {
+            return evaluateNegativeOperator(scope, returnValue);
             break;
-        default:
+        }
+        default: {
             return Value();  // TODO: error?
+        }
     }
 }
 
-const Value UnaryOperator::evaluateReturn(Scope* scope) const {
-    return (_child->evaluate(scope));
+const Value UnaryOperator::evaluateReturn(Scope* scope, Value& returnValue) const {
+    return (_child->evaluate(scope, returnValue));
 }
 
-const Value UnaryOperator::evaluateNegativeOperator(Scope* scope) const {
-    const Value childValue = getChild()->evaluate(scope);
+const Value UnaryOperator::evaluateNegativeOperator(Scope* scope, Value& returnValue) const {
+    const Value childValue = getChild()->evaluate(scope, returnValue);
     switch (childValue.getType()) {
         case NumberDouble: {
             double val = -1 * childValue.getDouble();

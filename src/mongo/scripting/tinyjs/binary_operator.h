@@ -42,7 +42,7 @@ public:
     Node* getRightChild() const;
     void setLeftChild(std::unique_ptr<Node>);
     void setRightChild(std::unique_ptr<Node>);
-    virtual const Value evaluate(Scope* scope) const = 0;
+    virtual const Value evaluate(Scope* scope, Value& returnValue) const = 0;
 
 private:
     std::unique_ptr<Node> _leftChild;

@@ -41,7 +41,7 @@ public:
     ~ArrayLiteral() {}
     std::vector<Node*> getChildren() const;
     void setChild(std::unique_ptr<Node>);
-    const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
 
 private:
     std::vector<std::unique_ptr<Node>> _children;

@@ -39,7 +39,7 @@ namespace tinyjs {
 class Identifier : public TerminalNode {
 public:
     Identifier(const StringData &value);
-    const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
 private:
     Value _value;
 };

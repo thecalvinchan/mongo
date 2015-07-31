@@ -36,9 +36,12 @@ namespace tinyjs {
 
 DoubleNotEqualsOperator::DoubleNotEqualsOperator() : BinaryOperator(TokenType::kDoubleNotEquals) {}
 
-const Value DoubleNotEqualsOperator::evaluate(Scope* scope) const {
-    const Value leftValue = this->getLeftChild()->evaluate(scope);
-    const Value rightValue = this->getRightChild()->evaluate(scope);
+const Value DoubleNotEqualsOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    const Value leftValue = this->getLeftChild()->evaluate(scope, returnValue);
+    const Value rightValue = this->getRightChild()->evaluate(scope, returnValue);
     return Value(!strictlyEqual(leftValue, rightValue));
 }
 

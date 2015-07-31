@@ -67,8 +67,11 @@ void TernaryOperator::setRightChild(std::unique_ptr<Node> node) {
     _rightChild = std::move(node);
 }
 
-const Value TernaryOperator::evaluate(Scope* scope) const {
-    const Value condition = this->getLeftChild()->evaluate(scope);
+const Value TernaryOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    const Value condition = this->getLeftChild()->evaluate(scope, returnValue);
 
     if (condition.getType() != Bool) {  // TODO how does it understand the BSON types?
         // TODO throw error
@@ -76,10 +79,10 @@ const Value TernaryOperator::evaluate(Scope* scope) const {
 
     if (condition.getBool()) {
         // Evaluate the first branch
-        return this->getMiddleChild()->evaluate(scope);
+        return this->getMiddleChild()->evaluate(scope, returnValue);
     } else {
         // Evaluate the second branch
-        return this->getRightChild()->evaluate(scope);
+        return this->getRightChild()->evaluate(scope, returnValue);
     }
 }
 

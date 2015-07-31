@@ -94,7 +94,10 @@ std::vector<Node*> TerminalNode::getChildren() const {
     return std::vector<Node*>();
 }
 
-const Value TerminalNode::evaluate(Scope* scope) const {
+const Value TerminalNode::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
     return _value;
 }
 

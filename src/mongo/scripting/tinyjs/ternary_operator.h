@@ -44,7 +44,7 @@ public:
     void setLeftChild(std::unique_ptr<Node> node);
     void setMiddleChild(std::unique_ptr<Node> node);
     void setRightChild(std::unique_ptr<Node> node);
-    const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
 
 private:
     std::unique_ptr<Node> _leftChild;

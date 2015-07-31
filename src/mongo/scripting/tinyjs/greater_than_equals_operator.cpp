@@ -37,9 +37,12 @@ namespace tinyjs {
 GreaterThanEqualsOperator::GreaterThanEqualsOperator()
     : BinaryOperator(TokenType::kGreaterThanEquals) {}
 
-const Value GreaterThanEqualsOperator::evaluate(Scope* scope) const {
-    Value leftValue = this->getLeftChild()->evaluate(scope);
-    Value rightValue = this->getRightChild()->evaluate(scope);
+const Value GreaterThanEqualsOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    Value leftValue = this->getLeftChild()->evaluate(scope, returnValue);
+    Value rightValue = this->getRightChild()->evaluate(scope, returnValue);
     return Value(Value::compare(leftValue, rightValue) >= 0);
 }
 

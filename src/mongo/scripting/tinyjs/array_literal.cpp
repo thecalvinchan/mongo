@@ -47,10 +47,13 @@ void ArrayLiteral::setChild(std::unique_ptr<Node> child) {
     _children.push_back(std::move(child));
 }
 
-const Value ArrayLiteral::evaluate(Scope* scope) const {
+const Value ArrayLiteral::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
     std::vector<Value> v;
     for (size_t i = 0; i < _children.size(); i++) {
-        v.push_back(_children[i]->evaluate(scope));
+        v.push_back(_children[i]->evaluate(scope, returnValue));
     }
     return Value(v);
 }

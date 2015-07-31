@@ -36,7 +36,7 @@ namespace tinyjs {
 class DoubleEqualsOperator : public BinaryOperator {
 public:
     DoubleEqualsOperator();
-    virtual const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
 };
 
 }  // namespace tinyjs

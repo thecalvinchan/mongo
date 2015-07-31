@@ -36,7 +36,7 @@ namespace tinyjs {
 class NotEqualsOperator : public BinaryOperator {
 public:
     NotEqualsOperator();
-    virtual const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
 };
 
 }  // namespace tinyjs

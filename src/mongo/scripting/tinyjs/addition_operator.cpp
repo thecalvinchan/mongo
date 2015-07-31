@@ -36,9 +36,12 @@ namespace tinyjs {
 
 AdditionOperator::AdditionOperator() : BinaryOperator(TokenType::kAdd) {}
 
-const Value AdditionOperator::evaluate(Scope* scope) const {
-    Value leftValue = this->getLeftChild()->evaluate(scope);
-    Value rightValue = this->getRightChild()->evaluate(scope);
+const Value AdditionOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    Value leftValue = this->getLeftChild()->evaluate(scope, returnValue);
+    Value rightValue = this->getRightChild()->evaluate(scope, returnValue);
 
     if (isString(leftValue)) {
         return Value(makeString(leftValue) + makeString(rightValue));

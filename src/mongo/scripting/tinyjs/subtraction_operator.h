@@ -36,7 +36,7 @@ namespace tinyjs {
 class SubtractionOperator : public BinaryOperator {
 public:
     SubtractionOperator();
-    virtual const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
 };
 
 }  // namespace tinyjs
