@@ -263,7 +263,9 @@ tasks:
           set -o verbose
 
           rm -rf ${install_directory|/data/mongo-install-directory}
-          ${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
+          ${scons|scons} ${compile_flags|} --js-engine=tinyjs --use-new-tools mongod dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
+          ${scons|scons} ${compile_flags|} --js-engine=mozjs --use-new-tools mongos dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
+          ${scons|scons} ${compile_flags|} --js-engine=mozjs --use-new-tools mongo dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
 
           ${python|python} buildscripts/generate_compile_expansions.py version.json | \
             tee compile_expansions.yml
