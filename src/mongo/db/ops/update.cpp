@@ -48,6 +48,7 @@
 #include "mongo/db/ops/update_lifecycle.h"
 #include "mongo/db/query/explain.h"
 #include "mongo/db/query/get_executor.h"
+#include "mongo/db/repl/repl_client_info.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
 #include "mongo/db/update_index_data.h"
 #include "mongo/util/log.h"
@@ -62,6 +63,10 @@ UpdateResult update(OperationContext* txn,
 
     // Explain should never use this helper.
     invariant(!request.isExplain());
+
+    auto client = txn->getClient();
+    auto lastOpHolder = repl::ReplClientInfo::forClient(client);
+    auto lastOpAtOperationStart = lastOpHolder.getLastOp();
 
     const NamespaceString& nsString = request.getNamespaceString();
     Collection* collection = db->getCollection(nsString.ns());
@@ -99,12 +104,17 @@ UpdateResult update(OperationContext* txn,
     ParsedUpdate parsedUpdate(txn, &request);
     uassertStatusOK(parsedUpdate.parseRequest());
 
-    PlanExecutor* rawExec;
-    uassertStatusOK(getExecutorUpdate(txn, collection, &parsedUpdate, opDebug, &rawExec));
-    std::unique_ptr<PlanExecutor> exec(rawExec);
+    std::unique_ptr<PlanExecutor> exec =
+        uassertStatusOK(getExecutorUpdate(txn, collection, &parsedUpdate, opDebug));
 
     uassertStatusOK(exec->executePlan());
-    return UpdateStage::makeUpdateResult(exec.get(), opDebug);
+
+    // No-ops need to reset lastOp in the client, for write concern.
+    if (lastOpHolder.getLastOp() == lastOpAtOperationStart) {
+        lastOpHolder.setLastOpToSystemLastOpTime(txn);
+    }
+
+    return UpdateStage::makeUpdateResult(*exec, opDebug);
 }
 
 BSONObj applyUpdateOperators(const BSONObj& from, const BSONObj& operators) {

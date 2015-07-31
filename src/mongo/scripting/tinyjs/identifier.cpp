@@ -37,7 +37,12 @@ namespace tinyjs {
 
 Identifier::Identifier(const StringData& value) : TerminalNode(value) {}
 
-const Value Identifier::evaluate(Scope* scope) const {
+
+const Value Identifier::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+
     Value obj = scope->get(getName());
     if (obj == Value()) {
         std::cout << "cannot find identifier" << std::endl;

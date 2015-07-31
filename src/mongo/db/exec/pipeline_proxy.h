@@ -42,24 +42,23 @@ namespace mongo {
 /**
  * Stage for pulling results out from an aggregation pipeline.
  */
-class PipelineProxyStage : public PlanStage {
+class PipelineProxyStage final : public PlanStage {
 public:
     PipelineProxyStage(boost::intrusive_ptr<Pipeline> pipeline,
                        const std::shared_ptr<PlanExecutor>& child,
                        WorkingSet* ws);
 
-    virtual PlanStage::StageState work(WorkingSetID* out);
+    PlanStage::StageState work(WorkingSetID* out) final;
 
-    virtual bool isEOF();
+    bool isEOF() final;
 
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    void doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) final;
 
     //
-    // Manage our OperationContext. We intentionally don't propagate to the child
-    // Runner as that is handled by DocumentSourceCursor as it needs to.
+    // Manage our OperationContext.
     //
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
+    void doDetachFromOperationContext() final;
+    void doReattachToOperationContext(OperationContext* opCtx) final;
 
     /**
      * Make obj the next object returned by getNext().
@@ -73,23 +72,16 @@ public:
     std::shared_ptr<PlanExecutor> getChildExecutor();
 
     // Returns empty PlanStageStats object
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
+
 
     // Not used.
-    virtual CommonStats* getCommonStats() const {
+    SpecificStats* getSpecificStats() const final {
         return NULL;
     }
 
     // Not used.
-    virtual SpecificStats* getSpecificStats() const {
-        return NULL;
-    }
-
-    // Not used.
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    // Not used.
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_PIPELINE_PROXY;
     }
 

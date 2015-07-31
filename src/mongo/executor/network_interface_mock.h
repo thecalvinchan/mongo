@@ -28,7 +28,12 @@
 
 #pragma once
 
-#include <map>
+#include <memory>
+#include <queue>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "mongo/executor/network_interface.h"
 #include "mongo/stdx/condition_variable.h"
@@ -80,12 +85,15 @@ public:
     virtual void shutdown();
     virtual void waitForWork();
     virtual void waitForWorkUntil(Date_t when);
+    virtual void setConnectionHook(std::unique_ptr<ConnectionHook> hook);
     virtual void signalWorkAvailable();
     virtual Date_t now();
+    virtual std::string getHostName();
     virtual void startCommand(const TaskExecutor::CallbackHandle& cbHandle,
                               const RemoteCommandRequest& request,
                               const RemoteCommandCompletionFn& onFinish);
     virtual void cancelCommand(const TaskExecutor::CallbackHandle& cbHandle);
+    virtual void setAlarm(Date_t when, const stdx::function<void()>& action);
 
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -110,6 +118,9 @@ public:
      *
      * Call this before calling any methods that might block waiting for the
      * executor thread.
+     *
+     * It is safe to call exitNetwork() even if enterNetwork() has not been called - it will just
+     * be a no-op.
      */
     void exitNetwork();
 
@@ -159,7 +170,35 @@ public:
      */
     void runReadyNetworkOperations();
 
+    /**
+     * Sets the reply of the 'isMaster' handshake for a specific host. This reply will only
+     * be given to the 'validateHost' method of the ConnectionHook set on this object - NOT
+     * to the completion handlers of any 'isMaster' commands scheduled with 'startCommand'.
+     *
+     * This reply will persist until it is changed again using this method.
+     *
+     * If the NetworkInterfaceMock conducts a handshake with a simulated host which has not
+     * had a handshake reply set, a default constructed RemoteCommandResponse will be passed
+     * to validateHost if a hook is set.
+     */
+    void setHandshakeReplyForHost(const HostAndPort& host, RemoteCommandResponse&& reply);
+
 private:
+    /**
+     * Information describing a scheduled alarm.
+     */
+    struct AlarmInfo {
+        using AlarmAction = stdx::function<void()>;
+        AlarmInfo(Date_t inWhen, AlarmAction inAction)
+            : when(inWhen), action(std::move(inAction)) {}
+        bool operator>(const AlarmInfo& rhs) const {
+            return when > rhs.when;
+        }
+
+        Date_t when;
+        AlarmAction action;
+    };
+
     /**
      * Type used to identify which thread (network mock or executor) is currently executing.
      *
@@ -193,6 +232,16 @@ private:
      * Returns true if the executor thread could run right now.
      */
     bool _isExecutorThreadRunnable_inlock();
+
+    /**
+     * Enqueues a network operation to run in order of 'consideration date'.
+     */
+    void _enqueueOperation_inlock(NetworkOperation&& op);
+
+    /**
+     * "Connects" to a remote host, and then enqueues the provided operation.
+     */
+    void _connectThenEnqueueOperation_inlock(const HostAndPort& target, NetworkOperation&& op);
 
     /**
      * Runs all ready network operations, called while holding "lk".  May drop and
@@ -247,6 +296,21 @@ private:
 
     // List of network operations that will not be responded to until shutdown() is called.
     NetworkOperationList _blackHoled;  // (M)
+
+    // Heap of alarms, with the next alarm always on top.
+    std::priority_queue<AlarmInfo, std::vector<AlarmInfo>, std::greater<AlarmInfo>> _alarms;  // (M)
+
+    // The connection hook.
+    std::unique_ptr<ConnectionHook> _hook;  // (R)
+
+    // The set of hosts we have seen so far. If we see a new host, we will execute the
+    // ConnectionHook's validation and post-connection logic.
+    //
+    // TODO: provide a way to simulate disconnections.
+    std::unordered_set<HostAndPort> _connections;  // (M)
+
+    // The handshake replies set for each host.
+    std::unordered_map<HostAndPort, RemoteCommandResponse> _handshakeReplies;  // (M)
 };
 
 /**
@@ -278,6 +342,10 @@ public:
      */
     bool isForCallback(const TaskExecutor::CallbackHandle& cbHandle) const {
         return cbHandle == _cbHandle;
+    }
+
+    const TaskExecutor::CallbackHandle& getCallbackHandle() const {
+        return _cbHandle;
     }
 
     /**

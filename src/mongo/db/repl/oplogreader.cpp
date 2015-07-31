@@ -76,6 +76,8 @@ bool replAuthenticate(DBClientBase* conn) {
     return authenticateInternalUser(conn);
 }
 
+const Seconds OplogReader::kSocketTimeout(30);
+
 OplogReader::OplogReader() {
     _tailingQueryOptions = QueryOption_SlaveOk;
     _tailingQueryOptions |= QueryOption_CursorTailable | QueryOption_OplogReplay;
@@ -89,7 +91,8 @@ OplogReader::OplogReader() {
 bool OplogReader::connect(const HostAndPort& host) {
     if (conn() == NULL || _host != host) {
         resetConnection();
-        _conn = shared_ptr<DBClientConnection>(new DBClientConnection(false, tcp_timeout));
+        _conn =
+            shared_ptr<DBClientConnection>(new DBClientConnection(false, kSocketTimeout.count()));
         string errmsg;
         if (!_conn->connect(host, errmsg) ||
             (getGlobalAuthorizationManager()->isAuthEnabled() && !replAuthenticate(_conn.get()))) {
@@ -144,7 +147,7 @@ void OplogReader::connectToSyncSource(OperationContext* txn,
     invariant(conn() == NULL);
 
     while (true) {
-        HostAndPort candidate = replCoord->chooseNewSyncSource();
+        HostAndPort candidate = replCoord->chooseNewSyncSource(lastOpTimeFetched.getTimestamp());
 
         if (candidate.empty()) {
             if (oldestOpTimeSeen == sentinel) {
@@ -183,7 +186,8 @@ void OplogReader::connectToSyncSource(OperationContext* txn,
         OpTime remoteOldOpTime = extractOpTime(remoteOldestOp);
 
         // remoteOldOpTime may come from a very old config, so we cannot compare their terms.
-        if (lastOpTimeFetched.getTimestamp() < remoteOldOpTime.getTimestamp()) {
+        if (!lastOpTimeFetched.isNull() &&
+            lastOpTimeFetched.getTimestamp() < remoteOldOpTime.getTimestamp()) {
             // We're too stale to use this sync source.
             resetConnection();
             replCoord->blacklistSyncSource(candidate, Date_t::now() + Minutes(10));

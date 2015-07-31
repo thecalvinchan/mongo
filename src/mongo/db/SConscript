@@ -19,6 +19,7 @@ env.SConscript(
         'pipeline',
         'query',
         'repl',
+        's',
         'sorter',
         'stats',
         'storage',
@@ -41,7 +42,7 @@ env.Library(
         'write_concern_options.cpp'
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/index_names',
         '$BUILD_DIR/mongo/util/foundation',
     ]
@@ -108,6 +109,7 @@ env.Library(
         'startup_warnings_common.cpp',
     ],
     LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
     ]
 )
 
@@ -162,6 +164,9 @@ env.Library(
     source=[
         "index_names.cpp",
     ],
+    LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
+    ]
 )
 
 env.Library(
@@ -169,6 +174,11 @@ env.Library(
     source=[
         "hasher.cpp",
     ],
+    LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/util/foundation',
+        '$BUILD_DIR/mongo/util/md5',
+    ]
 )
 
 # Range arithmetic library, used by both mongod and mongos
@@ -178,7 +188,7 @@ env.Library(
         'range_arithmetic.cpp',
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/util/foundation',
     ],
 )
@@ -198,6 +208,9 @@ env.Library(
     source=[
         'global_timestamp.cpp',
     ],
+    LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
+    ]
 )
 
 env.Library(
@@ -226,7 +239,7 @@ env.Library(
         "server_parameters.cpp",
     ],
     LIBDEPS=[
-        "$BUILD_DIR/mongo/bson/bson",
+        "$BUILD_DIR/mongo/base",
         "$BUILD_DIR/mongo/util/foundation",
     ],
 )
@@ -258,7 +271,7 @@ env.CppUnitTest(
         'update_index_data_test.cpp',
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
         'common',
         'update_index_data',
     ],
@@ -274,7 +287,7 @@ env.Library(
         "server_options.cpp",
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
     ],
 )
 
@@ -284,7 +297,7 @@ env.Library(
         "server_options_helpers.cpp",
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/util/cmdline_utils/cmdline_utils',
         # The dependency on network is a temporary crutch that should go away once the
         # networking library has separate options
@@ -312,8 +325,8 @@ env.Library(
         'range_deleter_mock_env.cpp',
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/base/base',
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/common',
         '$BUILD_DIR/mongo/db/repl/repl_coordinator_global',
         '$BUILD_DIR/mongo/db/service_context',
         '$BUILD_DIR/mongo/util/concurrency/synchronization',
@@ -343,9 +356,15 @@ env.Library(
         "server_extra_log_context.cpp",
     ],
     LIBDEPS=[
+        "$BUILD_DIR/mongo/client/clientdriver",
+        "$BUILD_DIR/mongo/rpc/command_reply",
+        "$BUILD_DIR/mongo/rpc/command_request",
+        "$BUILD_DIR/mongo/rpc/metadata",
         "$BUILD_DIR/mongo/util/net/message_server_port",
         "$BUILD_DIR/mongo/util/net/miniwebserver",
+        "$BUILD_DIR/mongo/util/processinfo",
         "$BUILD_DIR/mongo/util/signal_handlers",
+        "auth/authorization_manager_global",
     ],
 )
 
@@ -406,9 +425,7 @@ env.Library(
     ],
 )
 
-coredbEnv = env.Clone()
-coredbEnv.InjectThirdPartyIncludePaths(libraries=['snappy'])
-coredbEnv.Library(
+env.Library(
     target="coredb",
     source=[
         "audit.cpp",
@@ -427,44 +444,15 @@ coredbEnv.Library(
         "commands/parameters.cpp",
         "commands/user_management_commands_common.cpp",
         "commands/write_commands/write_commands_common.cpp",
-        "pipeline/pipeline.cpp",
         "dbcommands_generic.cpp",
-        "matcher/matcher.cpp",
-        "pipeline/accumulator_add_to_set.cpp",
-        "pipeline/accumulator_avg.cpp",
-        "pipeline/accumulator_first.cpp",
-        "pipeline/accumulator_last.cpp",
-        "pipeline/accumulator_min_max.cpp",
-        "pipeline/accumulator_push.cpp",
-        "pipeline/accumulator_std_dev.cpp",
-        "pipeline/accumulator_sum.cpp",
-        "pipeline/dependencies.cpp",
-        "pipeline/document_source.cpp",
-        "pipeline/document_source_bson_array.cpp",
-        "pipeline/document_source_command_shards.cpp",
-        "pipeline/document_source_geo_near.cpp",
-        "pipeline/document_source_group.cpp",
-        "pipeline/document_source_limit.cpp",
-        "pipeline/document_source_match.cpp",
-        "pipeline/document_source_merge_cursors.cpp",
-        "pipeline/document_source_out.cpp",
-        "pipeline/document_source_project.cpp",
-        "pipeline/document_source_redact.cpp",
-        "pipeline/document_source_skip.cpp",
-        "pipeline/document_source_sort.cpp",
-        "pipeline/document_source_unwind.cpp",
-        "pipeline/expression.cpp",
-        "stats/timer_stats.cpp",
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/client/clientdriver',
-        '$BUILD_DIR/mongo/client/remote_command_runner',
         '$BUILD_DIR/mongo/logger/parse_log_component_settings',
         '$BUILD_DIR/mongo/scripting/scripting_common',
         '$BUILD_DIR/mongo/util/cmdline_utils/cmdline_utils',
         '$BUILD_DIR/mongo/util/foundation',
         '$BUILD_DIR/mongo/util/processinfo',
-        '$BUILD_DIR/third_party/shim_snappy',
         'auth/serverauth',
         'commands/server_status_core',
         'common',
@@ -475,11 +463,11 @@ coredbEnv.Library(
         'matcher/expressions',
         'matcher/expressions_geo',
         'matcher/expressions_text',
-        'pipeline/document_value',
         'server_options',
         'server_parameters',
         'startup_warnings_common',
         'stats/counters',
+        'stats/timer_stats',
     ],
 )
 
@@ -529,9 +517,10 @@ serverOnlyFiles = [
     "commands/geo_near_cmd.cpp",
     "commands/get_last_error.cpp",
     "commands/getmore_cmd.cpp",
-    "commands/group.cpp",
+    "commands/group_cmd.cpp",
     "commands/index_filter_commands.cpp",
     "commands/kill_op.cpp",
+    "commands/killcursors_cmd.cpp",
     "commands/list_collections.cpp",
     "commands/list_databases.cpp",
     "commands/list_indexes.cpp",
@@ -543,6 +532,7 @@ serverOnlyFiles = [
     "commands/plan_cache_commands.cpp",
     "commands/rename_collection.cpp",
     "commands/repair_cursor.cpp",
+    "commands/snapshot_management.cpp",
     "commands/test_commands.cpp",
     "commands/top_command.cpp",
     "commands/touch.cpp",
@@ -587,7 +577,6 @@ serverOnlyFiles = [
     "range_deleter_db_env.cpp",
     "range_deleter_service.cpp",
     "repair_database.cpp",
-    "repl/bgsync.cpp",
     "repl/initial_sync.cpp",
     "repl/master_slave.cpp",
     "repl/minvalid.cpp",
@@ -625,13 +614,12 @@ serveronlyEnv = env.Clone()
 serveronlyEnv.InjectThirdPartyIncludePaths(libraries=['snappy'])
 serveronlyLibdeps = [
     "$BUILD_DIR/mongo/client/parallel",
-    "$BUILD_DIR/mongo/executor/network_interface_impl",
+    "$BUILD_DIR/mongo/executor/network_interface_factory",
     "$BUILD_DIR/mongo/s/batch_write_types",
     "$BUILD_DIR/mongo/s/catalog/legacy/catalog_manager_legacy",
     "$BUILD_DIR/mongo/s/catalog/replset/catalog_manager_replica_set",
     "$BUILD_DIR/mongo/s/client/sharding_connection_hook",
     "$BUILD_DIR/mongo/s/coreshard",
-    "$BUILD_DIR/mongo/s/metadata",
     "$BUILD_DIR/mongo/s/serveronly",
     "$BUILD_DIR/mongo/scripting/scripting_server",
     "$BUILD_DIR/mongo/util/elapsed_tracker",
@@ -650,18 +638,21 @@ serveronlyLibdeps = [
     "global_timestamp",
     "index/index_descriptor",
     "ops/update_driver",
+    "pipeline/document_source",
+    "pipeline/pipeline",
     "query/query",
     "range_deleter",
+    "repl/bgsync",
     "repl/repl_coordinator_global",
     "repl/repl_coordinator_impl",
     "repl/repl_settings",
-    "repl/replication_executor",
-    "repl/replication_executor",
     "repl/replset_commands",
     "repl/rs_rollback",
     "repl/rslog",
     "repl/sync_tail",
     "repl/topology_coordinator_impl",
+    "s/metadata",
+    "s/sharding",
     "startup_warnings_mongod",
     "stats/counters",
     "stats/top",
@@ -689,7 +680,11 @@ env.Library(
     source=[
         'log_process_details.cpp',
     ],
-    LIBDEPS=[],
+    LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/util/net/network',
+        'server_options',
+    ],
 )
 
 env.Library(
@@ -698,5 +693,9 @@ env.Library(
         'conn_pool_options.cpp',
     ],
     LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/client/clientdriver',
+        '$BUILD_DIR/mongo/db/server_parameters',
+        '$BUILD_DIR/mongo/s/client/sharding_client',
     ],
 )

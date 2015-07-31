@@ -63,6 +63,8 @@ void CollectionOptions::reset() {
     temp = false;
     storageEngine = BSONObj();
     validator = BSONObj();
+    validationLevel = "";
+    validationAction = "";
 }
 
 bool CollectionOptions::isValid() const {
@@ -161,6 +163,18 @@ Status CollectionOptions::parse(const BSONObj& options) {
             }
 
             validator = e.Obj().getOwned();
+        } else if (fieldName == "validationAction") {
+            if (e.type() != mongo::String) {
+                return Status(ErrorCodes::BadValue, "'validationAction' has to be a string.");
+            }
+
+            validationAction = e.String();
+        } else if (fieldName == "validationLevel") {
+            if (e.type() != mongo::String) {
+                return Status(ErrorCodes::BadValue, "'validationLevel' has to be a string.");
+            }
+
+            validationLevel = e.String();
         }
     }
 
@@ -197,6 +211,14 @@ BSONObj CollectionOptions::toBSON() const {
 
     if (!validator.isEmpty()) {
         b.append("validator", validator);
+    }
+
+    if (!validationLevel.empty()) {
+        b.append("validationLevel", validationLevel);
+    }
+
+    if (!validationAction.empty()) {
+        b.append("validationAction", validationAction);
     }
 
     return b.obj();

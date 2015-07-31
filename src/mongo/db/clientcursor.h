@@ -31,12 +31,10 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/query/plan_executor.h"
 #include "mongo/db/record_id.h"
-#include "mongo/s/collection_metadata.h"
 #include "mongo/util/net/message.h"
 
 namespace mongo {
 
-class ClientCursor;
 class Collection;
 class CursorManager;
 class RecoveryUnit;
@@ -61,12 +59,15 @@ public:
     ClientCursor(CursorManager* cursorManager,
                  PlanExecutor* exec,
                  const std::string& ns,
+                 bool isReadCommitted,
                  int qopts = 0,
                  const BSONObj query = BSONObj(),
                  bool isAggCursor = false);
 
     /**
      * This ClientCursor is used to track sharding state for the given collection.
+     *
+     * Do not use outside of RangePreserver!
      */
     explicit ClientCursor(const Collection* collection);
 
@@ -82,6 +83,9 @@ public:
     }
     CursorManager* cursorManager() const {
         return _cursorManager;
+    }
+    bool isReadCommitted() const {
+        return _isReadCommitted;
     }
     bool isAggCursor() const {
         return _isAggCursor;
@@ -170,60 +174,17 @@ public:
     }
 
     // Used by ops/query.cpp to stash how many results have been returned by a query.
-    int pos() const {
+    long long pos() const {
         return _pos;
     }
-    void incPos(int n) {
+    void incPos(long long n) {
         _pos += n;
     }
-    void setPos(int n) {
+    void setPos(long long n) {
         _pos = n;
     }
 
     static long long totalOpen();
-
-    //
-    // Storage engine state for getMore.
-    //
-
-    bool hasRecoveryUnit() const {
-        return _ownedRU.get() || _unownedRU;
-    }
-
-    /**
-     *
-     * If a ClientCursor is created via DBDirectClient, it uses the same storage engine
-     * context as the DBDirectClient caller.  We store this context in _unownedRU.  We use
-     * this to verify that all further callers use the same RecoveryUnit.
-     *
-     * Once a ClientCursor has an unowned RecoveryUnit, it will always have one.
-     *
-     * Sets the unowned RecoveryUnit to 'ru'.  Does NOT take ownership of the pointer.
-     */
-    void setUnownedRecoveryUnit(RecoveryUnit* ru);
-
-    /**
-     * Return the unowned RecoveryUnit.  'this' does not own pointer and therefore cannot
-     * transfer ownership.
-     */
-    RecoveryUnit* getUnownedRecoveryUnit() const;
-
-    /**
-     * If a ClientCursor is created via a client request, we bind its lifetime to the
-     * ClientCursor's by storing it un _ownedRU.  In order to execute the query over repeated
-     * network requests, we have to keep the execution state around.
-     */
-
-    /**
-     * Set the owned recovery unit to 'ru'.  Takes ownership of it.  If there is a previous
-     * owned recovery unit, it is deleted.
-     */
-    void setOwnedRecoveryUnit(RecoveryUnit* ru);
-
-    /**
-     * Returns the owned recovery unit.  Ownership is transferred to the caller.
-     */
-    RecoveryUnit* releaseOwnedRecoveryUnit();
 
 private:
     friend class CursorManager;
@@ -250,13 +211,15 @@ private:
     // The namespace we're operating on.
     std::string _ns;
 
+    const bool _isReadCommitted;
+
     CursorManager* _cursorManager;
 
     // if we've added it to the total open counter yet
     bool _countedYet;
 
     // How many objects have been returned by the find() so far?
-    int _pos;
+    long long _pos;
 
     // If this cursor was created by a find operation, '_query' holds the query predicate for
     // the find. If this cursor was created by a command (e.g. the aggregate command), then
@@ -272,7 +235,7 @@ private:
     // should not be killed or destroyed when the underlying collection is deleted.
     //
     // Note: This should *not* be set for the internal cursor used as input to an aggregation.
-    bool _isAggCursor;
+    const bool _isAggCursor;
 
     // Is this cursor in use?  Defaults to false.
     bool _isPinned;
@@ -289,20 +252,6 @@ private:
 
     // TODO: Document.
     uint64_t _leftoverMaxTimeMicros;
-
-    // For chunks that are being migrated, there is a period of time when that chunks data is in
-    // two shards, the donor and the receiver one. That data is picked up by a cursor on the
-    // receiver side, even before the migration was decided.  The CollectionMetadata allow one
-    // to inquiry if any given document of the collection belongs indeed to this shard or if it
-    // is coming from (or a vestige of) an ongoing migration.
-    CollectionMetadataPtr _collMetadata;
-
-    // Only one of these is not-NULL.
-    RecoveryUnit* _unownedRU;
-    std::unique_ptr<RecoveryUnit> _ownedRU;
-    // NOTE: _ownedRU must come before _exec, because _ownedRU must outlive _exec.
-    // The storage engine can have resources in the PlanExecutor that rely on
-    // the RecoveryUnit being alive.
 
     //
     // The underlying execution machinery.

@@ -94,15 +94,6 @@ const char* getUserDir() {
 
 // real methods
 
-BSONObj Quit(const BSONObj& args, void* data) {
-    // If no arguments are given first element will be EOO, which
-    // converts to the integer value 0.
-    goingAwaySoon();
-    int exit_code = int(args.firstElement().number());
-    quickExit(exit_code);
-    return undefinedReturn;
-}
-
 BSONObj JSGetMemInfo(const BSONObj& args, void* data) {
     ProcessInfo pi;
     uassert(10258, "processinfo not supported", pi.supported());
@@ -231,7 +222,6 @@ BSONObj interpreterVersion(const BSONObj& a, void* data) {
 }
 
 void installShellUtils(Scope& scope) {
-    scope.injectNative("quit", Quit);
     scope.injectNative("getMemInfo", JSGetMemInfo);
     scope.injectNative("_replMonitorStats", replMonitorStats);
     scope.injectNative("_srand", JSSrand);
@@ -352,7 +342,12 @@ void onConnect(DBClientWithCommands& c) {
     if (_nokillop) {
         return;
     }
-    c.setClientRPCProtocols(shellGlobalParams.rpcProtocols);
+
+    // Only override the default rpcProtocols if they were set on the command line.
+    if (shellGlobalParams.rpcProtocols) {
+        c.setClientRPCProtocols(*shellGlobalParams.rpcProtocols);
+    }
+
     connectionRegistry.registerConnection(c);
 }
 

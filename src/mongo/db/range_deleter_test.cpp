@@ -36,25 +36,15 @@
 #include "mongo/db/service_context.h"
 #include "mongo/db/write_concern_options.h"
 #include "mongo/stdx/functional.h"
+#include "mongo/stdx/future.h"
 #include "mongo/stdx/thread.h"
 #include "mongo/unittest/unittest.h"
+#include "mongo/util/scopeguard.h"
 
+namespace mongo {
 namespace {
 
 using std::string;
-
-using mongo::BSONObj;
-using mongo::CursorId;
-using mongo::DeletedRange;
-using mongo::FieldParser;
-using mongo::KeyRange;
-using mongo::Notification;
-using mongo::RangeDeleter;
-using mongo::RangeDeleterMockEnv;
-using mongo::RangeDeleterOptions;
-using mongo::OperationContext;
-
-namespace stdx = mongo::stdx;
 
 OperationContext* const noTxn = NULL;  // MockEnv doesn't need txn XXX SERVER-13931
 
@@ -163,13 +153,6 @@ TEST(QueuedDelete, StopWhileWaitingCursor) {
     ASSERT_FALSE(env->deleteOccured());
 }
 
-static void rangeDeleterDeleteNow(RangeDeleter* deleter,
-                                  OperationContext* txn,
-                                  const RangeDeleterOptions& deleterOptions,
-                                  std::string* errMsg) {
-    deleter->deleteNow(txn, deleterOptions, errMsg);
-}
-
 // Should not start delete if the set of cursors that were open when the
 // deleteNow method is called is still open.
 TEST(ImmediateDelete, ShouldWaitCursor) {
@@ -191,8 +174,19 @@ TEST(ImmediateDelete, ShouldWaitCursor) {
     RangeDeleterOptions deleterOption(
         KeyRange(ns, BSON("x" << 0), BSON("x" << 10), BSON("x" << 1)));
     deleterOption.waitForOpenCursors = true;
-    stdx::thread deleterThread = stdx::thread(
-        mongo::stdx::bind(rangeDeleterDeleteNow, &deleter, noTxn, deleterOption, &errMsg));
+
+    // VS2013 Doesn't support future<void>, so fake it with a bool.
+    stdx::packaged_task<bool()> deleterTask([&] {
+        deleter.deleteNow(noTxn, deleterOption, &errMsg);
+        return true;
+    });
+    stdx::future<bool> deleterFuture = deleterTask.get_future();
+    stdx::thread deleterThread(std::move(deleterTask));
+
+    auto guard = MakeGuard([&] {
+        deleter.stopWorkers();
+        deleterThread.join();
+    });
 
     env->waitForNthGetCursor(1u);
 
@@ -206,8 +200,8 @@ TEST(ImmediateDelete, ShouldWaitCursor) {
     env->addCursorId(ns, 200);
     env->removeCursorId(ns, 345);
 
-    ASSERT_TRUE(
-        deleterThread.timed_join(boost::posix_time::seconds(MAX_IMMEDIATE_DELETE_WAIT_SECS)));
+    ASSERT_TRUE(stdx::future_status::ready ==
+                deleterFuture.wait_for(stdx::chrono::seconds(MAX_IMMEDIATE_DELETE_WAIT_SECS)));
 
     ASSERT_TRUE(env->deleteOccured());
     const DeletedRange deletedChunk(env->getLastDelete());
@@ -216,8 +210,6 @@ TEST(ImmediateDelete, ShouldWaitCursor) {
     ASSERT_TRUE(deletedChunk.min.equal(BSON("x" << 0)));
     ASSERT_TRUE(deletedChunk.max.equal(BSON("x" << 10)));
     ASSERT_TRUE(deletedChunk.shardKeyPattern.equal(BSON("x" << 1)));
-
-    deleter.stopWorkers();
 }
 
 // Should terminate when stop is requested.
@@ -240,8 +232,17 @@ TEST(ImmediateDelete, StopWhileWaitingCursor) {
     RangeDeleterOptions deleterOption(
         KeyRange(ns, BSON("x" << 0), BSON("x" << 10), BSON("x" << 1)));
     deleterOption.waitForOpenCursors = true;
-    stdx::thread deleterThread = stdx::thread(
-        mongo::stdx::bind(rangeDeleterDeleteNow, &deleter, noTxn, deleterOption, &errMsg));
+
+    // VS2013 Doesn't support future<void>, so fake it with a bool.
+    stdx::packaged_task<bool()> deleterTask([&] {
+        deleter.deleteNow(noTxn, deleterOption, &errMsg);
+        return true;
+    });
+    stdx::future<bool> deleterFuture = deleterTask.get_future();
+    stdx::thread deleterThread(std::move(deleterTask));
+
+    auto join_thread_guard = MakeGuard([&] { deleterThread.join(); });
+    auto stop_deleter_guard = MakeGuard([&] { deleter.stopWorkers(); });
 
     env->waitForNthGetCursor(1u);
 
@@ -251,10 +252,10 @@ TEST(ImmediateDelete, StopWhileWaitingCursor) {
 
     ASSERT_FALSE(env->deleteOccured());
 
-    deleter.stopWorkers();
+    stop_deleter_guard.Execute();
 
-    ASSERT_TRUE(
-        deleterThread.timed_join(boost::posix_time::seconds(MAX_IMMEDIATE_DELETE_WAIT_SECS)));
+    ASSERT_TRUE(stdx::future_status::ready ==
+                deleterFuture.wait_for(stdx::chrono::seconds(MAX_IMMEDIATE_DELETE_WAIT_SECS)));
 
     ASSERT_FALSE(env->deleteOccured());
 }
@@ -362,3 +363,4 @@ TEST(MixedDeletes, MultipleDeletes) {
 }
 
 }  // unnamed namespace
+}  // namespace mongo

@@ -33,11 +33,13 @@
 #include "mongo/db/catalog/collection.h"
 #include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set_common.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* CountStage::kStageType = "COUNT";
@@ -47,15 +49,15 @@ CountStage::CountStage(OperationContext* txn,
                        const CountRequest& request,
                        WorkingSet* ws,
                        PlanStage* child)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _collection(collection),
       _request(request),
       _leftToSkip(request.getSkip()),
-      _ws(ws),
-      _child(child),
-      _commonStats(kStageType) {}
-
-CountStage::~CountStage() {}
+      _ws(ws) {
+    if (child)
+        _children.emplace_back(child);
+}
 
 bool CountStage::isEOF() {
     if (_specificStats.trivialCount) {
@@ -66,7 +68,7 @@ bool CountStage::isEOF() {
         return true;
     }
 
-    return NULL != _child.get() && _child->isEOF();
+    return !_children.empty() && child()->isEOF();
 }
 
 void CountStage::trivialCount() {
@@ -117,16 +119,16 @@ PlanStage::StageState CountStage::work(WorkingSetID* out) {
 
     // For non-trivial counts, we should always have a child stage from which we can retrieve
     // results.
-    invariant(_child.get());
+    invariant(child());
     WorkingSetID id = WorkingSet::INVALID_ID;
-    PlanStage::StageState state = _child->work(&id);
+    PlanStage::StageState state = child()->work(&id);
 
     if (PlanStage::IS_EOF == state) {
         _commonStats.isEOF = true;
         return PlanStage::IS_EOF;
     } else if (PlanStage::DEAD == state) {
         return state;
-    } else if (PlanStage::FAILURE == state || PlanStage::DEAD == state) {
+    } else if (PlanStage::FAILURE == state) {
         *out = id;
         // If a stage fails, it may create a status WSM to indicate why it failed, in which
         // case 'id' is valid. If ID is invalid, we create our own error message.
@@ -161,51 +163,18 @@ PlanStage::StageState CountStage::work(WorkingSetID* out) {
     return PlanStage::NEED_TIME;
 }
 
-void CountStage::saveState() {
-    _txn = NULL;
-    ++_commonStats.yields;
-    if (_child.get()) {
-        _child->saveState();
-    }
-}
-
-void CountStage::restoreState(OperationContext* opCtx) {
-    invariant(_txn == NULL);
+void CountStage::doReattachToOperationContext(OperationContext* opCtx) {
     _txn = opCtx;
-    ++_commonStats.unyields;
-    if (_child.get()) {
-        _child->restoreState(opCtx);
-    }
 }
 
-void CountStage::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
-    if (_child.get()) {
-        _child->invalidate(txn, dl, type);
-    }
-}
-
-vector<PlanStage*> CountStage::getChildren() const {
-    vector<PlanStage*> children;
-    if (_child.get()) {
-        children.push_back(_child.get());
-    }
-    return children;
-}
-
-PlanStageStats* CountStage::getStats() {
+unique_ptr<PlanStageStats> CountStage::getStats() {
     _commonStats.isEOF = isEOF();
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_COUNT));
-    CountStats* countStats = new CountStats(_specificStats);
-    ret->specific.reset(countStats);
-    if (_child.get()) {
-        ret->children.push_back(_child->getStats());
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_COUNT);
+    ret->specific = make_unique<CountStats>(_specificStats);
+    if (!_children.empty()) {
+        ret->children.push_back(child()->getStats().release());
     }
-    return ret.release();
-}
-
-const CommonStats* CountStage::getCommonStats() const {
-    return &_commonStats;
+    return ret;
 }
 
 const SpecificStats* CountStage::getSpecificStats() const {

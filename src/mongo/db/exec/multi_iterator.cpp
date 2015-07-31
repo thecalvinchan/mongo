@@ -33,25 +33,26 @@
 #include "mongo/db/concurrency/write_conflict_exception.h"
 #include "mongo/db/exec/working_set_common.h"
 #include "mongo/db/storage/record_fetcher.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
+using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 const char* MultiIteratorStage::kStageType = "MULTI_ITERATOR";
 
 MultiIteratorStage::MultiIteratorStage(OperationContext* txn,
                                        WorkingSet* ws,
                                        Collection* collection)
-    : _txn(txn), _collection(collection), _ws(ws), _wsidForFetch(_ws->allocate()) {
-    // We pre-allocate a WSM and use it to pass up fetch requests. This should never be used
-    // for anything other than passing up NEED_YIELD. We use the loc and owned obj state, but
-    // the loc isn't really pointing at any obj. The obj field of the WSM should never be used.
-    WorkingSetMember* member = _ws->get(_wsidForFetch);
-    member->state = WorkingSetMember::LOC_AND_OWNED_OBJ;
-}
+    : PlanStage(kStageType),
+      _txn(txn),
+      _collection(collection),
+      _ws(ws),
+      _wsidForFetch(_ws->allocate()) {}
 
-void MultiIteratorStage::addIterator(std::unique_ptr<RecordCursor> it) {
+void MultiIteratorStage::addIterator(unique_ptr<RecordCursor> it) {
     _iterators.push_back(std::move(it));
 }
 
@@ -92,7 +93,7 @@ PlanStage::StageState MultiIteratorStage::work(WorkingSetID* out) {
     WorkingSetMember* member = _ws->get(*out);
     member->loc = record->id;
     member->obj = {_txn->recoveryUnit()->getSnapshotId(), record->data.releaseToBson()};
-    member->state = WorkingSetMember::LOC_AND_UNOWNED_OBJ;
+    _ws->transitionToLocAndObj(*out);
     return PlanStage::ADVANCED;
 }
 
@@ -105,26 +106,38 @@ void MultiIteratorStage::kill() {
     _iterators.clear();
 }
 
-void MultiIteratorStage::saveState() {
-    _txn = NULL;
-    for (size_t i = 0; i < _iterators.size(); i++) {
-        _iterators[i]->savePositioned();
+void MultiIteratorStage::doSaveState() {
+    for (auto&& iterator : _iterators) {
+        iterator->savePositioned();
     }
 }
 
-void MultiIteratorStage::restoreState(OperationContext* opCtx) {
-    invariant(_txn == NULL);
-    _txn = opCtx;
-    for (size_t i = 0; i < _iterators.size(); i++) {
-        if (!_iterators[i]->restore(opCtx)) {
+void MultiIteratorStage::doRestoreState() {
+    for (auto&& iterator : _iterators) {
+        if (!iterator->restore()) {
             kill();
         }
     }
 }
 
-void MultiIteratorStage::invalidate(OperationContext* txn,
-                                    const RecordId& dl,
-                                    InvalidationType type) {
+void MultiIteratorStage::doDetachFromOperationContext() {
+    _txn = NULL;
+    for (auto&& iterator : _iterators) {
+        iterator->detachFromOperationContext();
+    }
+}
+
+void MultiIteratorStage::doReattachToOperationContext(OperationContext* opCtx) {
+    invariant(_txn == NULL);
+    _txn = opCtx;
+    for (auto&& iterator : _iterators) {
+        iterator->reattachToOperationContext(opCtx);
+    }
+}
+
+void MultiIteratorStage::doInvalidate(OperationContext* txn,
+                                      const RecordId& dl,
+                                      InvalidationType type) {
     switch (type) {
         case INVALIDATION_DELETION:
             for (size_t i = 0; i < _iterators.size(); i++) {
@@ -137,16 +150,11 @@ void MultiIteratorStage::invalidate(OperationContext* txn,
     }
 }
 
-vector<PlanStage*> MultiIteratorStage::getChildren() const {
-    vector<PlanStage*> empty;
-    return empty;
-}
-
-PlanStageStats* MultiIteratorStage::getStats() {
-    std::unique_ptr<PlanStageStats> ret(
-        new PlanStageStats(CommonStats(kStageType), STAGE_MULTI_ITERATOR));
-    ret->specific.reset(new CollectionScanStats());
-    return ret.release();
+unique_ptr<PlanStageStats> MultiIteratorStage::getStats() {
+    unique_ptr<PlanStageStats> ret =
+        make_unique<PlanStageStats>(CommonStats(kStageType), STAGE_MULTI_ITERATOR);
+    ret->specific = make_unique<CollectionScanStats>();
+    return ret;
 }
 
 }  // namespace mongo

@@ -64,6 +64,9 @@ public:
     virtual bool isWriteCommandForConfigServer() const {
         return false;
     }
+    bool supportsReadConcern() const final {
+        return true;
+    }
 
     virtual void addRequiredPrivileges(const std::string& dbname,
                                        const BSONObj& cmdObj,
@@ -123,17 +126,16 @@ public:
             return true;
         }
 
-        PlanExecutor* rawExec;
-        Status status =
-            getExecutorDistinct(txn, collection, query, key, PlanExecutor::YIELD_AUTO, &rawExec);
-        if (!status.isOK()) {
+        auto statusWithPlanExecutor =
+            getExecutorDistinct(txn, collection, query, key, PlanExecutor::YIELD_AUTO);
+        if (!statusWithPlanExecutor.isOK()) {
             uasserted(17216,
                       mongoutils::str::stream() << "Can't get executor for query " << query << ": "
-                                                << status.toString());
+                                                << statusWithPlanExecutor.getStatus().toString());
             return 0;
         }
 
-        unique_ptr<PlanExecutor> exec(rawExec);
+        unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
         BSONObj obj;
         PlanExecutor::ExecState state;
@@ -165,7 +167,7 @@ public:
 
         // Get summary information about the plan.
         PlanSummaryStats stats;
-        Explain::getSummaryStats(exec.get(), &stats);
+        Explain::getSummaryStats(*exec, &stats);
 
         verify(start == bb.buf());
 

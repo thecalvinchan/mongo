@@ -261,12 +261,11 @@ public:
                         str::stream() << "database " << dbName << " does not exist."};
             }
 
-            PlanExecutor* rawExec;
-            Status execStatus = getExecutorDelete(txn, collection, &parsedDelete, &rawExec);
-            if (!execStatus.isOK()) {
-                return execStatus;
+            auto statusWithPlanExecutor = getExecutorDelete(txn, collection, &parsedDelete);
+            if (!statusWithPlanExecutor.isOK()) {
+                return statusWithPlanExecutor.getStatus();
             }
-            const std::unique_ptr<PlanExecutor> exec(rawExec);
+            const std::unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
             Explain::explainStages(exec.get(), verbosity, out);
         } else {
             UpdateRequest request(nsString);
@@ -298,13 +297,12 @@ public:
                         str::stream() << "database " << dbName << " does not exist."};
             }
 
-            PlanExecutor* rawExec;
-            Status execStatus =
-                getExecutorUpdate(txn, collection, &parsedUpdate, opDebug, &rawExec);
-            if (!execStatus.isOK()) {
-                return execStatus;
+            auto statusWithPlanExecutor =
+                getExecutorUpdate(txn, collection, &parsedUpdate, opDebug);
+            if (!statusWithPlanExecutor.isOK()) {
+                return statusWithPlanExecutor.getStatus();
             }
-            const std::unique_ptr<PlanExecutor> exec(rawExec);
+            const std::unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
             Explain::explainStages(exec.get(), verbosity, out);
         }
 
@@ -346,6 +344,7 @@ public:
             maybeDisableValidation.emplace(txn);
 
         auto client = txn->getClient();
+        auto lastOpAtOperationStart = repl::ReplClientInfo::forClient(client).getLastOp();
 
         // We may encounter a WriteConflictException when creating a collection during an
         // upsert, even when holding the exclusive lock on the database (due to other load on
@@ -378,12 +377,12 @@ public:
                     return appendCommandStatus(result, isPrimary);
                 }
 
-                PlanExecutor* rawExec;
-                Status execStatus = getExecutorDelete(txn, collection, &parsedDelete, &rawExec);
-                if (!execStatus.isOK()) {
-                    return appendCommandStatus(result, execStatus);
+                auto statusWithPlanExecutor = getExecutorDelete(txn, collection, &parsedDelete);
+                if (!statusWithPlanExecutor.isOK()) {
+                    return appendCommandStatus(result, statusWithPlanExecutor.getStatus());
                 }
-                const std::unique_ptr<PlanExecutor> exec(rawExec);
+                const std::unique_ptr<PlanExecutor> exec =
+                    std::move(statusWithPlanExecutor.getValue());
 
                 StatusWith<boost::optional<BSONObj>> advanceStatus =
                     advanceExecutor(exec.get(), args.isRemove());
@@ -447,13 +446,13 @@ public:
                     }
                 }
 
-                PlanExecutor* rawExec;
-                Status execStatus =
-                    getExecutorUpdate(txn, collection, &parsedUpdate, opDebug, &rawExec);
-                if (!execStatus.isOK()) {
-                    return appendCommandStatus(result, execStatus);
+                auto statusWithPlanExecutor =
+                    getExecutorUpdate(txn, collection, &parsedUpdate, opDebug);
+                if (!statusWithPlanExecutor.isOK()) {
+                    return appendCommandStatus(result, statusWithPlanExecutor.getStatus());
                 }
-                const std::unique_ptr<PlanExecutor> exec(rawExec);
+                const std::unique_ptr<PlanExecutor> exec =
+                    std::move(statusWithPlanExecutor.getValue());
 
                 StatusWith<boost::optional<BSONObj>> advanceStatus =
                     advanceExecutor(exec.get(), args.isRemove());
@@ -466,6 +465,11 @@ public:
             }
         }
         MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "findAndModify", nsString.ns());
+
+        // No-ops need to reset lastOp in the client, for write concern.
+        if (repl::ReplClientInfo::forClient(client).getLastOp() == lastOpAtOperationStart) {
+            repl::ReplClientInfo::forClient(client).setLastOpToSystemLastOpTime(txn);
+        }
 
         WriteConcernResult res;
         auto waitForWCStatus = waitForWriteConcern(

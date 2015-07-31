@@ -71,7 +71,7 @@ private:
  *
  * Callers of work() must be holding a write lock.
  */
-class UpdateStage : public PlanStage {
+class UpdateStage final : public PlanStage {
     MONGO_DISALLOW_COPYING(UpdateStage);
 
 public:
@@ -81,24 +81,19 @@ public:
                 Collection* collection,
                 PlanStage* child);
 
-    virtual bool isEOF();
-    virtual StageState work(WorkingSetID* out);
+    bool isEOF() final;
+    StageState work(WorkingSetID* out) final;
 
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    void doRestoreState() final;
+    void doReattachToOperationContext(OperationContext* opCtx) final;
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_UPDATE;
     }
 
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -111,7 +106,7 @@ public:
      *
      * Should only be called once this stage is EOF.
      */
-    static UpdateResult makeUpdateResult(PlanExecutor* exec, OpDebug* opDebug);
+    static UpdateResult makeUpdateResult(const PlanExecutor& exec, OpDebug* opDebug);
 
     /**
      * Computes the document to insert if the upsert flag is set to true and no matching
@@ -169,7 +164,7 @@ private:
     /**
      * Helper for restoring the state of this update.
      */
-    Status restoreUpdateState(OperationContext* opCtx);
+    Status restoreUpdateState();
 
     // Transactional context.  Not owned by us.
     OperationContext* _txn;
@@ -182,9 +177,6 @@ private:
     // Not owned by us. May be NULL.
     Collection* _collection;
 
-    // Owned by us.
-    std::unique_ptr<PlanStage> _child;
-
     // If not WorkingSet::INVALID_ID, we use this rather than asking our child what to do next.
     WorkingSetID _idRetrying;
 
@@ -192,7 +184,6 @@ private:
     WorkingSetID _idReturning;
 
     // Stats
-    CommonStats _commonStats;
     UpdateStats _specificStats;
 
     // If the update was in-place, we may see it again.  This only matters if we're doing

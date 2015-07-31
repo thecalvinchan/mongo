@@ -33,7 +33,8 @@
 #include "mongo/s/catalog/legacy/config_upgrade.h"
 
 #include "mongo/s/catalog/catalog_manager.h"
-#include "mongo/s/type_config_version.h"
+#include "mongo/s/catalog/config_server_version.h"
+#include "mongo/s/catalog/type_config_version.h"
 #include "mongo/util/log.h"
 #include "mongo/util/mongoutils/str.h"
 
@@ -74,7 +75,7 @@ bool doUpgradeV0ToV7(CatalogManager* catalogManager,
     versionInfo.setCurrentVersion(CURRENT_CONFIG_VERSION);
     versionInfo.setClusterId(newClusterId);
 
-    verify(versionInfo.isValid(NULL));
+    verify(versionInfo.validate().isOK());
 
     // If the cluster has not previously been initialized, we need to set the version before
     // using so subsequent mongoses use the config data the same way.  This requires all three

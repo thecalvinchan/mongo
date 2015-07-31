@@ -49,7 +49,7 @@ namespace mongo {
  *
  * Owns the query solutions and PlanStage roots for all candidate plans.
  */
-class MultiPlanStage : public PlanStage {
+class MultiPlanStage final : public PlanStage {
 public:
     /**
      * Takes no ownership.
@@ -62,29 +62,22 @@ public:
                    CanonicalQuery* cq,
                    bool shouldCache = true);
 
-    virtual ~MultiPlanStage();
+    bool isEOF() final;
 
-    virtual bool isEOF();
+    StageState work(WorkingSetID* out) final;
 
-    virtual StageState work(WorkingSetID* out);
+    void doReattachToOperationContext(OperationContext* opCtx) final;
 
-    virtual void saveState();
+    void doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) final;
 
-    virtual void restoreState(OperationContext* opCtx);
-
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
-
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_MULTI_PLAN;
     }
 
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
 
-    virtual const CommonStats* getCommonStats() const;
 
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     /**
      * Takes ownership of QuerySolution and PlanStage. not of WorkingSet
@@ -187,9 +180,10 @@ private:
     // not owned here
     CanonicalQuery* _query;
 
-    // Candidate plans. Each candidate includes a child PlanStage tree and QuerySolution which
-    // are owned here. Ownership of all QuerySolutions is retained here, and will *not* be
-    // tranferred to the PlanExecutor that wraps this stage.
+    // Candidate plans. Each candidate includes a child PlanStage tree and QuerySolution. Ownership
+    // of all QuerySolutions is retained here, and will *not* be tranferred to the PlanExecutor that
+    // wraps this stage. Ownership of the PlanStages will be in PlanStage::_children which maps
+    // one-to-one with _candidates.
     std::vector<CandidatePlan> _candidates;
 
     // index into _candidates, of the winner of the plan competition
@@ -227,7 +221,6 @@ private:
     std::unique_ptr<RecordFetcher> _fetcher;
 
     // Stats
-    CommonStats _commonStats;
     MultiPlanStats _specificStats;
 };
 

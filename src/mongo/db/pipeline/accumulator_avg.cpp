@@ -37,6 +37,12 @@ namespace mongo {
 
 using boost::intrusive_ptr;
 
+REGISTER_ACCUMULATOR(avg, AccumulatorAvg::create);
+
+const char* AccumulatorAvg::getOpName() const {
+    return "$avg";
+}
+
 namespace {
 const char subTotalName[] = "subTotal";
 const char countName[] = "count";
@@ -66,7 +72,7 @@ intrusive_ptr<Accumulator> AccumulatorAvg::create() {
 Value AccumulatorAvg::getValue(bool toBeMerged) const {
     if (!toBeMerged) {
         if (_count == 0)
-            return Value(0.0);
+            return Value(BSONNULL);
 
         return Value(_total / static_cast<double>(_count));
     } else {
@@ -82,9 +88,5 @@ AccumulatorAvg::AccumulatorAvg() : _total(0), _count(0) {
 void AccumulatorAvg::reset() {
     _total = 0;
     _count = 0;
-}
-
-const char* AccumulatorAvg::getOpName() const {
-    return "$avg";
 }
 }

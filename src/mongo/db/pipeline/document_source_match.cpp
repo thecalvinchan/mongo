@@ -43,10 +43,10 @@ using boost::intrusive_ptr;
 using std::string;
 using std::vector;
 
-const char DocumentSourceMatch::matchName[] = "$match";
+REGISTER_DOCUMENT_SOURCE(match, DocumentSourceMatch::createFromBson);
 
 const char* DocumentSourceMatch::getSourceName() const {
-    return matchName;
+    return "$match";
 }
 
 Value DocumentSourceMatch::serialize(bool explain) const {
@@ -161,6 +161,10 @@ Document redactSafePortionDollarOps(BSONObj expr) {
             case BSONObj::opREGEX:
             case BSONObj::opOPTIONS:
             case BSONObj::opMOD:
+            case BSONObj::opBITS_ALL_SET:
+            case BSONObj::opBITS_ALL_CLEAR:
+            case BSONObj::opBITS_ANY_SET:
+            case BSONObj::opBITS_ANY_CLEAR:
                 output[field.fieldNameStringData()] = Value(field);
                 break;
 

@@ -51,31 +51,24 @@ namespace mongo {
  * operates with RecordIds, we are unable to evaluate the AND for the invalidated RecordId, and it
  * must be fully matched later.
  */
-class AndSortedStage : public PlanStage {
+class AndSortedStage final : public PlanStage {
 public:
     AndSortedStage(WorkingSet* ws, const Collection* collection);
-    virtual ~AndSortedStage();
 
     void addChild(PlanStage* child);
 
-    virtual StageState work(WorkingSetID* out);
-    virtual bool isEOF();
+    StageState work(WorkingSetID* out) final;
+    bool isEOF() final;
 
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    void doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) final;
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_AND_SORTED;
     }
 
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -93,9 +86,6 @@ private:
     // Not owned by us.
     WorkingSet* _ws;
 
-    // Owned by us.
-    std::vector<PlanStage*> _children;
-
     // The current node we're AND-ing against.
     size_t _targetNode;
     RecordId _targetLoc;
@@ -110,7 +100,6 @@ private:
     bool _isEOF;
 
     // Stats
-    CommonStats _commonStats;
     AndSortedStats _specificStats;
 };
 

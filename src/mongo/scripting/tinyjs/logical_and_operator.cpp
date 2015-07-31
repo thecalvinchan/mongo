@@ -39,9 +39,12 @@ namespace tinyjs {
 
 LogicalAndOperator::LogicalAndOperator() : BinaryOperator(TokenType::kLogicalAnd) {}
 
-const Value LogicalAndOperator::evaluate(Scope* scope) const {
-    const Value leftValue = this->getLeftChild()->evaluate(scope);
-    const Value rightValue = this->getRightChild()->evaluate(scope);
+const Value LogicalAndOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    const Value leftValue = this->getLeftChild()->evaluate(scope, returnValue);
+    const Value rightValue = this->getRightChild()->evaluate(scope, returnValue);
 
     if (!isFalse(leftValue)) {
         return rightValue;

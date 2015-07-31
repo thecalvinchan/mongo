@@ -38,6 +38,7 @@
 #include "mongo/client/dbclientinterface.h"
 #include "mongo/db/dbmessage.h"
 #include "mongo/db/namespace_string.h"
+#include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/util/log.h"
 
 // error codes 8000-8009
@@ -267,15 +268,17 @@ BSONObj SyncClusterConnection::findOne(const string& ns,
             _checkLast();
 
             for (size_t i = 0; i < all.size(); i++) {
-                BSONObj temp = all[i];
-                if (isOk(temp))
+                Status status = getStatusFromCommandResult(all[i]);
+                if (status.isOK()) {
                     continue;
+                }
+
                 stringstream ss;
-                ss << "write $cmd failed on a node: " << temp.jsonString();
+                ss << "write $cmd failed on a node: " << status.toString();
                 ss << " " << _conns[i]->toString();
                 ss << " ns: " << ns;
                 ss << " cmd: " << query.toString();
-                throw UserException(13105, ss.str());
+                throw UserException(status.code(), ss.str());
             }
 
             return all[0];
@@ -575,10 +578,6 @@ void SyncClusterConnection::say(Message& toSend, bool isRetry, string* actualSer
     // TODO: should we set actualServer??
 
     _checkLast();
-}
-
-void SyncClusterConnection::sayPiggyBack(Message& toSend) {
-    verify(0);
 }
 
 int SyncClusterConnection::_lockType(const string& name) {

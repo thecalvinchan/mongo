@@ -29,6 +29,8 @@
 
 #pragma once
 
+#include <queue>
+#include <utility>
 #include <vector>
 
 #include "mongo/client/remote_command_runner_impl.h"
@@ -36,7 +38,7 @@
 #include "mongo/stdx/condition_variable.h"
 #include "mongo/stdx/list.h"
 #include "mongo/stdx/mutex.h"
-#include "mongo/stdx/thread.h"
+#include "mongo/util/concurrency/thread_pool.h"
 
 namespace mongo {
 namespace executor {
@@ -67,23 +69,41 @@ namespace executor {
  * after they have been connected for a certain maximum period.
  * TODO(spencer): Rename this to ThreadPoolNetworkInterface
  */
-class NetworkInterfaceImpl : public NetworkInterface {
+class NetworkInterfaceImpl final : public NetworkInterface {
 public:
     NetworkInterfaceImpl();
-    virtual ~NetworkInterfaceImpl();
-    virtual std::string getDiagnosticString();
-    virtual void startup();
-    virtual void shutdown();
-    virtual void waitForWork();
-    virtual void waitForWorkUntil(Date_t when);
-    virtual void signalWorkAvailable();
-    virtual Date_t now();
-    virtual void startCommand(const TaskExecutor::CallbackHandle& cbHandle,
-                              const RemoteCommandRequest& request,
-                              const RemoteCommandCompletionFn& onFinish);
-    virtual void cancelCommand(const TaskExecutor::CallbackHandle& cbHandle);
+    ~NetworkInterfaceImpl();
+    std::string getDiagnosticString() override;
+    void startup() override;
+    void shutdown() override;
+    void waitForWork() override;
+    void waitForWorkUntil(Date_t when) override;
+    void setConnectionHook(std::unique_ptr<ConnectionHook> hook) override;
+    void signalWorkAvailable() override;
+    Date_t now() override;
+    std::string getHostName() override;
+    void startCommand(const TaskExecutor::CallbackHandle& cbHandle,
+                      const RemoteCommandRequest& request,
+                      const RemoteCommandCompletionFn& onFinish) override;
+    void cancelCommand(const TaskExecutor::CallbackHandle& cbHandle) override;
+    void setAlarm(Date_t when, const stdx::function<void()>& action) override;
 
 private:
+    /**
+     * Information describing a scheduled alarm.
+     */
+    struct AlarmInfo {
+        using AlarmAction = stdx::function<void()>;
+        AlarmInfo(Date_t inWhen, AlarmAction inAction)
+            : when(inWhen), action(std::move(inAction)) {}
+        bool operator>(const AlarmInfo& rhs) const {
+            return when > rhs.when;
+        }
+
+        Date_t when;
+        AlarmAction action;
+    };
+
     /**
      * Information describing an in-flight command.
      */
@@ -93,29 +113,21 @@ private:
         RemoteCommandCompletionFn onFinish;
     };
     typedef stdx::list<CommandData> CommandDataList;
-    typedef std::vector<std::shared_ptr<stdx::thread>> ThreadList;
 
     /**
-     * Thread body for threads that synchronously perform network requests from
-     * the _pending list.
+     * Executes one pending network operation, if there is at least one in the pending queue.
      */
-    static void _requestProcessorThreadBody(NetworkInterfaceImpl* net,
-                                            const std::string& threadName);
+    void _runOneCommand();
 
     /**
-     * Run loop that iteratively consumes network requests in a request processor thread.
+     * Worker function that processes alarms set via setAlarm.
      */
-    void _consumeNetworkRequests();
+    void _processAlarms();
 
     /**
      * Notifies the network threads that there is work available.
      */
     void _signalWorkAvailable_inlock();
-
-    /**
-     * Starts a new network thread.
-     */
-    void _startNewNetworkThread_inlock();
 
     // Mutex guarding the state of this network interface, except for the remote command
     // executor, which has its own concurrency control.
@@ -127,34 +139,30 @@ private:
     // Queue of yet-to-be-executed network operations.
     CommandDataList _pending;
 
-    // List of threads serving as the worker pool.
-    ThreadList _threads;
-
-    // Count of idle threads.
-    size_t _numIdleThreads;
-
-    // Id counter for assigning thread names
-    size_t _nextThreadId;
-
-    // The last time that _pending.size() + _numActiveNetworkRequests grew to be at least
-    // _threads.size().
-    Date_t _lastFullUtilizationDate;
+    // Worker thread pool.
+    ThreadPool _pool;
 
     // Condition signaled to indicate that the executor, blocked in waitForWorkUntil or
     // waitForWork, should wake up.
     stdx::condition_variable _isExecutorRunnableCondition;
 
     // Flag indicating whether or not the executor associated with this interface is runnable.
-    bool _isExecutorRunnable;
+    bool _isExecutorRunnable = false;
 
     // Flag indicating when this interface is being shut down (because shutdown() has executed).
-    bool _inShutdown;
+    bool _inShutdown = false;
 
     // Interface for running remote commands
-    RemoteCommandRunnerImpl _commandRunner;
+    RemoteCommandRunnerImpl _commandRunner{kMessagingPortKeepOpen};
 
     // Number of active network requests
-    size_t _numActiveNetworkRequests;
+    size_t _numActiveNetworkRequests = 0;
+
+    // Condition variable to signal in order to wake up the alarm processing thread.
+    stdx::condition_variable _newAlarmReady;
+
+    // Heap of alarms, with the next alarm always on top.
+    std::priority_queue<AlarmInfo, std::vector<AlarmInfo>, std::greater<AlarmInfo>> _alarms;
 };
 
 }  // namespace executor

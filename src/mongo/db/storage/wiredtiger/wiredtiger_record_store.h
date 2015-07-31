@@ -191,8 +191,8 @@ public:
     const std::string& getURI() const {
         return _uri;
     }
-    uint64_t instanceId() const {
-        return _instanceId;
+    uint64_t tableId() const {
+        return _tableId;
     }
 
     void setSizeStorer(WiredTigerSizeStorer* ss) {
@@ -201,6 +201,7 @@ public:
 
     void dealtWithCappedLoc(const RecordId& loc);
     bool isCappedHidden(const RecordId& loc) const;
+    RecordId lowestCappedHiddenRecord() const;
 
     bool inShutdown() const;
     int64_t cappedDeleteAsNeeded(OperationContext* txn, const RecordId& justInserted);
@@ -235,7 +236,7 @@ private:
     void _oplogSetStartHack(WiredTigerRecoveryUnit* wru) const;
 
     const std::string _uri;
-    const uint64_t _instanceId;  // not persisted
+    const uint64_t _tableId;  // not persisted
 
     // The capped settings should not be updated once operations have started
     const bool _isCapped;

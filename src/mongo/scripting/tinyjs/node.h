@@ -38,7 +38,7 @@ namespace tinyjs {
 class Node {
 public:
     virtual ~Node() {};
-    virtual const Value evaluate(Scope* scope) const = 0;
+    virtual const Value evaluate(Scope* scope, Value& returnValue) const = 0;
     virtual std::vector<Node* > getChildren() const = 0;
     virtual StringData getName() const = 0;
     TokenType getType() const { return _type; };

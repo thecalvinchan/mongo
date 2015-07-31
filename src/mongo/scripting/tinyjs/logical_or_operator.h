@@ -36,7 +36,7 @@ namespace tinyjs {
 class LogicalOrOperator : public BinaryOperator {
 public:
     LogicalOrOperator();
-    virtual const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
 };
 
 }  // namespace tinyjs

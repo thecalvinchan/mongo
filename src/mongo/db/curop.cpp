@@ -233,11 +233,7 @@ void CurOp::reportState(BSONObjBuilder* builder) {
 
     builder->append("op", opToString(_op));
 
-    // Fill out "ns" from our namespace member (and if it's not available, fall back to the
-    // OpDebug namespace member). We prefer our ns when set because it changes to match each
-    // accessed namespace, while _debug.ns is set once at the start of the operation. However,
-    // sometimes _ns is not yet set.
-    builder->append("ns", !_ns.empty() ? _ns : _debug.ns);
+    builder->append("ns", _ns);
 
     if (_op == dbInsert) {
         _query.append(*builder, "insert");
@@ -373,11 +369,8 @@ uint64_t CurOp::MaxTimeTracker::getRemainingMicros() const {
 }
 
 void OpDebug::reset() {
-    extra.reset();
-
     op = 0;
     iscommand = false;
-    ns = "";
     query = BSONObj();
     updateobj = BSONObj();
 
@@ -411,6 +404,16 @@ void OpDebug::reset() {
     responseLength = -1;
 }
 
+namespace {
+StringData getProtoString(int op) {
+    if (op == dbQuery) {
+        return "op_query";
+    } else if (op == dbCommand) {
+        return "op_command";
+    }
+    MONGO_UNREACHABLE;
+}
+}  // namespace
 
 #define OPDEBUG_TOSTRING_HELP(x) \
     if (x >= 0)                  \
@@ -424,7 +427,8 @@ string OpDebug::report(const CurOp& curop, const SingleThreadedLockStats& lockSt
         s << "command ";
     else
         s << opToString(op) << ' ';
-    s << ns;
+
+    s << curop.getNS();
 
     if (!query.isEmpty()) {
         if (iscommand) {
@@ -475,9 +479,6 @@ string OpDebug::report(const CurOp& curop, const SingleThreadedLockStats& lockSt
     OPDEBUG_TOSTRING_HELP(keyUpdates);
     OPDEBUG_TOSTRING_HELP(writeConflicts);
 
-    if (extra.len())
-        s << " " << extra.str();
-
     if (!exceptionInfo.empty()) {
         s << " exception: " << exceptionInfo.msg;
         if (exceptionInfo.code)
@@ -495,6 +496,10 @@ string OpDebug::report(const CurOp& curop, const SingleThreadedLockStats& lockSt
         BSONObjBuilder locks;
         lockStats.report(&locks);
         s << " locks:" << locks.obj().toString();
+    }
+
+    if (iscommand) {
+        s << " protocol:" << getProtoString(op);
     }
 
     s << " " << executionTime << "ms";
@@ -547,7 +552,7 @@ void OpDebug::append(const CurOp& curop,
     const size_t maxElementSize = 50 * 1024;
 
     b.append("op", iscommand ? "command" : opToString(op));
-    b.append("ns", ns);
+    b.append("ns", curop.getNS());
 
     if (!query.isEmpty()) {
         appendAsObjOrString(iscommand ? "command" : "query", query, maxElementSize, &b);
@@ -595,6 +600,9 @@ void OpDebug::append(const CurOp& curop,
 
     OPDEBUG_APPEND_NUMBER(nreturned);
     OPDEBUG_APPEND_NUMBER(responseLength);
+    if (iscommand) {
+        b.append("protocol", getProtoString(op));
+    }
     b.append("millis", executionTime);
 
     execStats.append(b, "execStats");

@@ -28,15 +28,12 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
-
-#include "mongo/bson/bsonobj.h"
 #include "mongo/client/connection_string.h"
+#include "mongo/platform/atomic_word.h"
 #include "mongo/s/catalog/catalog_manager.h"
 #include "mongo/stdx/condition_variable.h"
+#include "mongo/stdx/mutex.h"
 #include "mongo/stdx/thread.h"
-#include "mongo/platform/atomic_word.h"
 
 namespace mongo {
 
@@ -54,45 +51,35 @@ public:
      */
     Status init(const ConnectionString& configCS);
 
-    Status startup(bool upgrade) override;
+    Status startup() override;
 
     ConnectionString connectionString() const override;
 
     void shutDown() override;
 
-    Status enableSharding(const std::string& dbName) override;
-
-    Status shardCollection(const std::string& ns,
+    Status shardCollection(OperationContext* txn,
+                           const std::string& ns,
                            const ShardKeyPattern& fieldsAndOrder,
                            bool unique,
-                           std::vector<BSONObj>* initPoints,
-                           std::set<ShardId>* initShardIds) override;
-
-    StatusWith<std::string> addShard(const std::string& name,
-                                     const ConnectionString& shardConnectionString,
-                                     const long long maxSize) override;
+                           const std::vector<BSONObj>& initPoints,
+                           const std::set<ShardId>& initShardIds) override;
 
     StatusWith<ShardDrainingStatus> removeShard(OperationContext* txn,
                                                 const std::string& name) override;
 
-    Status createDatabase(const std::string& dbName) override;
-
-    Status updateDatabase(const std::string& dbName, const DatabaseType& db) override;
-
     StatusWith<DatabaseType> getDatabase(const std::string& dbName) override;
-
-    Status updateCollection(const std::string& collNs, const CollectionType& coll) override;
 
     StatusWith<CollectionType> getCollection(const std::string& collNs) override;
 
     Status getCollections(const std::string* dbName, std::vector<CollectionType>* collections);
 
-    Status dropCollection(const std::string& collectionNs);
-
     Status getDatabasesForShard(const std::string& shardName,
                                 std::vector<std::string>* dbs) override;
 
-    Status getChunks(const Query& query, int nToReturn, std::vector<ChunkType>* chunks) override;
+    Status getChunks(const BSONObj& query,
+                     const BSONObj& sort,
+                     boost::optional<int> limit,
+                     std::vector<ChunkType>* chunks) override;
 
     Status getTagsForCollection(const std::string& collectionNs,
                                 std::vector<TagsType>* tags) override;
@@ -102,8 +89,6 @@ public:
 
     Status getAllShards(std::vector<ShardType>* shards) override;
 
-    bool isShardHost(const ConnectionString& shardConnectionString) override;
-
     /**
      * Grabs a distributed lock and runs the command on all config servers.
      */
@@ -112,16 +97,16 @@ public:
                                        const BSONObj& cmdObj,
                                        BSONObjBuilder* result) override;
 
-    bool runUserManagementReadCommand(const std::string& dbname,
-                                      const BSONObj& cmdObj,
-                                      BSONObjBuilder* result) override;
+    bool runReadCommand(const std::string& dbname,
+                        const BSONObj& cmdObj,
+                        BSONObjBuilder* result) override;
 
     Status applyChunkOpsDeprecated(const BSONArray& updateOps,
                                    const BSONArray& preCondition) override;
 
     void logAction(const ActionLogType& actionLog);
 
-    void logChange(OperationContext* txn,
+    void logChange(const std::string& clientAddress,
                    const std::string& what,
                    const std::string& ns,
                    const BSONObj& detail) override;
@@ -133,11 +118,12 @@ public:
 
     DistLockManager* getDistLockManager() const override;
 
+    Status checkAndUpgrade(bool checkOnly) override;
+
 private:
-    /**
-     * Updates the config server's metadata to the current version.
-     */
-    Status _checkAndUpgradeConfigMetadata(bool doUpgrade);
+    Status _checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) const override;
+
+    StatusWith<std::string> _generateNewShardName() const override;
 
     /**
      * Starts the thread that periodically checks data consistency amongst the config servers.
@@ -146,23 +132,11 @@ private:
     Status _startConfigServerChecker();
 
     /**
-     * Direct network check to see if a particular database does not already exist with the
-     * same name or different case.
-     */
-    Status _checkDbDoesNotExist(const std::string& dbName) const;
-
-    /**
-     * Generates a new shard name "shard<xxxx>"
-     * where <xxxx> is an autoincrementing value and <xxxx> < 10000
-     */
-    StatusWith<std::string> _getNewShardName() const;
-
-    /**
      * Returns the number of shards recognized by the config servers
      * in this sharded cluster.
      * Optional: use query parameter to filter shard count.
      */
-    size_t _getShardCount(const BSONObj& query = {}) const;
+    size_t _getShardCount(const BSONObj& query) const;
 
     /**
      * Returns true if all config servers have the same state.

@@ -39,8 +39,11 @@ namespace tinyjs {
 
 ObjectAccessorOperator::ObjectAccessorOperator(TokenType t) : BinaryOperator(t) {}
 
-const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
-    std::string objectPathString = ObjectAccessorOperator::generateNestedField(this, scope);
+const Value ObjectAccessorOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    std::string objectPathString = ObjectAccessorOperator::generateNestedField(this, scope, returnValue);
     int rootObjIndex = objectPathString.find_first_of('.');
     std::string fieldPathString = objectPathString.substr(rootObjIndex + 1),
                 objectString = objectPathString.substr(0, rootObjIndex);
@@ -50,23 +53,23 @@ const Value ObjectAccessorOperator::evaluate(Scope* scope) const {
 }
 
 
-std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope* scope) const {
+std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope* scope, Value& returnValue) const {
     TokenType type = head->getType();
     if (type == TokenType::kPeriod) {
         std::string cur = (head->getName()).rawData();
         if (cur.front() == '[') {
             cur.erase(0, 1);
             std::string leftNestedField = ObjectAccessorOperator::generateNestedField(
-                (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
+                (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope, returnValue);
             return leftNestedField + cur;
         }
         return cur;
     } else if (type == TokenType::kOpenSquareBracket) {
         std::string cur = ".";
         std::string leftNestedField = ObjectAccessorOperator::generateNestedField(
-            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope);
+            (checked_cast<const BinaryOperator*>(head))->getLeftChild(), scope, returnValue);
         Value rightChildValue =
-            (checked_cast<const BinaryOperator*>(head))->getRightChild()->evaluate(scope);
+            (checked_cast<const BinaryOperator*>(head))->getRightChild()->evaluate(scope, returnValue);
         std::string rightNestedField = rightChildValue.coerceToString();
         return leftNestedField + cur + rightNestedField;
     } else {

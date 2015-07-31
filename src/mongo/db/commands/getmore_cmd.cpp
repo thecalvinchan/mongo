@@ -45,17 +45,22 @@
 #include "mongo/db/exec/working_set_common.h"
 #include "mongo/db/global_timestamp.h"
 #include "mongo/db/query/cursor_responses.h"
-#include "mongo/db/repl/oplog.h"
-#include "mongo/db/service_context.h"
 #include "mongo/db/query/find.h"
 #include "mongo/db/query/getmore_request.h"
+#include "mongo/db/repl/replication_coordinator_global.h"
 #include "mongo/db/repl/oplog.h"
 #include "mongo/db/service_context.h"
 #include "mongo/db/stats/counters.h"
+#include "mongo/stdx/memory.h"
+#include "mongo/util/fail_point_service.h"
 #include "mongo/util/log.h"
 #include "mongo/util/scopeguard.h"
 
 namespace mongo {
+
+namespace {
+MONGO_FP_DECLARE(rsStopGetMoreCmd);
+}  // namespace
 
 /**
  * A command for running getMore() against an existing cursor registered with a CursorManager.
@@ -87,6 +92,11 @@ public:
     }
 
     bool adminOnly() const override {
+        return false;
+    }
+
+    bool supportsReadConcern() const final {
+        // Uses the $readMajorityTemporaryName setting from whatever created the cursor.
         return false;
     }
 
@@ -144,7 +154,9 @@ public:
         //
         // 1) Normal cursor: we lock with "ctx" and hold it for the whole getMore.
         // 2) Cursor owned by global cursor manager: we don't lock anything.  These cursors
-        //    don't own any collection state.
+        //    don't own any collection state. These cursors are generated either by the
+        //    listCollections or listIndexes commands, as these special cursor-generating commands
+        //    operate over catalog data rather than targeting the data within a collection.
         // 3) Agg cursor: we lock with "ctx", then release, then relock with "unpinDBLock" and
         //    "unpinCollLock".  This is because agg cursors handle locking internally (hence the
         //    release), but the pin and unpin of the cursor must occur under the collection
@@ -160,11 +172,10 @@ public:
         std::unique_ptr<Lock::CollectionLock> unpinCollLock;
 
         CursorManager* cursorManager;
-        CursorManager* globalCursorManager = CursorManager::getGlobalCursorManager();
-        if (globalCursorManager->ownsCursorId(request.cursorid)) {
-            cursorManager = globalCursorManager;
+        if (request.nss.isListIndexesCursorNS() || request.nss.isListCollectionsCursorNS()) {
+            cursorManager = CursorManager::getGlobalCursorManager();
         } else {
-            ctx.reset(new AutoGetCollectionForRead(txn, request.nss));
+            ctx = stdx::make_unique<AutoGetCollectionForRead>(txn, request.nss);
             Collection* collection = ctx->getCollection();
             if (!collection) {
                 return appendCommandStatus(result,
@@ -192,6 +203,14 @@ public:
                                      << "', but cursor belongs to a different namespace"));
         }
 
+        if (request.nss.isOplog() && MONGO_FAIL_POINT(rsStopGetMoreCmd)) {
+            return appendCommandStatus(
+                result,
+                Status(ErrorCodes::CommandFailed,
+                       str::stream() << "getMore on " << request.nss.ns()
+                                     << " rejected due to active fail point rsStopGetMoreCmd"));
+        }
+
         const bool hasOwnMaxTime = CurOp::get(txn)->isMaxTimeSet();
 
         // Validation related to awaitData.
@@ -212,17 +231,21 @@ public:
             }
         }
 
+        // Validate term, if provided.
+        if (request.term) {
+            auto replCoord = repl::ReplicationCoordinator::get(txn);
+            Status status = replCoord->updateTerm(*request.term);
+            // Note: updateTerm returns ok if term stayed the same.
+            if (!status.isOK()) {
+                return appendCommandStatus(result, status);
+            }
+        }
+
         // On early return, get rid of the cursor.
         ScopeGuard cursorFreer = MakeGuard(&GetMoreCmd::cleanupCursor, txn, &ccPin, request);
 
-        if (!cursor->hasRecoveryUnit()) {
-            // Start using a new RecoveryUnit.
-            cursor->setOwnedRecoveryUnit(
-                getGlobalServiceContext()->getGlobalStorageEngine()->newRecoveryUnit());
-        }
-
-        // Swap RecoveryUnit(s) between the ClientCursor and OperationContext.
-        ScopedRecoveryUnitSwapper ruSwapper(cursor, txn);
+        if (cursor->isReadCommitted())
+            uassertStatusOK(txn->recoveryUnit()->setReadFromMajorityCommittedSnapshot());
 
         // Reset timeout timer on the cursor since the cursor is still in use.
         cursor->setIdleTime(0);
@@ -241,7 +264,8 @@ public:
         }
 
         PlanExecutor* exec = cursor->getExecutor();
-        exec->restoreState(txn);
+        exec->reattachToOperationContext(txn);
+        exec->restoreState();
 
         // If we're tailing a capped collection, retrieve a monotonically increasing insert
         // counter.
@@ -255,14 +279,14 @@ public:
         BSONArrayBuilder nextBatch;
         BSONObj obj;
         PlanExecutor::ExecState state;
-        int numResults = 0;
+        long long numResults = 0;
         Status batchStatus = generateBatch(cursor, request, &nextBatch, &state, &numResults);
         if (!batchStatus.isOK()) {
             return appendCommandStatus(result, batchStatus);
         }
 
         // If this is an await data cursor, and we hit EOF without generating any results, then
-        // we block waiting for new oplog data to arrive.
+        // we block waiting for new data to arrive.
         if (isCursorAwaitData(cursor) && state == PlanExecutor::IS_EOF && numResults == 0) {
             // Retrieve the notifier which we will wait on until new data arrives. We make sure
             // to do this in the lock because once we drop the lock it is possible for the
@@ -280,7 +304,7 @@ public:
             notifier.reset();
 
             ctx.reset(new AutoGetCollectionForRead(txn, request.nss));
-            exec->restoreState(txn);
+            exec->restoreState();
 
             // We woke up because either the timed_wait expired, or there was more data. Either
             // way, attempt to generate another batch of results.
@@ -294,6 +318,7 @@ public:
             respondWithId = request.cursorid;
 
             exec->saveState();
+            exec->detachFromOperationContext();
 
             // If maxTimeMS was set directly on the getMore rather than being rolled over
             // from a previous find, then don't roll remaining micros over to the next
@@ -303,12 +328,6 @@ public:
             }
 
             cursor->incPos(numResults);
-
-            if (isCursorTailable(cursor) && state == PlanExecutor::IS_EOF) {
-                // Rather than swapping their existing RU into the client cursor, tailable
-                // cursors should get a new recovery unit.
-                ruSwapper.dismiss();
-            }
         } else {
             CurOp::get(txn)->debug().cursorExhausted = true;
         }
@@ -345,7 +364,7 @@ public:
                          const GetMoreRequest& request,
                          BSONArrayBuilder* nextBatch,
                          PlanExecutor::ExecState* state,
-                         int* numResults) {
+                         long long* numResults) {
         PlanExecutor* exec = cursor->getExecutor();
         const bool isAwaitData = isCursorAwaitData(cursor);
 

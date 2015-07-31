@@ -36,12 +36,12 @@ namespace tinyjs {
 class ObjectAccessorOperator : public BinaryOperator {
 public:
     ObjectAccessorOperator(TokenType t);
-    virtual const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
     void setPath(std::string path);
     StringData getName() const override;
 
 private:
-    std::string generateNestedField(const Node* head, Scope* scope) const;
+    std::string generateNestedField(const Node* head, Scope* scope, Value& returnValue) const;
     std::string _objectPathString;
 };
 

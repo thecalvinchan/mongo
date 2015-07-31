@@ -174,6 +174,7 @@ public:
             const auto shard = grid.shardRegistry()->getShard(config->getPrimaryId());
             shardConnString = shard->getConnString();
         }
+
         ScopedDbConnection conn(shardConnString);
 
         // check that collection is not capped
@@ -397,7 +398,7 @@ public:
         audit::logShardCollection(ClientBasic::getCurrent(), ns, proposedKey, careAboutUnique);
 
         Status status = grid.catalogManager()->shardCollection(
-            ns, proposedShardKey, careAboutUnique, &initSplits);
+            txn, ns, proposedShardKey, careAboutUnique, initSplits, std::set<ShardId>{});
         if (!status.isOK()) {
             return appendCommandStatus(result, status);
         }

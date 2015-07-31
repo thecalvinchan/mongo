@@ -39,6 +39,7 @@
 #include "mongo/db/index/index_access_method.h"
 #include "mongo/db/index/index_descriptor.h"
 #include "mongo/db/query/index_bounds_builder.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 
 namespace {
@@ -61,7 +62,8 @@ IndexScan::IndexScan(OperationContext* txn,
                      const IndexScanParams& params,
                      WorkingSet* workingSet,
                      const MatchExpression* filter)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _workingSet(workingSet),
       _iam(params.descriptor->getIndexCatalog()->getIndex(params.descriptor)),
       _keyPattern(params.descriptor->keyPattern().getOwned()),
@@ -70,7 +72,6 @@ IndexScan::IndexScan(OperationContext* txn,
       _shouldDedup(true),
       _forward(params.direction == 1),
       _params(params),
-      _commonStats(kStageType),
       _endKeyInclusive(false) {
     // We can't always access the descriptor in the call to getStats() so we pull
     // any info we need for stats reporting out here.
@@ -215,7 +216,7 @@ PlanStage::StageState IndexScan::work(WorkingSetID* out) {
     WorkingSetMember* member = _workingSet->get(id);
     member->loc = kv->loc;
     member->keyData.push_back(IndexKeyDatum(_keyPattern, kv->key, _iam));
-    member->state = WorkingSetMember::LOC_AND_IDX;
+    _workingSet->transitionToLocAndIdx(id);
 
     if (_params.addKeyMetadata) {
         BSONObjBuilder bob;
@@ -232,14 +233,7 @@ bool IndexScan::isEOF() {
     return _commonStats.isEOF;
 }
 
-void IndexScan::saveState() {
-    if (!_txn) {
-        // We were already saved. Nothing to do.
-        return;
-    }
-
-    _txn = NULL;
-    ++_commonStats.yields;
+void IndexScan::doSaveState() {
     if (!_indexCursor)
         return;
 
@@ -251,18 +245,25 @@ void IndexScan::saveState() {
     _indexCursor->savePositioned();
 }
 
-void IndexScan::restoreState(OperationContext* opCtx) {
-    invariant(_txn == NULL);
-    _txn = opCtx;
-    ++_commonStats.unyields;
-
+void IndexScan::doRestoreState() {
     if (_indexCursor)
-        _indexCursor->restore(opCtx);
+        _indexCursor->restore();
 }
 
-void IndexScan::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
+void IndexScan::doDetachFromOperationContext() {
+    _txn = NULL;
+    if (_indexCursor)
+        _indexCursor->detachFromOperationContext();
+}
 
+void IndexScan::doReattachToOperationContext(OperationContext* opCtx) {
+    invariant(_txn == NULL);
+    _txn = opCtx;
+    if (_indexCursor)
+        _indexCursor->reattachToOperationContext(opCtx);
+}
+
+void IndexScan::doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
     // The only state we're responsible for holding is what RecordIds to drop.  If a document
     // mutates the underlying index cursor will deal with it.
     if (INVALIDATION_MUTATION == type) {
@@ -278,11 +279,7 @@ void IndexScan::invalidate(OperationContext* txn, const RecordId& dl, Invalidati
     }
 }
 
-std::vector<PlanStage*> IndexScan::getChildren() const {
-    return {};
-}
-
-PlanStageStats* IndexScan::getStats() {
+std::unique_ptr<PlanStageStats> IndexScan::getStats() {
     // WARNING: this could be called even if the collection was dropped.  Do not access any
     // catalog information here.
 
@@ -302,13 +299,10 @@ PlanStageStats* IndexScan::getStats() {
         _specificStats.direction = _params.direction;
     }
 
-    std::unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_IXSCAN));
-    ret->specific.reset(new IndexScanStats(_specificStats));
-    return ret.release();
-}
-
-const CommonStats* IndexScan::getCommonStats() const {
-    return &_commonStats;
+    std::unique_ptr<PlanStageStats> ret =
+        stdx::make_unique<PlanStageStats>(_commonStats, STAGE_IXSCAN);
+    ret->specific = stdx::make_unique<IndexScanStats>(_specificStats);
+    return ret;
 }
 
 const SpecificStats* IndexScan::getSpecificStats() const {

@@ -29,13 +29,11 @@
 #pragma once
 
 #include <string>
-#include <thread>
 
 #include "mongo/base/disallow_copying.h"
 #include "mongo/base/status.h"
 #include "mongo/base/status_with.h"
 #include "mongo/base/string_data.h"
-#include "mongo/client/remote_command_runner.h"
 #include "mongo/db/concurrency/lock_manager_defs.h"
 #include "mongo/db/repl/task_runner.h"
 #include "mongo/executor/task_executor.h"
@@ -45,6 +43,7 @@
 #include "mongo/stdx/functional.h"
 #include "mongo/stdx/list.h"
 #include "mongo/stdx/mutex.h"
+#include "mongo/stdx/thread.h"
 #include "mongo/util/concurrency/old_thread_pool.h"
 #include "mongo/util/net/hostandport.h"
 #include "mongo/util/time_support.h"
@@ -110,21 +109,24 @@ public:
 
     std::string getDiagnosticString() override;
     Date_t now() override;
+    void startup() override;
     void shutdown() override;
+    void join() override;
     void signalEvent(const EventHandle& event) override;
     StatusWith<EventHandle> makeEvent() override;
     StatusWith<CallbackHandle> onEvent(const EventHandle& event, const CallbackFn& work) override;
     void waitForEvent(const EventHandle& event) override;
     StatusWith<CallbackHandle> scheduleWork(const CallbackFn& work) override;
     StatusWith<CallbackHandle> scheduleWorkAt(Date_t when, const CallbackFn& work) override;
-    StatusWith<CallbackHandle> scheduleRemoteCommand(const RemoteCommandRequest& request,
+    StatusWith<CallbackHandle> scheduleRemoteCommand(const executor::RemoteCommandRequest& request,
                                                      const RemoteCommandCallbackFn& cb) override;
     void cancel(const CallbackHandle& cbHandle) override;
     void wait(const CallbackHandle& cbHandle) override;
 
-
     /**
-     * Executes the run loop.  May be called up to one time.
+     * Executes the run loop. May be called up to one time.
+     *
+     * Doesn't need to be public, so do not call directly unless from unit-tests.
      *
      * Returns after the executor has been shutdown and is safe to delete.
      */
@@ -259,8 +261,8 @@ private:
      */
     void finishShutdown();
 
-    void _finishRemoteCommand(const RemoteCommandRequest& request,
-                              const StatusWith<RemoteCommandResponse>& response,
+    void _finishRemoteCommand(const executor::RemoteCommandRequest& request,
+                              const StatusWith<executor::RemoteCommandResponse>& response,
                               const CallbackHandle& cbHandle,
                               const uint64_t expectedHandleGeneration,
                               const RemoteCommandCallbackFn& cb);
@@ -300,6 +302,10 @@ private:
 
     std::unique_ptr<executor::NetworkInterface> _networkInterface;
     std::unique_ptr<StorageInterface> _storageInterface;
+
+    // Thread which executes the run method. Started by startup and must be jointed after shutdown.
+    stdx::thread _executorThread;
+
     stdx::mutex _mutex;
     stdx::mutex _terribleExLockSyncMutex;
     stdx::condition_variable _noMoreWaitingThreads;

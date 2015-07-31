@@ -6,6 +6,7 @@ var dir = 'jstests/concurrency/fsm_workloads';
 
 var blacklist = [
     // Disabled due to known bugs
+    'agg_base.js', // SERVER-19418 Mongod termination while executing aggregation pipeline
     'agg_match.js', // SERVER-3645 .count() can be wrong on sharded collections
     'count.js', // SERVER-3645 .count() can be wrong on sharded collections
     'count_limit_skip.js', // SERVER-3645 .count() can be wrong on sharded collections
@@ -67,4 +68,4 @@ var blacklist = [
 // SERVER-16196 re-enable executing workloads against sharded clusters
 // runWorkloadsSerially(ls(dir).filter(function(file) {
 //     return !Array.contains(blacklist, file);
-// }), { sharded: true });
+// }), { sharded: true, useLegacyConfigServers: false });

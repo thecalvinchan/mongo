@@ -153,31 +153,27 @@ public:
             }
             MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "listIndexes", ns.ns());
 
-            WorkingSetMember member;
-            member.state = WorkingSetMember::OWNED_OBJ;
-            member.keyData.clear();
-            member.loc = RecordId();
-            member.obj = Snapshotted<BSONObj>(SnapshotId(), indexSpec.getOwned());
-            root->pushBack(member);
+            WorkingSetID id = ws->allocate();
+            WorkingSetMember* member = ws->get(id);
+            member->keyData.clear();
+            member->loc = RecordId();
+            member->obj = Snapshotted<BSONObj>(SnapshotId(), indexSpec.getOwned());
+            member->transitionToOwnedObj();
+            root->pushBack(id);
         }
 
         std::string cursorNamespace = str::stream() << dbname << ".$cmd." << name << "."
                                                     << ns.coll();
         dassert(NamespaceString(cursorNamespace).isValid());
-        dassert(NamespaceString(cursorNamespace).isListIndexesGetMore());
-        dassert(ns == NamespaceString(cursorNamespace).getTargetNSForListIndexesGetMore());
+        dassert(NamespaceString(cursorNamespace).isListIndexesCursorNS());
+        dassert(ns == NamespaceString(cursorNamespace).getTargetNSForListIndexes());
 
-        PlanExecutor* rawExec;
-        Status makeStatus = PlanExecutor::make(txn,
-                                               ws.release(),
-                                               root.release(),
-                                               cursorNamespace,
-                                               PlanExecutor::YIELD_MANUAL,
-                                               &rawExec);
-        std::unique_ptr<PlanExecutor> exec(rawExec);
-        if (!makeStatus.isOK()) {
-            return appendCommandStatus(result, makeStatus);
+        auto statusWithPlanExecutor = PlanExecutor::make(
+            txn, std::move(ws), std::move(root), cursorNamespace, PlanExecutor::YIELD_MANUAL);
+        if (!statusWithPlanExecutor.isOK()) {
+            return appendCommandStatus(result, statusWithPlanExecutor.getStatus());
         }
+        std::unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
         BSONArrayBuilder firstBatch;
 
@@ -196,8 +192,12 @@ public:
         CursorId cursorId = 0LL;
         if (!exec->isEOF()) {
             exec->saveState();
-            ClientCursor* cursor = new ClientCursor(
-                CursorManager::getGlobalCursorManager(), exec.release(), cursorNamespace);
+            exec->detachFromOperationContext();
+            ClientCursor* cursor =
+                new ClientCursor(CursorManager::getGlobalCursorManager(),
+                                 exec.release(),
+                                 cursorNamespace,
+                                 txn->recoveryUnit()->isReadingFromMajorityCommittedSnapshot());
             cursorId = cursor->cursorid();
         }
 

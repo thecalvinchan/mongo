@@ -212,7 +212,7 @@ private:
 
 TEST_F(TopoCoordTest, ChooseSyncSourceBasic) {
     // if we do not have an index in the config, we should get an empty syncsource
-    HostAndPort newSyncSource = getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    HostAndPort newSyncSource = getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_TRUE(newSyncSource.empty());
 
     updateConfig(BSON("_id"
@@ -235,7 +235,7 @@ TEST_F(TopoCoordTest, ChooseSyncSourceBasic) {
     ASSERT(getTopoCoord().getSyncSourceAddress().empty());
 
     // Fail due to insufficient number of pings
-    newSyncSource = getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    newSyncSource = getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(getTopoCoord().getSyncSourceAddress(), newSyncSource);
     ASSERT(getTopoCoord().getSyncSourceAddress().empty());
 
@@ -245,37 +245,37 @@ TEST_F(TopoCoordTest, ChooseSyncSourceBasic) {
     heartbeatFromMember(HostAndPort("h3"), "rs0", MemberState::RS_SECONDARY, OpTime());
 
     // Should choose h2, since it is furthest ahead
-    newSyncSource = getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    newSyncSource = getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(getTopoCoord().getSyncSourceAddress(), newSyncSource);
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 
     // h3 becomes further ahead, so it should be chosen
     heartbeatFromMember(
         HostAndPort("h3"), "rs0", MemberState::RS_SECONDARY, OpTime(Timestamp(2, 0), 0));
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
 
     // h3 becomes an invalid candidate for sync source; should choose h2 again
     heartbeatFromMember(
         HostAndPort("h3"), "rs0", MemberState::RS_RECOVERING, OpTime(Timestamp(2, 0), 0));
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 
     // h3 back in SECONDARY and ahead
     heartbeatFromMember(
         HostAndPort("h3"), "rs0", MemberState::RS_SECONDARY, OpTime(Timestamp(2, 0), 0));
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
 
     // h3 goes down
     receiveDownHeartbeat(HostAndPort("h3"), "rs0", OpTime());
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 
     // h3 back up and ahead
     heartbeatFromMember(
         HostAndPort("h3"), "rs0", MemberState::RS_SECONDARY, OpTime(Timestamp(2, 0), 0));
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
 }
 
@@ -305,7 +305,7 @@ TEST_F(TopoCoordTest, ChooseSyncSourceCandidates) {
                  0);
 
     setSelfMemberState(MemberState::RS_SECONDARY);
-    OpTime lastOpTimeWeApplied = OpTime(Timestamp(100, 0), 0);
+    Timestamp lastOpTimeWeApplied = Timestamp(100, 0);
 
     heartbeatFromMember(HostAndPort("h1"),
                         "rs0",
@@ -466,7 +466,7 @@ TEST_F(TopoCoordTest, ChooseSyncSourceChainingNotAllowed) {
                         Milliseconds(300));
 
     // No primary situation: should choose no sync source.
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT(getTopoCoord().getSyncSourceAddress().empty());
 
     // Add primary
@@ -480,7 +480,7 @@ TEST_F(TopoCoordTest, ChooseSyncSourceChainingNotAllowed) {
 
     // h3 is primary and should be chosen as sync source, despite being further away than h2
     // and the primary (h3) being behind our most recently applied optime
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime(Timestamp(10, 0), 0));
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp(10, 0));
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
 }
 
@@ -519,7 +519,7 @@ TEST_F(TopoCoordTest, EmptySyncSourceOnPrimary) {
                         Milliseconds(300));
 
     // No primary situation: should choose h2 sync source.
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 
     // Become primary
@@ -566,18 +566,18 @@ TEST_F(TopoCoordTest, ForceSyncSource) {
                         Milliseconds(100));
 
     // force should overrule other defaults
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
     getTopoCoord().setForceSyncSourceIndex(1);
     // force should cause shouldChangeSyncSource() to return true
     // even if the currentSource is the force target
     ASSERT_TRUE(getTopoCoord().shouldChangeSyncSource(HostAndPort("h2"), now()));
     ASSERT_TRUE(getTopoCoord().shouldChangeSyncSource(HostAndPort("h3"), now()));
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 
     // force should only work for one call to chooseNewSyncSource
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
 }
 
@@ -615,17 +615,17 @@ TEST_F(TopoCoordTest, BlacklistSyncSource) {
                         OpTime(Timestamp(2, 0), 0),
                         Milliseconds(100));
 
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
 
     Date_t expireTime = Date_t::fromMillisSinceEpoch(1000);
     getTopoCoord().blacklistSyncSource(HostAndPort("h3"), expireTime);
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     // Should choose second best choice now that h3 is blacklisted.
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 
     // After time has passed, should go back to original sync source
-    getTopoCoord().chooseNewSyncSource(expireTime, OpTime());
+    getTopoCoord().chooseNewSyncSource(expireTime, Timestamp());
     ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().getSyncSourceAddress());
 }
 
@@ -666,17 +666,17 @@ TEST_F(TopoCoordTest, BlacklistSyncSourceNoChaining) {
                         OpTime(Timestamp(2, 0), 0),
                         Milliseconds(100));
 
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 
     Date_t expireTime = Date_t::fromMillisSinceEpoch(1000);
     getTopoCoord().blacklistSyncSource(HostAndPort("h2"), expireTime);
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     // Can't choose any sync source now.
     ASSERT(getTopoCoord().getSyncSourceAddress().empty());
 
     // After time has passed, should go back to the primary
-    getTopoCoord().chooseNewSyncSource(expireTime, OpTime());
+    getTopoCoord().chooseNewSyncSource(expireTime, Timestamp());
     ASSERT_EQUALS(HostAndPort("h2"), getTopoCoord().getSyncSourceAddress());
 }
 
@@ -715,20 +715,20 @@ TEST_F(TopoCoordTest, OnlyUnauthorizedUpCausesRecovering) {
                         OpTime(Timestamp(2, 0), 0),
                         Milliseconds(100));
 
-    ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().chooseNewSyncSource(now()++, OpTime()));
+    ASSERT_EQUALS(HostAndPort("h3"), getTopoCoord().chooseNewSyncSource(now()++, Timestamp()));
     ASSERT_EQUALS(MemberState::RS_SECONDARY, getTopoCoord().getMemberState().s);
     // Good state setup done
 
     // Mark nodes down, ensure that we have no source and are secondary
     receiveDownHeartbeat(HostAndPort("h2"), "rs0", OpTime(), ErrorCodes::NetworkTimeout);
     receiveDownHeartbeat(HostAndPort("h3"), "rs0", OpTime(), ErrorCodes::NetworkTimeout);
-    ASSERT_TRUE(getTopoCoord().chooseNewSyncSource(now()++, OpTime()).empty());
+    ASSERT_TRUE(getTopoCoord().chooseNewSyncSource(now()++, Timestamp()).empty());
     ASSERT_EQUALS(MemberState::RS_SECONDARY, getTopoCoord().getMemberState().s);
 
     // Mark nodes down + unauth, ensure that we have no source and are secondary
     receiveDownHeartbeat(HostAndPort("h2"), "rs0", OpTime(), ErrorCodes::NetworkTimeout);
     receiveDownHeartbeat(HostAndPort("h3"), "rs0", OpTime(), ErrorCodes::Unauthorized);
-    ASSERT_TRUE(getTopoCoord().chooseNewSyncSource(now()++, OpTime()).empty());
+    ASSERT_TRUE(getTopoCoord().chooseNewSyncSource(now()++, Timestamp()).empty());
     ASSERT_EQUALS(MemberState::RS_RECOVERING, getTopoCoord().getMemberState().s);
 
     // Having an auth error but with another node up should bring us out of RECOVERING
@@ -872,7 +872,7 @@ TEST_F(TopoCoordTest, PrepareSyncFromResponse) {
     ASSERT_OK(result);
     ASSERT_EQUALS("requested member \"h5:27017\" is more than 10 seconds behind us",
                   response8.obj()["warning"].String());
-    getTopoCoord().chooseNewSyncSource(now()++, ourOpTime);
+    getTopoCoord().chooseNewSyncSource(now()++, ourOpTime.getTimestamp());
     ASSERT_EQUALS(HostAndPort("h5"), getTopoCoord().getSyncSourceAddress());
 
     // Sync successfully from an up-to-date member
@@ -886,7 +886,7 @@ TEST_F(TopoCoordTest, PrepareSyncFromResponse) {
     BSONObj response9Obj = response9.obj();
     ASSERT_FALSE(response9Obj.hasField("warning"));
     ASSERT_EQUALS(HostAndPort("h5").toString(), response9Obj["prevSyncTarget"].String());
-    getTopoCoord().chooseNewSyncSource(now()++, ourOpTime);
+    getTopoCoord().chooseNewSyncSource(now()++, ourOpTime.getTimestamp());
     ASSERT_EQUALS(HostAndPort("h6"), getTopoCoord().getSyncSourceAddress());
 
     // node goes down between forceSync and chooseNewSyncSource
@@ -897,7 +897,7 @@ TEST_F(TopoCoordTest, PrepareSyncFromResponse) {
     ASSERT_FALSE(response10Obj.hasField("warning"));
     ASSERT_EQUALS(HostAndPort("h6").toString(), response10Obj["prevSyncTarget"].String());
     receiveDownHeartbeat(HostAndPort("h6"), "rs0", OpTime());
-    HostAndPort syncSource = getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    HostAndPort syncSource = getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h6"), syncSource);
 
     // Try to sync from a member that is unauth'd
@@ -917,7 +917,7 @@ TEST_F(TopoCoordTest, PrepareSyncFromResponse) {
     getTopoCoord().prepareSyncFromResponse(
         cbData(), HostAndPort("h6"), ourOpTime, &response12, &result);
     ASSERT_OK(result);
-    syncSource = getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    syncSource = getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
     ASSERT_EQUALS(HostAndPort("h6"), syncSource);
 }
 
@@ -1004,7 +1004,7 @@ TEST_F(TopoCoordTest, ReplSetGetStatus) {
     ASSERT_EQUALS(MemberState::RS_DOWN, member0Status["state"].numberInt());
     ASSERT_EQUALS("(not reachable/healthy)", member0Status["stateStr"].str());
     ASSERT_EQUALS(0, member0Status["uptime"].numberInt());
-    ASSERT_EQUALS(Timestamp(), Timestamp(member0Status["optime"]["ts"].timestampValue()));
+    ASSERT_EQUALS(Timestamp(), Timestamp(member0Status["optime"].timestampValue()));
     ASSERT_TRUE(member0Status.hasField("optimeDate"));
     ASSERT_EQUALS(Date_t::fromMillisSinceEpoch(Timestamp().getSecs() * 1000ULL),
                   member0Status["optimeDate"].Date());
@@ -1020,7 +1020,7 @@ TEST_F(TopoCoordTest, ReplSetGetStatus) {
                   member1Status["stateStr"].String());
     ASSERT_EQUALS(uptimeSecs.count(), member1Status["uptime"].numberInt());
     ASSERT_EQUALS(oplogProgress.getTimestamp(),
-                  Timestamp(member1Status["optime"]["ts"].timestampValue()));
+                  Timestamp(member1Status["optime"].timestampValue()));
     ASSERT_TRUE(member1Status.hasField("optimeDate"));
     ASSERT_EQUALS(Date_t::fromMillisSinceEpoch(oplogProgress.getSecs() * 1000ULL),
                   member1Status["optimeDate"].Date());
@@ -1050,8 +1050,7 @@ TEST_F(TopoCoordTest, ReplSetGetStatus) {
     ASSERT_EQUALS(MemberState::RS_PRIMARY, selfStatus["state"].numberInt());
     ASSERT_EQUALS(MemberState(MemberState::RS_PRIMARY).toString(), selfStatus["stateStr"].str());
     ASSERT_EQUALS(uptimeSecs.count(), selfStatus["uptime"].numberInt());
-    ASSERT_EQUALS(oplogProgress.getTimestamp(),
-                  Timestamp(selfStatus["optime"]["ts"].timestampValue()));
+    ASSERT_EQUALS(oplogProgress.getTimestamp(), Timestamp(selfStatus["optime"].timestampValue()));
     ASSERT_TRUE(selfStatus.hasField("optimeDate"));
     ASSERT_EQUALS(Date_t::fromMillisSinceEpoch(oplogProgress.getSecs() * 1000ULL),
                   selfStatus["optimeDate"].Date());
@@ -3439,8 +3438,8 @@ public:
                                                    << "hself")
                                         << BSON("_id" << 20 << "host"
                                                       << "h2") << BSON("_id" << 30 << "host"
-                                                                             << "h3"))
-                          << "protocolVersion" << 1),
+                                                                             << "h3")) << "settings"
+                          << BSON("protocolVersion" << 1)),
                      0);
         setSelfMemberState(MemberState::RS_SECONDARY);
     }
@@ -3483,7 +3482,7 @@ TEST_F(PrepareHeartbeatResponseV1Test, PrepareHeartbeatResponseWhenOutOfSet) {
                                                                               << "h2")
                                                                    << BSON("_id" << 30 << "host"
                                                                                  << "h3"))
-                      << "protocolVersion" << 1),
+                      << "settings" << BSON("protocolVersion" << 1)),
                  -1);
     ReplSetHeartbeatArgsV1 args;
     args.setSetName("rs0");
@@ -3637,7 +3636,7 @@ TEST_F(PrepareHeartbeatResponseV1Test, PrepareHeartbeatResponseWithSyncSource) {
         HostAndPort("h2"), "rs0", MemberState::RS_SECONDARY, OpTime(Timestamp(1, 0), 0));
     heartbeatFromMember(
         HostAndPort("h2"), "rs0", MemberState::RS_SECONDARY, OpTime(Timestamp(1, 0), 0));
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
 
     // set up args
     ReplSetHeartbeatArgsV1 args;
@@ -3910,7 +3909,7 @@ TEST_F(PrepareHeartbeatResponseTest, PrepareHeartbeatResponseWithSyncSource) {
         HostAndPort("h2"), "rs0", MemberState::RS_SECONDARY, OpTime(Timestamp(1, 0), 0));
     heartbeatFromMember(
         HostAndPort("h2"), "rs0", MemberState::RS_SECONDARY, OpTime(Timestamp(1, 0), 0));
-    getTopoCoord().chooseNewSyncSource(now()++, OpTime());
+    getTopoCoord().chooseNewSyncSource(now()++, Timestamp());
 
     // set up args
     ReplSetHeartbeatArgs args;

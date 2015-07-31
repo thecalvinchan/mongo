@@ -77,6 +77,7 @@ env.Library(
         '$BUILD_DIR/mongo/rpc/command_status',
         '$BUILD_DIR/mongo/rpc/rpc',
         '$BUILD_DIR/mongo/util/net/network',
+        '$BUILD_DIR/mongo/util/md5',
         'cyrus_sasl_client_session',
         'read_preference',
     ]
@@ -94,38 +95,20 @@ env.Library(
 )
 
 env.Library(
-    target='remote_command_runner',
-    source=[
-        'remote_command_runner.cpp',
-    ],
-    LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
-        '$BUILD_DIR/mongo/db/common',
-        '$BUILD_DIR/mongo/util/foundation',
-        '$BUILD_DIR/mongo/util/net/hostandport',
-    ]
-)
-
-env.Library(
     target='remote_command_runner_impl',
     source=[
         'remote_command_runner_impl.cpp',
     ],
     LIBDEPS=[
-        'connection_pool',
-        'remote_command_runner',
+        '$BUILD_DIR/mongo/base',
+        '$BUILD_DIR/mongo/db/common',
         '$BUILD_DIR/mongo/db/query/command_request_response',
         '$BUILD_DIR/mongo/db/query/lite_parsed_query',
-    ]
-)
-
-env.Library(
-    target='remote_command_runner_mock',
-    source=[
-        'remote_command_runner_mock.cpp',
-    ],
-    LIBDEPS=[
-         'remote_command_runner',
+        '$BUILD_DIR/mongo/executor/task_executor_interface',
+        '$BUILD_DIR/mongo/rpc/metadata',
+        '$BUILD_DIR/mongo/rpc/protocol',
+        '$BUILD_DIR/mongo/util/net/hostandport',
+        'connection_pool',
     ]
 )
 
@@ -181,7 +164,6 @@ if env['MONGO_BUILD_SASL_CLIENT']:
         ],
         LIBDEPS=[
             '$BUILD_DIR/mongo/util/foundation',
-            '$BUILD_DIR/mongo/util/signal_handlers_synchronous',
         ],
         SYSLIBDEPS=saslLibs,
     )
@@ -216,6 +198,8 @@ env.Library(
         'parallel.cpp',
     ],
     LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
+        'clientdriver',
     ],
 )
 
@@ -227,7 +211,7 @@ env.Library(
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/executor/task_executor_interface',
-        '$BUILD_DIR/mongo/logger/logger',
+        '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/namespace_string',
         '$BUILD_DIR/mongo/rpc/command_status',
     ],

@@ -9,7 +9,7 @@ env.Library(
         "working_set.cpp",
     ],
     LIBDEPS = [
-        "$BUILD_DIR/mongo/bson/bson",
+        "$BUILD_DIR/mongo/base",
     ],
 )
 
@@ -29,6 +29,7 @@ env.Library(
         "scoped_timer.cpp",
     ],
     LIBDEPS = [
+        '$BUILD_DIR/mongo/util/net/network',
     ],
 )
 
@@ -58,6 +59,7 @@ env.Library(
         "oplogstart.cpp",
         "or.cpp",
         "pipeline_proxy.cpp",
+        "plan_stage.cpp",
         "projection.cpp",
         "projection_exec.cpp",
         "queued_data_stage.cpp",
@@ -67,12 +69,15 @@ env.Library(
         "stagedebug_cmd.cpp",
         "subplan.cpp",
         "text.cpp",
+        "text_match.cpp",
+        "text_or.cpp",
         "update.cpp",
         "working_set_common.cpp",
     ],
     LIBDEPS = [
         "scoped_timer",
-        "$BUILD_DIR/mongo/bson/bson",
+        "working_set",
+        "$BUILD_DIR/mongo/base",
     ],
 )
 

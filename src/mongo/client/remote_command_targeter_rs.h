@@ -50,7 +50,11 @@ public:
      */
     RemoteCommandTargeterRS(const std::string& rsName, const std::vector<HostAndPort>& seedHosts);
 
+    ConnectionString connectionString() override;
+
     StatusWith<HostAndPort> findHost(const ReadPreferenceSetting& readPref) override;
+
+    void markHostNotMaster(const HostAndPort& host) override;
 
 private:
     // Name of the replica set which this targeter maintains

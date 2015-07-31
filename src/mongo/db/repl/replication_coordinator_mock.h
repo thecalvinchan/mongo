@@ -99,8 +99,8 @@ public:
 
     virtual OpTime getMyLastOptime() const;
 
-    virtual ReadAfterOpTimeResponse waitUntilOpTime(OperationContext* txn,
-                                                    const ReadAfterOpTimeArgs& settings) override;
+    virtual ReadConcernResponse waitUntilOpTime(OperationContext* txn,
+                                                const ReadConcernArgs& settings) override;
 
     virtual OID getElectionId();
 
@@ -127,6 +127,8 @@ public:
     virtual ReplicaSetConfig getConfig() const;
 
     virtual void processReplSetGetConfig(BSONObjBuilder* result);
+
+    virtual void processReplicationMetadata(const ReplicationMetadata& replMetadata);
 
     virtual Status setMaintenanceMode(bool activate);
 
@@ -170,7 +172,7 @@ public:
 
     virtual Status checkReplEnabledForCommand(BSONObjBuilder* result);
 
-    virtual HostAndPort chooseNewSyncSource();
+    virtual HostAndPort chooseNewSyncSource(const Timestamp& lastTimestampFetched);
 
     virtual void blacklistSyncSource(const HostAndPort& host, Date_t until);
 
@@ -187,7 +189,7 @@ public:
     virtual Status processReplSetDeclareElectionWinner(const ReplSetDeclareElectionWinnerArgs& args,
                                                        long long* responseTerm);
 
-    virtual void prepareCursorResponseInfo(BSONObjBuilder* objBuilder);
+    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder);
 
     virtual Status processHeartbeatV1(const ReplSetHeartbeatArgsV1& args,
                                       ReplSetHeartbeatResponse* response);
@@ -198,7 +200,11 @@ public:
 
     virtual long long getTerm();
 
-    virtual bool updateTerm(long long term);
+    virtual Status updateTerm(long long term);
+
+    virtual void onSnapshotCreate(OpTime timeOfSnapshot);
+
+    virtual void dropAllSnapshots() override;
 
 private:
     const ReplSettings _settings;

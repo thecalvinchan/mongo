@@ -28,12 +28,13 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "mongo/base/string_data.h"
 #include "mongo/client/connection_string.h"
 #include "mongo/client/read_preference.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/platform/atomic_word.h"
-#include "mongo/platform/cstdint.h"
 #include "mongo/rpc/protocol.h"
 #include "mongo/rpc/metadata.h"
 #include "mongo/rpc/unique_message.h"
@@ -401,7 +402,6 @@ public:
                       bool assertOk = true,
                       std::string* actualServer = 0) = 0;
     virtual void say(Message& toSend, bool isRetry = false, std::string* actualServer = 0) = 0;
-    virtual void sayPiggyBack(Message& toSend) = 0;
     /* used by QueryOption_Exhaust.  To use that your subclass must implement this. */
     virtual bool recv(Message& m) {
         verify(false);
@@ -946,18 +946,14 @@ private:
     /**
      * The rpc protocols this client supports.
      *
-     * TODO: Change to rpc::supports::kAll once OP_COMMAND is implemented in
-     * mongos (SERVER-18292).
      */
-    rpc::ProtocolSet _clientRPCProtocols{rpc::supports::kOpQueryOnly};
+    rpc::ProtocolSet _clientRPCProtocols{rpc::supports::kAll};
 
     /**
-     * The rpc protocol the remote server(s) support.
-     *
-     * TODO: implement proper detection of RPC protocol support when OP_COMMAND
-     * is implemented in mongos (SERVER-18292).
+     * The rpc protocol the remote server(s) support. We support 'opQueryOnly' by default unless
+     * we detect support for OP_COMMAND at connection time.
      */
-    rpc::ProtocolSet _serverRPCProtocols{rpc::supports::kAll};
+    rpc::ProtocolSet _serverRPCProtocols{rpc::supports::kOpQueryOnly};
 
     rpc::RequestMetadataWriter _metadataWriter;
     rpc::ReplyMetadataReader _metadataReader;
@@ -1088,7 +1084,7 @@ public:
      */
     virtual bool isStillConnected() = 0;
 
-    virtual void killCursor(long long cursorID) = 0;
+    virtual void killCursor(long long cursorID);
 
     virtual bool callRead(Message& toSend, Message& response) = 0;
 
@@ -1128,16 +1124,34 @@ public:
         _numConnections.fetchAndAdd(-1);
     }
 
-    /** Connect to a Mongo database server.
-
-       If autoReconnect is true, you can try to use the DBClientConnection even when
-       false was returned -- it will try to connect again.
-
-       @param server server to connect to.
-       @param errmsg any relevant error message will appended to the string
-       @return false if fails to connect.
-    */
+    /**
+     * Connect to a Mongo database server.
+     *
+     * If autoReconnect is true, you can try to use the DBClientConnection even when
+     * false was returned -- it will try to connect again.
+     *
+     * @param server server to connect to.
+     * @param errmsg any relevant error message will appended to the string
+     * @return false if fails to connect.
+     */
     virtual bool connect(const HostAndPort& server, std::string& errmsg);
+
+    /**
+     * Semantically equivalent to the previous connect method, but returns a Status
+     * instead of taking an errmsg out parameter.
+     *
+     * @param server The server to connect to.
+     */
+    Status connect(const HostAndPort& server);
+
+    /**
+     * This version of connect does not run 'isMaster' after creating a TCP connection to the
+     * remote host. This method should be used only when calling 'isMaster' would create a deadlock,
+     * such as in 'isSelf'.
+     *
+     * @param server The server to connect to.
+     */
+    Status connectSocketOnly(const HostAndPort& server);
 
     /** Connect to a Mongo database server.  Exception throwing version.
         Throws a UserException if cannot connect.
@@ -1148,11 +1162,6 @@ public:
        @param serverHostname host to connect to.  can include port number ( 127.0.0.1 ,
                                127.0.0.1:5555 )
     */
-    void connect(const std::string& serverHostname) {
-        std::string errmsg;
-        if (!connect(HostAndPort(serverHostname), errmsg))
-            throw ConnectException(std::string("can't connect ") + errmsg);
-    }
 
     /**
      * Logs out the connection for the given database.
@@ -1195,32 +1204,31 @@ public:
     }
 
     bool isStillConnected() {
-        return p ? p->isStillConnected() : true;
+        return _port ? _port->isStillConnected() : true;
     }
 
     MessagingPort& port() {
-        verify(p);
-        return *p;
+        verify(_port);
+        return *_port;
     }
 
     std::string toString() const {
         std::stringstream ss;
-        ss << _serverString;
-        if (!_serverAddrString.empty())
-            ss << " (" << _serverAddrString << ")";
+        ss << _serverAddress;
+        if (!_resolvedAddress.empty())
+            ss << " (" << _resolvedAddress << ")";
         if (_failed)
             ss << " failed";
         return ss.str();
     }
 
     std::string getServerAddress() const {
-        return _serverString;
+        return _serverAddress.toString();
     }
     const HostAndPort& getServerHostAndPort() const {
-        return _server;
+        return _serverAddress;
     }
 
-    virtual void killCursor(long long cursorID);
     virtual bool callRead(Message& toSend, Message& response) {
         return call(toSend, response);
     }
@@ -1256,28 +1264,21 @@ public:
      */
     void setParentReplSetName(const std::string& replSetName);
 
-    static void setLazyKillCursor(bool lazy) {
-        _lazyKillCursor = lazy;
-    }
-    static bool getLazyKillCursor() {
-        return _lazyKillCursor;
-    }
-
     uint64_t getSockCreationMicroSec() const;
 
 protected:
     friend class SyncClusterConnection;
     virtual void _auth(const BSONObj& params);
-    virtual void sayPiggyBack(Message& toSend);
 
-    std::unique_ptr<MessagingPort> p;
-    std::unique_ptr<SockAddr> server;
+    std::unique_ptr<MessagingPort> _port;
+
     bool _failed;
     const bool autoReconnect;
     Backoff autoReconnectBackoff;
-    HostAndPort _server;            // remember for reconnects
-    std::string _serverString;      // server host and port
-    std::string _serverAddrString;  // resolved ip of server
+
+    HostAndPort _serverAddress;
+    std::string _resolvedAddress;
+
     void _checkConnection();
 
     // throws SocketException if in failed state and not reconnecting or if waiting to reconnect
@@ -1288,10 +1289,8 @@ protected:
 
     std::map<std::string, BSONObj> authCache;
     double _so_timeout;
-    bool _connect(std::string& errmsg);
 
     static AtomicInt32 _numConnections;
-    static bool _lazyKillCursor;  // lazy means we piggy back kill cursors on next op
 
 private:
     /**

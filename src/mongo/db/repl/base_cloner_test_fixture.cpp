@@ -38,6 +38,9 @@
 namespace mongo {
 namespace repl {
 
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
+
 const HostAndPort BaseClonerTest::target("localhost", -1);
 const NamespaceString BaseClonerTest::nss("db.coll");
 const BSONObj BaseClonerTest::idIndexSpec = BSON("v" << 1 << "key" << BSON("_id" << 1) << "name"
@@ -122,7 +125,7 @@ const Status& BaseClonerTest::getStatus() const {
 void BaseClonerTest::scheduleNetworkResponse(NetworkOperationIterator noi, const BSONObj& obj) {
     auto net = getNet();
     Milliseconds millis(0);
-    RemoteCommandResponse response(obj, millis);
+    RemoteCommandResponse response(obj, BSONObj(), millis);
     ReplicationExecutor::ResponseStatus responseStatus(response);
     net->scheduleResponse(noi, net->now(), responseStatus);
 }

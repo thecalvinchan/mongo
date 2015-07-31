@@ -78,7 +78,7 @@ struct GroupRequest {
  *
  * Only created through the getExecutorGroup path.
  */
-class GroupStage : public PlanStage {
+class GroupStage final : public PlanStage {
     MONGO_DISALLOW_COPYING(GroupStage);
 
 public:
@@ -86,25 +86,18 @@ public:
                const GroupRequest& request,
                WorkingSet* workingSet,
                PlanStage* child);
-    virtual ~GroupStage() {}
 
-    virtual StageState work(WorkingSetID* out);
-    virtual bool isEOF();
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    StageState work(WorkingSetID* out) final;
+    bool isEOF() final;
+    void doReattachToOperationContext(OperationContext* opCtx) final;
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_GROUP;
     }
 
-    virtual PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats() final;
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -143,10 +136,7 @@ private:
     // The WorkingSet we annotate with results.  Not owned by us.
     WorkingSet* _ws;
 
-    CommonStats _commonStats;
     GroupStats _specificStats;
-
-    std::unique_ptr<PlanStage> _child;
 
     // Current state for this stage.
     GroupState _groupState;

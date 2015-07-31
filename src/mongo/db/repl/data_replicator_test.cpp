@@ -36,18 +36,18 @@
 #include "mongo/db/json.h"
 #include "mongo/db/repl/base_cloner_test_fixture.h"
 #include "mongo/db/repl/data_replicator.h"
-#include "mongo/db/repl/replication_coordinator.h"
-#include "mongo/db/repl/replication_coordinator_impl.h"
-#include "mongo/db/repl/replica_set_config.h"
-#include "mongo/db/repl/replication_coordinator_mock.h"
-#include "mongo/db/repl/replication_coordinator.h"
+#include "mongo/db/repl/member_state.h"
+#include "mongo/db/repl/optime.h"
 #include "mongo/db/repl/replication_executor_test_fixture.h"
 #include "mongo/db/repl/replication_executor.h"
+#include "mongo/db/repl/reporter.h"
+#include "mongo/db/repl/sync_source_selector.h"
 #include "mongo/executor/network_interface_mock.h"
 #include "mongo/stdx/mutex.h"
 #include "mongo/util/fail_point_service.h"
 #include "mongo/util/concurrency/thread_name.h"
 #include "mongo/util/log.h"
+#include "mongo/util/mongoutils/str.h"
 
 #include "mongo/unittest/barrier.h"
 #include "mongo/unittest/unittest.h"
@@ -56,37 +56,64 @@ namespace {
 using namespace mongo;
 using namespace mongo::repl;
 using executor::NetworkInterfaceMock;
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 using LockGuard = stdx::lock_guard<stdx::mutex>;
 using UniqueLock = stdx::unique_lock<stdx::mutex>;
 using mutex = stdx::mutex;
 
-ReplicaSetConfig assertMakeRSConfig(const BSONObj& configBson) {
-    ReplicaSetConfig config;
-    ASSERT_OK(config.initialize(configBson));
-    ASSERT_OK(config.validate());
-    return config;
-}
-const HostAndPort target("localhost", -1);
+class SyncSourceSelectorMock : public SyncSourceSelector {
+    MONGO_DISALLOW_COPYING(SyncSourceSelectorMock);
 
-class DataReplicatorTest : public ReplicationExecutorTest {
+public:
+    SyncSourceSelectorMock(const HostAndPort& syncSource) : _syncSource(syncSource) {}
+    void clearSyncSourceBlacklist() override {}
+    HostAndPort chooseNewSyncSource(const Timestamp& ts) override {
+        HostAndPort result = _syncSource;
+        _syncSource = HostAndPort();
+        return result;
+    }
+    void blacklistSyncSource(const HostAndPort& host, Date_t until) override {
+        _blacklistedSource = host;
+    }
+    bool shouldChangeSyncSource(const HostAndPort& currentSource) override {
+        return false;
+    }
+    HostAndPort _syncSource;
+    HostAndPort _blacklistedSource;
+};
+
+class DataReplicatorTest : public ReplicationExecutorTest, public SyncSourceSelector {
 public:
     DataReplicatorTest() {}
 
     void postExecutorThreadLaunch() override{};
 
+    /**
+     * clear/reset state
+     */
     void reset() {
-        // clear/reset state
+        _applierFn = [](OperationContext*, const BSONObj&) -> Status { return Status::OK(); };
+        _rollbackFn = [](OperationContext*, const OpTime&, const HostAndPort&)
+                          -> Status { return Status::OK(); };
+        _setMyLastOptime = [this](const OpTime& opTime) { _myLastOpTime = opTime; };
+        _myLastOpTime = OpTime();
+        _memberState = MemberState::RS_UNKNOWN;
+        _syncSourceSelector.reset(new SyncSourceSelectorMock(HostAndPort("localhost", -1)));
     }
 
-    void createDataReplicator(DataReplicatorOptions opts) {
-        _dr.reset(new DataReplicator(opts, &(getExecutor()), _repl.get()));
-        _dr->__setSourceForTesting(target);
+    // SyncSourceSelector
+    void clearSyncSourceBlacklist() override {
+        _syncSourceSelector->clearSyncSourceBlacklist();
     }
-
-    void createDataReplicator(DataReplicatorOptions opts,
-                              DataReplicator::OnBatchCompleteFn batchCompletedFn) {
-        _dr.reset(new DataReplicator(opts, &(getExecutor()), _repl.get(), batchCompletedFn));
-        _dr->__setSourceForTesting(target);
+    HostAndPort chooseNewSyncSource(const Timestamp& ts) override {
+        return _syncSourceSelector->chooseNewSyncSource(ts);
+    }
+    void blacklistSyncSource(const HostAndPort& host, Date_t until) override {
+        _syncSourceSelector->blacklistSyncSource(host, until);
+    }
+    bool shouldChangeSyncSource(const HostAndPort& currentSource) override {
+        return _syncSourceSelector->shouldChangeSyncSource(currentSource);
     }
 
     void scheduleNetworkResponse(const BSONObj& obj) {
@@ -99,7 +126,7 @@ public:
                                  const BSONObj& obj) {
         NetworkInterfaceMock* net = getNet();
         Milliseconds millis(0);
-        RemoteCommandResponse response(obj, millis);
+        RemoteCommandResponse response(obj, BSONObj(), millis);
         ReplicationExecutor::ResponseStatus responseStatus(response);
         net->scheduleResponse(noi, net->now(), responseStatus);
     }
@@ -129,34 +156,55 @@ public:
     DataReplicator& getDR() {
         return *_dr;
     }
-    ReplicationCoordinator& getRepl() {
-        return *_repl;
-    }
 
 protected:
     void setUp() override {
         ReplicationExecutorTest::setUp();
         reset();
 
-        _settings.replSet = "foo";  // We are a replica set :)
-        _repl.reset(new ReplicationCoordinatorMock(_settings));
         launchExecutorThread();
         DataReplicatorOptions options;
         options.initialSyncRetryWait = Milliseconds(0);
-        createDataReplicator(options);
+        options.applierFn = [this](OperationContext* txn, const BSONObj& operation) {
+            return _applierFn(txn, operation);
+        };
+        options.rollbackFn = [this](OperationContext* txn,
+                                    const OpTime& lastOpTimeWritten,
+                                    const HostAndPort& syncSource) -> Status {
+            return _rollbackFn(txn, lastOpTimeWritten, syncSource);
+        };
+
+        options.prepareReplSetUpdatePositionCommandFn =
+            []() -> StatusWith<BSONObj> { return BSON("replSetUpdatePosition" << 1); };
+        options.getMyLastOptime = [this]() { return _myLastOpTime; };
+        options.setMyLastOptime = [this](const OpTime& opTime) { _setMyLastOptime(opTime); };
+        options.setFollowerMode = [this](const MemberState& state) {
+            _memberState = state;
+            return true;
+        };
+        options.syncSourceSelector = this;
+        try {
+            _dr.reset(new DataReplicator(options, &(getReplExecutor())));
+        } catch (...) {
+            ASSERT_OK(exceptionToStatus());
+        }
     }
 
     void tearDown() override {
         ReplicationExecutorTest::tearDown();
         _dr.reset();
-        _repl.reset();
         // Executor may still invoke callback before shutting down.
     }
 
+    Applier::ApplyOperationFn _applierFn;
+    DataReplicatorOptions::RollbackFn _rollbackFn;
+    DataReplicatorOptions::SetMyLastOptimeFn _setMyLastOptime;
+    OpTime _myLastOpTime;
+    MemberState _memberState;
+    std::unique_ptr<SyncSourceSelector> _syncSourceSelector;
+
 private:
     std::unique_ptr<DataReplicator> _dr;
-    std::unique_ptr<ReplicationCoordinator> _repl;
-    ReplSettings _settings;
 };
 
 TEST_F(DataReplicatorTest, CreateDestroy) {}
@@ -184,13 +232,11 @@ public:
 
     void run() {
         _thread.reset(new stdx::thread(stdx::bind(&InitialSyncBackgroundRunner::_run, this)));
-        sleepmillis(2);  // sleep to let new thread run initialSync so it schedules work
     }
 
 private:
     void _run() {
         setThreadName("InitialSyncRunner");
-        log() << "starting initial sync";
         _result = _dr->initialSync();  // blocking
     }
 
@@ -269,16 +315,16 @@ protected:
             const long long cursorId = cmdElem.numberLong();
             if (isGetMore && cursorId == 1LL) {
                 // process getmore requests from the oplog fetcher
-                auto respBSON = fromjson(str::stream()
-                                         << "{ok:1, cursor:{id:1, ns:'local.oplog.rs', nextBatch:["
-                                            "{ts:Timestamp(" << ++c
-                                         << ",1), h:1, ns:'test.a', v:2, op:'u', o2:{_id:" << c
-                                         << "}, o:{$set:{a:1}}}"
-                                            "]}}");
+                auto respBSON =
+                    fromjson(str::stream() << "{ok:1, cursor:{id:NumberLong(1), ns:'local.oplog.rs'"
+                                              " , nextBatch:[{ts:Timestamp(" << ++c
+                                           << ",1), h:1, ns:'test.a', v:2, op:'u', o2:{_id:" << c
+                                           << "}, o:{$set:{a:1}}}"
+                                              "]}}");
                 net->scheduleResponse(
                     noi,
                     net->now(),
-                    ResponseStatus(RemoteCommandResponse(respBSON, Milliseconds(10))));
+                    ResponseStatus(RemoteCommandResponse(respBSON, BSONObj(), Milliseconds(10))));
                 net->runReadyNetworkOperations();
                 net->exitNetwork();
                 continue;
@@ -292,7 +338,7 @@ protected:
             net->scheduleResponse(noi,
                                   net->now(),
                                   ResponseStatus(RemoteCommandResponse(
-                                      _responses[processedRequests], Milliseconds(10))));
+                                      _responses[processedRequests], BSONObj(), Milliseconds(10))));
             net->runReadyNetworkOperations();
             net->exitNetwork();
             if (++processedRequests >= expectedResponses) {
@@ -311,7 +357,7 @@ protected:
     }
 
     void verifySync(Status s = Status::OK()) {
-        verifySync(_isbr->getResult().getStatus().code());
+        verifySync(s.code());
     }
 
     void verifySync(ErrorCodes::Error code) {
@@ -349,12 +395,12 @@ TEST_F(InitialSyncTest, Complete) {
     const std::vector<BSONObj> responses = {
         // get latest oplog ts
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(1,1), h:1, ns:'a.a', v:2, op:'i', o:{_id:1, a:1}}"
             "]}}"),
         // oplog fetcher find
         fromjson(
-            "{ok:1, cursor:{id:1, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(1), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(1,1), h:1, ns:'a.a', v:2, op:'i', o:{_id:1, a:1}}"
             "]}}"),
         // Clone Start
@@ -362,23 +408,23 @@ TEST_F(InitialSyncTest, Complete) {
         fromjson("{ok:1, databases:[{name:'a'}]}"),
         // listCollections for "a"
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'a.$cmd.listCollections', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'a.$cmd.listCollections', firstBatch:["
             "{name:'a', options:{}} "
             "]}}"),
         // listIndexes:a
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'a.$cmd.listIndexes.a', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'a.$cmd.listIndexes.a', firstBatch:["
             "{v:1, key:{_id:1}, name:'_id_', ns:'a.a'}"
             "]}}"),
         // find:a
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'a.a', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'a.a', firstBatch:["
             "{_id:1, a:1} "
             "]}}"),
         // Clone Done
         // get latest oplog ts
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(2,2), h:1, ns:'b.c', v:2, op:'i', o:{_id:1, c:1}}"
             "]}}"),
         // Applier starts ...
@@ -392,23 +438,22 @@ TEST_F(InitialSyncTest, Complete) {
 TEST_F(InitialSyncTest, MissingDocOnApplyCompletes) {
     DataReplicatorOptions opts;
     int applyCounter{0};
-    opts.applierFn = [&](OperationContext* txn, const BSONObj& op) {
+    _applierFn = [&](OperationContext* txn, const BSONObj& op) {
         if (++applyCounter == 1) {
             return Status(ErrorCodes::NoMatchingDocument, "failed: missing doc.");
         }
         return Status::OK();
     };
-    createDataReplicator(opts);
 
     const std::vector<BSONObj> responses = {
         // get latest oplog ts
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(1,1), h:1, ns:'a.a', v:2, op:'i', o:{_id:1, a:1}}"
             "]}}"),
         // oplog fetcher find
         fromjson(
-            "{ok:1, cursor:{id:1, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(1), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(1,1), h:1, ns:'a.a', v:2, op:'u', o2:{_id:1}, o:{$set:{a:1}}}"
             "]}}"),
         // Clone Start
@@ -416,26 +461,26 @@ TEST_F(InitialSyncTest, MissingDocOnApplyCompletes) {
         fromjson("{ok:1, databases:[{name:'a'}]}"),
         // listCollections for "a"
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'a.$cmd.listCollections', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'a.$cmd.listCollections', firstBatch:["
             "{name:'a', options:{}} "
             "]}}"),
         // listIndexes:a
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'a.$cmd.listIndexes.a', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'a.$cmd.listIndexes.a', firstBatch:["
             "{v:1, key:{_id:1}, name:'_id_', ns:'a.a'}"
             "]}}"),
         // find:a -- empty
-        fromjson("{ok:1, cursor:{id:0, ns:'a.a', firstBatch:[]}}"),
+        fromjson("{ok:1, cursor:{id:NumberLong(0), ns:'a.a', firstBatch:[]}}"),
         // Clone Done
         // get latest oplog ts
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(2,2), h:1, ns:'b.c', v:2, op:'i', o:{_id:1, c:1}}"
             "]}}"),
         // Applier starts ...
         // missing doc fetch -- find:a {_id:1}
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'a.a', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'a.a', firstBatch:["
             "{_id:1, a:1} "
             "]}}"),
     };
@@ -460,11 +505,10 @@ TEST_F(InitialSyncTest, Failpoint) {
                                            << BSON("_id" << 3 << "host"
                                                          << "node3:12345")));
 
-    ReplicaSetConfig config = assertMakeRSConfig(configObj);
     Timestamp time1(100, 1);
     OpTime opTime1(time1, OpTime::kDefaultTerm);
-    getRepl().setMyLastOptime(opTime1);
-    ASSERT(getRepl().setFollowerMode(MemberState::RS_SECONDARY));
+    _myLastOpTime = opTime1;
+    _memberState = MemberState::RS_SECONDARY;
 
     DataReplicator* dr = &(getDR());
     InitialSyncBackgroundRunner isbr(dr);
@@ -480,12 +524,12 @@ TEST_F(InitialSyncTest, FailsOnClone) {
     const std::vector<BSONObj> responses = {
         // get latest oplog ts
         fromjson(
-            "{ok:1, cursor:{id:0, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(1,1), h:1, ns:'a.a', v:2, op:'i', o:{_id:1, a:1}}"
             "]}}"),
         // oplog fetcher find
         fromjson(
-            "{ok:1, cursor:{id:1, ns:'local.oplog.rs', firstBatch:["
+            "{ok:1, cursor:{id:NumberLong(1), ns:'local.oplog.rs', firstBatch:["
             "{ts:Timestamp(1,1), h:1, ns:'a.a', v:2, op:'i', o:{_id:1, a:1}}"
             "]}}"),
         // Clone Start
@@ -497,20 +541,95 @@ TEST_F(InitialSyncTest, FailsOnClone) {
     verifySync(ErrorCodes::InitialSyncFailure);
 }
 
+class TestSyncSourceSelector2 : public SyncSourceSelector {
+public:
+    void clearSyncSourceBlacklist() override {}
+    HostAndPort chooseNewSyncSource(const Timestamp& ts) override {
+        LockGuard lk(_mutex);
+        auto result = HostAndPort(str::stream() << "host-" << _nextSourceNum++, -1);
+        _condition.notify_all();
+        return result;
+    }
+    void blacklistSyncSource(const HostAndPort& host, Date_t until) override {
+        LockGuard lk(_mutex);
+        _blacklistedSource = host;
+    }
+    bool shouldChangeSyncSource(const HostAndPort& currentSource) override {
+        return false;
+    }
+    mutable stdx::mutex _mutex;
+    stdx::condition_variable _condition;
+    int _nextSourceNum{0};
+    HostAndPort _blacklistedSource;
+};
+
 class SteadyStateTest : public DataReplicatorTest {
 protected:
-    void _testOplogStartMissing(const BSONObj& oplogFetcherResponse) {
+    void _setUpOplogFetcherFailed() {
         DataReplicator& dr = getDR();
+        _syncSourceSelector.reset(new TestSyncSourceSelector2());
+        _memberState = MemberState::RS_UNKNOWN;
         auto net = getNet();
         net->enterNetwork();
         ASSERT_OK(dr.start());
+    }
 
+    void _testOplogFetcherFailed(const BSONObj& oplogFetcherResponse,
+                                 const Status& rollbackStatus,
+                                 const HostAndPort& expectedRollbackSource,
+                                 const HostAndPort& expectedBlacklistedSource,
+                                 const HostAndPort& expectedFinalSource,
+                                 const MemberState& expectedFinalState,
+                                 const DataReplicatorState& expectedDataReplicatorState,
+                                 int expectedNextSourceNum) {
+        stdx::mutex mutex;
+        OperationContext* rollbackTxn = nullptr;
+        HostAndPort rollbackSource;
+        unittest::Barrier barrier(2U);
+        _rollbackFn = [&](OperationContext* txn,
+                          const OpTime& lastOpTimeWritten,
+                          const HostAndPort& syncSource) -> Status {
+            stdx::lock_guard<stdx::mutex> lock(mutex);
+            rollbackTxn = txn;
+            rollbackSource = syncSource;
+            barrier.countDownAndWait();
+            return rollbackStatus;
+        };
+
+        auto net = getNet();
         ASSERT_TRUE(net->hasReadyRequests());
         auto noi = net->getNextReadyRequest();
+        ASSERT_EQUALS("find", std::string(noi->getRequest().cmdObj.firstElementFieldName()));
         scheduleNetworkResponse(noi, oplogFetcherResponse);
         net->runReadyNetworkOperations();
-        ASSERT_EQUALS(MemberState(MemberState::RS_RECOVERING).toString(),
-                      getRepl().getMemberState().toString());
+
+        // Replicator state should be ROLLBACK before rollback function returns.
+        DataReplicator& dr = getDR();
+        ASSERT_EQUALS(toString(DataReplicatorState::Rollback), toString(dr.getState()));
+
+        // Wait for rollback function to be called.
+        barrier.countDownAndWait();
+        {
+            stdx::lock_guard<stdx::mutex> lock(mutex);
+            ASSERT_TRUE(rollbackTxn);
+            ASSERT_EQUALS(expectedRollbackSource, rollbackSource);
+        }
+
+        dr.waitForState(expectedDataReplicatorState);
+
+        // Wait for data replicator to request a new sync source if rollback is expected to fail.
+        if (!rollbackStatus.isOK()) {
+            TestSyncSourceSelector2* syncSourceSelector =
+                static_cast<TestSyncSourceSelector2*>(_syncSourceSelector.get());
+            UniqueLock lk(syncSourceSelector->_mutex);
+            while (syncSourceSelector->_nextSourceNum < expectedNextSourceNum) {
+                syncSourceSelector->_condition.wait(lk);
+            }
+            ASSERT_EQUALS(expectedBlacklistedSource, syncSourceSelector->_blacklistedSource);
+        }
+
+        ASSERT_EQUALS(expectedFinalSource, dr.getSyncSource());
+        ASSERT_EQUALS(expectedFinalState.toString(), _memberState.toString());
     }
 };
 
@@ -529,7 +648,7 @@ TEST_F(SteadyStateTest, ShutdownAfterStart) {
     net->enterNetwork();
     ASSERT_OK(dr.start());
     ASSERT_TRUE(net->hasReadyRequests());
-    getExecutor().shutdown();
+    getReplExecutor().shutdown();
     ASSERT_EQUALS(toString(DataReplicatorState::Steady), toString(dr.getState()));
     ASSERT_EQUALS(ErrorCodes::IllegalOperation, dr.start().code());
 }
@@ -552,19 +671,246 @@ TEST_F(SteadyStateTest, RequestShutdownAfterStart) {
     ASSERT_EQUALS(toString(DataReplicatorState::Uninitialized), toString(dr.getState()));
 }
 
-TEST_F(SteadyStateTest, RemoteOplogEmpty) {
-    _testOplogStartMissing(fromjson("{ok:1, cursor:{id:0, ns:'local.oplog.rs', firstBatch: []}}"));
+class ShutdownExecutorSyncSourceSelector : public SyncSourceSelector {
+public:
+    ShutdownExecutorSyncSourceSelector(ReplicationExecutor* exec) : _exec(exec) {}
+    void clearSyncSourceBlacklist() override {}
+    HostAndPort chooseNewSyncSource(const Timestamp& ts) override {
+        _exec->shutdown();
+        return HostAndPort();
+    }
+    void blacklistSyncSource(const HostAndPort& host, Date_t until) override {}
+    bool shouldChangeSyncSource(const HostAndPort& currentSource) override {
+        return false;
+    }
+    ReplicationExecutor* _exec;
+};
+
+TEST_F(SteadyStateTest, ScheduleNextActionFailsAfterChoosingEmptySyncSource) {
+    _syncSourceSelector.reset(new ShutdownExecutorSyncSourceSelector(&getReplExecutor()));
+
+    DataReplicator& dr = getDR();
+    ASSERT_EQUALS(toString(DataReplicatorState::Uninitialized), toString(dr.getState()));
+    auto net = getNet();
+    net->enterNetwork();
+    ASSERT_OK(dr.start());
+    ASSERT_EQUALS(HostAndPort(), dr.getSyncSource());
+    ASSERT_EQUALS(toString(DataReplicatorState::Uninitialized), toString(dr.getState()));
 }
 
-TEST_F(SteadyStateTest, RemoteOplogFirstOperationMissingTimestamp) {
-    _testOplogStartMissing(
-        fromjson("{ok:1, cursor:{id:0, ns:'local.oplog.rs', firstBatch: [{}]}}"));
+TEST_F(SteadyStateTest, ChooseNewSyncSourceAfterFailedNetworkRequest) {
+    TestSyncSourceSelector2* testSyncSourceSelector = new TestSyncSourceSelector2();
+    _syncSourceSelector.reset(testSyncSourceSelector);
+
+    _memberState = MemberState::RS_UNKNOWN;
+    DataReplicator& dr = getDR();
+    ASSERT_EQUALS(toString(DataReplicatorState::Uninitialized), toString(dr.getState()));
+    auto net = getNet();
+    net->enterNetwork();
+    ASSERT_OK(dr.start());
+    ASSERT_TRUE(net->hasReadyRequests());
+    ASSERT_EQUALS(toString(DataReplicatorState::Steady), toString(dr.getState()));
+    // Simulating an invalid remote oplog query response to cause the data replicator to
+    // blacklist the existing sync source and request a new one.
+    scheduleNetworkResponse(BSON("ok" << 0));
+    net->runReadyNetworkOperations();
+
+    // Wait for data replicator to request a new sync source.
+    {
+        UniqueLock lk(testSyncSourceSelector->_mutex);
+        while (testSyncSourceSelector->_nextSourceNum < 2) {
+            testSyncSourceSelector->_condition.wait(lk);
+        }
+        ASSERT_EQUALS(HostAndPort("host-0", -1), testSyncSourceSelector->_blacklistedSource);
+    }
+    ASSERT_EQUALS(HostAndPort("host-1", -1), dr.getSyncSource());
+    ASSERT_EQUALS(MemberState(MemberState::RS_UNKNOWN).toString(), _memberState.toString());
+    ASSERT_EQUALS(toString(DataReplicatorState::Steady), toString(dr.getState()));
 }
 
-TEST_F(SteadyStateTest, RemoteOplogFirstOperationTimestampDoesNotMatch) {
-    _testOplogStartMissing(fromjson(
-        "{ok:1, cursor:{id:0, ns:'local.oplog.rs', "
-        "firstBatch: [{ts:Timestamp(1,1)}]}}"));
+TEST_F(SteadyStateTest, RemoteOplogEmptyRollbackSucceeded) {
+    _setUpOplogFetcherFailed();
+    auto oplogFetcherResponse =
+        fromjson("{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch: []}}");
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status::OK(),
+                            HostAndPort("host-0", -1),  // rollback source
+                            HostAndPort(),              // sync source should not be blacklisted.
+                            HostAndPort("host-0", -1),
+                            MemberState::RS_SECONDARY,
+                            DataReplicatorState::Steady,
+                            2);
+}
+
+TEST_F(SteadyStateTest, RemoteOplogEmptyRollbackFailed) {
+    _setUpOplogFetcherFailed();
+    auto oplogFetcherResponse =
+        fromjson("{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch: []}}");
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status(ErrorCodes::OperationFailed, "rollback failed"),
+                            HostAndPort("host-0", -1),  // rollback source
+                            HostAndPort("host-0", -1),
+                            HostAndPort("host-1", -1),
+                            MemberState::RS_UNKNOWN,
+                            DataReplicatorState::Rollback,
+                            2);
+}
+
+TEST_F(SteadyStateTest, RemoteOplogFirstOperationMissingTimestampRollbackFailed) {
+    _setUpOplogFetcherFailed();
+    auto oplogFetcherResponse =
+        fromjson("{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch: [{}]}}");
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status(ErrorCodes::OperationFailed, "rollback failed"),
+                            HostAndPort("host-0", -1),  // rollback source
+                            HostAndPort("host-0", -1),
+                            HostAndPort("host-1", -1),
+                            MemberState::RS_UNKNOWN,
+                            DataReplicatorState::Rollback,
+                            2);
+}
+
+TEST_F(SteadyStateTest, RemoteOplogFirstOperationTimestampDoesNotMatchRollbackFailed) {
+    _setUpOplogFetcherFailed();
+    auto oplogFetcherResponse = fromjson(
+        "{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch:[{ts:Timestamp(1,1)}]}}");
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status(ErrorCodes::OperationFailed, "rollback failed"),
+                            HostAndPort("host-0", -1),  // rollback source
+                            HostAndPort("host-0", -1),
+                            HostAndPort("host-1", -1),
+                            MemberState::RS_UNKNOWN,
+                            DataReplicatorState::Rollback,
+                            2);
+}
+
+TEST_F(SteadyStateTest, RollbackTwoSyncSourcesBothFailed) {
+    _setUpOplogFetcherFailed();
+    auto oplogFetcherResponse =
+        fromjson("{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch: []}}");
+
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status(ErrorCodes::OperationFailed, "rollback failed"),
+                            HostAndPort("host-0", -1),  // rollback source
+                            HostAndPort("host-0", -1),
+                            HostAndPort("host-1", -1),
+                            MemberState::RS_UNKNOWN,
+                            DataReplicatorState::Rollback,
+                            2);
+
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status(ErrorCodes::OperationFailed, "rollback failed"),
+                            HostAndPort("host-1", -1),  // rollback source
+                            HostAndPort("host-1", -1),
+                            HostAndPort("host-2", -1),
+                            MemberState::RS_UNKNOWN,
+                            DataReplicatorState::Rollback,
+                            3);
+}
+
+TEST_F(SteadyStateTest, RollbackTwoSyncSourcesSecondRollbackSucceeds) {
+    _setUpOplogFetcherFailed();
+    auto oplogFetcherResponse =
+        fromjson("{ok:1, cursor:{id:NumberLong(0), ns:'local.oplog.rs', firstBatch: []}}");
+
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status(ErrorCodes::OperationFailed, "rollback failed"),
+                            HostAndPort("host-0", -1),  // rollback source
+                            HostAndPort("host-0", -1),
+                            HostAndPort("host-1", -1),
+                            MemberState::RS_UNKNOWN,
+                            DataReplicatorState::Rollback,
+                            2);
+
+    _testOplogFetcherFailed(oplogFetcherResponse,
+                            Status::OK(),
+                            HostAndPort("host-1", -1),  // rollback source
+                            HostAndPort("host-0", -1),  // blacklisted source unchanged
+                            HostAndPort("host-1", -1),
+                            MemberState::RS_SECONDARY,
+                            DataReplicatorState::Steady,
+                            2);  // not used when rollback is expected to succeed
+}
+
+TEST_F(SteadyStateTest, PauseDataReplicator) {
+    auto operationToApply = BSON("op"
+                                 << "a"
+                                 << "ts" << Timestamp(Seconds(123), 0));
+    stdx::mutex mutex;
+    unittest::Barrier barrier(2U);
+    Timestamp lastTimestampApplied;
+    BSONObj operationApplied;
+    _applierFn = [&](OperationContext* txn, const BSONObj& op) {
+        stdx::lock_guard<stdx::mutex> lock(mutex);
+        operationApplied = op;
+        barrier.countDownAndWait();
+        return Status::OK();
+    };
+    DataReplicatorOptions::SetMyLastOptimeFn oldSetMyLastOptime = _setMyLastOptime;
+    _setMyLastOptime = [&](const OpTime& opTime) {
+        oldSetMyLastOptime(opTime);
+        stdx::lock_guard<stdx::mutex> lock(mutex);
+        lastTimestampApplied = opTime.getTimestamp();
+        barrier.countDownAndWait();
+    };
+
+    auto& dr = getDR();
+    _myLastOpTime = OpTime(operationToApply["ts"].timestamp(), OpTime::kDefaultTerm);
+    _memberState = MemberState::RS_SECONDARY;
+
+    auto net = getNet();
+    net->enterNetwork();
+
+    ASSERT_OK(dr.start());
+
+    ASSERT_TRUE(net->hasReadyRequests());
+    {
+        auto networkRequest = net->getNextReadyRequest();
+        auto commandResponse = BSON(
+            "ok" << 1 << "cursor" << BSON("id" << 0LL << "ns"
+                                               << "local.oplog.rs"
+                                               << "firstBatch" << BSON_ARRAY(operationToApply)));
+        scheduleNetworkResponse(networkRequest, commandResponse);
+    }
+
+    dr.pause();
+
+    ASSERT_EQUALS(0U, dr.getOplogBufferCount());
+
+    // Data replication will process the fetcher response but will not schedule the applier.
+    net->runReadyNetworkOperations();
+    ASSERT_EQUALS(operationToApply["ts"].timestamp(), dr.getLastTimestampFetched());
+
+    // Schedule a bogus work item to ensure that the operation applier function
+    // is not scheduled.
+    auto& exec = getReplExecutor();
+    exec.scheduleWork(
+        [&barrier](const executor::TaskExecutor::CallbackArgs&) { barrier.countDownAndWait(); });
+
+
+    // Wake up executor thread and wait for bogus work callback to be invoked.
+    net->exitNetwork();
+    barrier.countDownAndWait();
+
+    // Oplog buffer should contain fetched operations since applier is not scheduled.
+    ASSERT_EQUALS(1U, dr.getOplogBufferCount());
+
+    dr.resume();
+
+    // Wait for applier function.
+    barrier.countDownAndWait();
+    // Run scheduleWork() work item scheduled in DataReplicator::_onApplyBatchFinish().
+    net->exitNetwork();
+
+    // Wait for batch completion callback.
+    barrier.countDownAndWait();
+
+    ASSERT_EQUALS(MemberState(MemberState::RS_SECONDARY).toString(), _memberState.toString());
+    {
+        stdx::lock_guard<stdx::mutex> lock(mutex);
+        ASSERT_EQUALS(operationToApply, operationApplied);
+        ASSERT_EQUALS(operationToApply["ts"].timestamp(), lastTimestampApplied);
+    }
 }
 
 TEST_F(SteadyStateTest, ApplyOneOperation) {
@@ -575,23 +921,22 @@ TEST_F(SteadyStateTest, ApplyOneOperation) {
     unittest::Barrier barrier(2U);
     Timestamp lastTimestampApplied;
     BSONObj operationApplied;
-    auto batchCompletedFn = [&](const Timestamp& ts) {
-        stdx::lock_guard<stdx::mutex> lock(mutex);
-        lastTimestampApplied = ts;
-        barrier.countDownAndWait();
-    };
-    DataReplicatorOptions opts;
-    opts.applierFn = [&](OperationContext* txn, const BSONObj& op) {
+    _applierFn = [&](OperationContext* txn, const BSONObj& op) {
         stdx::lock_guard<stdx::mutex> lock(mutex);
         operationApplied = op;
         barrier.countDownAndWait();
         return Status::OK();
     };
-    createDataReplicator(opts, batchCompletedFn);
+    DataReplicatorOptions::SetMyLastOptimeFn oldSetMyLastOptime = _setMyLastOptime;
+    _setMyLastOptime = [&](const OpTime& opTime) {
+        oldSetMyLastOptime(opTime);
+        stdx::lock_guard<stdx::mutex> lock(mutex);
+        lastTimestampApplied = opTime.getTimestamp();
+        barrier.countDownAndWait();
+    };
 
-    auto& repl = getRepl();
-    repl.setMyLastOptime(OpTime(operationToApply["ts"].timestamp(), 0));
-    ASSERT_TRUE(repl.setFollowerMode(MemberState::RS_SECONDARY));
+    _myLastOpTime = OpTime(operationToApply["ts"].timestamp(), OpTime::kDefaultTerm);
+    _memberState = MemberState::RS_SECONDARY;
 
     auto net = getNet();
     net->enterNetwork();
@@ -608,7 +953,11 @@ TEST_F(SteadyStateTest, ApplyOneOperation) {
                                                << "firstBatch" << BSON_ARRAY(operationToApply)));
         scheduleNetworkResponse(networkRequest, commandResponse);
     }
+    ASSERT_EQUALS(0U, dr.getOplogBufferCount());
+
+    // Oplog buffer should be empty because contents are transferred to applier.
     net->runReadyNetworkOperations();
+    ASSERT_EQUALS(0U, dr.getOplogBufferCount());
 
     // Wait for applier function.
     barrier.countDownAndWait();
@@ -619,8 +968,7 @@ TEST_F(SteadyStateTest, ApplyOneOperation) {
     // Wait for batch completion callback.
     barrier.countDownAndWait();
 
-    ASSERT_EQUALS(MemberState(MemberState::RS_SECONDARY).toString(),
-                  repl.getMemberState().toString());
+    ASSERT_EQUALS(MemberState(MemberState::RS_SECONDARY).toString(), _memberState.toString());
     {
         stdx::lock_guard<stdx::mutex> lock(mutex);
         ASSERT_EQUALS(operationToApply, operationApplied);

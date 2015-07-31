@@ -339,6 +339,7 @@ private:
     bool _isCapturingLogMessages;
     std::vector<std::string> _capturedLogMessages;
     logger::MessageLogDomain::AppenderHandle _captureAppenderHandle;
+    logger::MessageLogDomain::AppenderAutoPtr _captureAppender;
 };
 
 /**
@@ -533,12 +534,6 @@ T assertGet(StatusWith<T>&& swt) {
     ASSERT_OK(swt.getStatus());
     return std::move(swt.getValue());
 }
-
-/**
- * Hack to support the runaway test observer in dbtests.  This is a hook that
- * unit test running harnesses (unittest_main and dbtests) must implement.
- */
-void onCurrentTestNameChange(const std::string& testName);
 
 /**
  * Return a list of suite names.

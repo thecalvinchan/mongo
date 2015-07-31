@@ -32,7 +32,6 @@
 
 #include "mongo/db/commands/mr.h"
 
-
 #include "mongo/client/connpool.h"
 #include "mongo/client/parallel.h"
 #include "mongo/db/auth/authorization_session.h"
@@ -56,9 +55,11 @@
 #include "mongo/db/query/query_planner.h"
 #include "mongo/db/range_preserver.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
+#include "mongo/db/s/collection_metadata.h"
+#include "mongo/db/s/sharded_connection_info.h"
+#include "mongo/db/s/sharding_state.h"
 #include "mongo/s/catalog/catalog_cache.h"
 #include "mongo/s/chunk_manager.h"
-#include "mongo/s/collection_metadata.h"
 #include "mongo/s/config.h"
 #include "mongo/s/d_state.h"
 #include "mongo/s/grid.h"
@@ -510,9 +511,9 @@ void State::appendResults(BSONObjBuilder& final) {
 
     BSONArrayBuilder b((int)(_size * 1.2));  // _size is data size, doesn't count overhead and keys
 
-    for (InMemory::iterator i = _temp->begin(); i != _temp->end(); ++i) {
-        BSONObj key = i->first;
-        BSONList& all = i->second;
+    for (const auto& entry : *_temp) {
+        const BSONObj& key = entry.first;
+        const BSONList& all = entry.second;
 
         verify(all.size() == 1);
 
@@ -1004,23 +1005,19 @@ void State::finalReduce(CurOp* op, ProgressMeterHolder& pm) {
     const NamespaceString nss(_config.incLong);
     const WhereCallbackReal whereCallback(_txn, nss.db());
 
-    CanonicalQuery* cqRaw;
-    verify(CanonicalQuery::canonicalize(
-               _config.incLong, BSONObj(), sortKey, BSONObj(), &cqRaw, whereCallback).isOK());
-    std::unique_ptr<CanonicalQuery> cq(cqRaw);
+    auto statusWithCQ =
+        CanonicalQuery::canonicalize(nss, BSONObj(), sortKey, BSONObj(), whereCallback);
+    verify(statusWithCQ.isOK());
+    std::unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
     Collection* coll = getCollectionOrUassert(ctx->getDb(), _config.incLong);
     invariant(coll);
 
-    PlanExecutor* rawExec;
-    verify(getExecutor(_txn,
-                       coll,
-                       cq.release(),
-                       PlanExecutor::YIELD_AUTO,
-                       &rawExec,
-                       QueryPlannerParams::NO_TABLE_SCAN).isOK());
+    auto statusWithPlanExecutor = getExecutor(
+        _txn, coll, std::move(cq), PlanExecutor::YIELD_AUTO, QueryPlannerParams::NO_TABLE_SCAN);
+    verify(statusWithPlanExecutor.isOK());
 
-    unique_ptr<PlanExecutor> exec(rawExec);
+    unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
     // iterate over all sorted objects
     BSONObj o;
@@ -1051,7 +1048,7 @@ void State::finalReduce(CurOp* op, ProgressMeterHolder& pm) {
         prev = o;
         all.push_back(o);
 
-        if (!exec->restoreState(_txn)) {
+        if (!exec->restoreState()) {
             break;
         }
 
@@ -1240,6 +1237,10 @@ public:
         return true;
     }
 
+    bool supportsReadConcern() const final {
+        return true;
+    }
+
     virtual void help(stringstream& help) const {
         help << "Run a map/reduce operation on the server.\n";
         help << "Note this is used for aggregation, not querying, in MongoDB.\n";
@@ -1298,8 +1299,10 @@ public:
 
             // Get metadata before we check our version, to make sure it doesn't increment
             // in the meantime.  Need to do this in the same lock scope as the block.
-            if (shardingState.needCollectionMetadata(client, config.ns)) {
-                collMetadata = shardingState.getCollectionMetadata(config.ns);
+            if (ShardingState::get(getGlobalServiceContext())
+                    ->needCollectionMetadata(client, config.ns)) {
+                collMetadata =
+                    ShardingState::get(getGlobalServiceContext())->getCollectionMetadata(config.ns);
             }
         }
 
@@ -1363,27 +1366,26 @@ public:
 
                 const WhereCallbackReal whereCallback(txn, nss.db());
 
-                CanonicalQuery* cqRaw;
-                if (!CanonicalQuery::canonicalize(
-                         config.ns, config.filter, config.sort, BSONObj(), &cqRaw, whereCallback)
-                         .isOK()) {
+                auto statusWithCQ = CanonicalQuery::canonicalize(
+                    nss, config.filter, config.sort, BSONObj(), whereCallback);
+                if (!statusWithCQ.isOK()) {
                     uasserted(17238, "Can't canonicalize query " + config.filter.toString());
                     return 0;
                 }
-                std::unique_ptr<CanonicalQuery> cq(cqRaw);
+                std::unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
 
                 Database* db = scopedAutoDb->getDb();
                 Collection* coll = state.getCollectionOrUassert(db, config.ns);
                 invariant(coll);
 
-                PlanExecutor* rawExec;
-                if (!getExecutor(txn, coll, cq.release(), PlanExecutor::YIELD_AUTO, &rawExec)
-                         .isOK()) {
+                auto statusWithPlanExecutor =
+                    getExecutor(txn, coll, std::move(cq), PlanExecutor::YIELD_AUTO);
+                if (!statusWithPlanExecutor.isOK()) {
                     uasserted(17239, "Can't get executor for query " + config.filter.toString());
                     return 0;
                 }
 
-                unique_ptr<PlanExecutor> exec(rawExec);
+                unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
                 Timer mt;
 
@@ -1427,7 +1429,7 @@ public:
                         scopedXact.reset(new ScopedTransaction(txn, MODE_IS));
                         scopedAutoDb.reset(new AutoGetDb(txn, nss.db(), MODE_S));
 
-                        exec->restoreState(txn);
+                        exec->restoreState();
 
                         // Need to reload the database, in case it was dropped after we
                         // released the lock
@@ -1623,7 +1625,7 @@ public:
 
             // Fetch result from other shards 1 chunk at a time. It would be better to do
             // just one big $or query, but then the sorting would not be efficient.
-            const string shardName = shardingState.getShardName();
+            const string shardName = ShardingState::get(getGlobalServiceContext())->getShardName();
             const ChunkMap& chunkMap = cm->getChunkMap();
 
             for (ChunkMap::const_iterator it = chunkMap.begin(); it != chunkMap.end(); ++it) {

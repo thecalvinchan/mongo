@@ -49,7 +49,6 @@
 #include "mongo/db/server_parameters.h"
 #include "mongo/db/stats/counters.h"
 #include "mongo/db/write_concern.h"
-#include "mongo/s/d_state.h"
 
 namespace mongo {
 
@@ -128,17 +127,9 @@ bool WriteCmd::run(OperationContext* txn,
     BatchedCommandRequest request(_writeType);
     BatchedCommandResponse response;
 
-    if (!request.parseBSON(cmdObj, &errMsg) || !request.isValid(&errMsg)) {
+    if (!request.parseBSON(dbName, cmdObj, &errMsg) || !request.isValid(&errMsg)) {
         return appendCommandStatus(result, Status(ErrorCodes::FailedToParse, errMsg));
     }
-
-    // Note that this is a runCommmand, and therefore, the database and the collection name
-    // are in different parts of the grammar for the command. But it's more convenient to
-    // work with a NamespaceString. We built it here and replace it in the parsed command.
-    // Internally, everything work with the namespace string as opposed to just the
-    // collection name.
-    NamespaceString nss(dbName, request.getNS());
-    request.setNSS(nss);
 
     StatusWith<WriteConcernOptions> wcStatus = extractWriteConcern(cmdObj);
 
@@ -171,17 +162,9 @@ Status WriteCmd::explain(OperationContext* txn,
     // Parse the batch request.
     BatchedCommandRequest request(_writeType);
     std::string errMsg;
-    if (!request.parseBSON(cmdObj, &errMsg) || !request.isValid(&errMsg)) {
+    if (!request.parseBSON(dbname, cmdObj, &errMsg) || !request.isValid(&errMsg)) {
         return Status(ErrorCodes::FailedToParse, errMsg);
     }
-
-    // Note that this is a runCommmand, and therefore, the database and the collection name
-    // are in different parts of the grammar for the command. But it's more convenient to
-    // work with a NamespaceString. We built it here and replace it in the parsed command.
-    // Internally, everything work with the namespace string as opposed to just the
-    // collection name.
-    NamespaceString nsString(dbname, request.getNS());
-    request.setNSS(nsString);
 
     // Do the validation of the batch that is shared with non-explained write batches.
     Status isValid = WriteBatchExecutor::validateBatch(request);
@@ -202,7 +185,7 @@ Status WriteCmd::explain(OperationContext* txn,
 
     if (BatchedCommandRequest::BatchType_Update == _writeType) {
         // Create the update request.
-        UpdateRequest updateRequest(nsString);
+        UpdateRequest updateRequest(request.getNS());
         updateRequest.setQuery(batchItem.getUpdate()->getQuery());
         updateRequest.setUpdates(batchItem.getUpdate()->getUpdateExpr());
         updateRequest.setMulti(batchItem.getUpdate()->getMulti());
@@ -224,20 +207,17 @@ Status WriteCmd::explain(OperationContext* txn,
 
         // Explains of write commands are read-only, but we take write locks so
         // that timing info is more accurate.
-        AutoGetDb autoDb(txn, nsString.db(), MODE_IX);
-        Lock::CollectionLock colLock(txn->lockState(), nsString.ns(), MODE_IX);
-
-        ensureShardVersionOKOrThrow(txn->getClient(), nsString.ns());
+        AutoGetDb autoDb(txn, request.getNS().db(), MODE_IX);
+        Lock::CollectionLock colLock(txn->lockState(), request.getNS().ns(), MODE_IX);
 
         // Get a pointer to the (possibly NULL) collection.
         Collection* collection = NULL;
         if (autoDb.getDb()) {
-            collection = autoDb.getDb()->getCollection(nsString.ns());
+            collection = autoDb.getDb()->getCollection(request.getNS());
         }
 
-        PlanExecutor* rawExec;
-        uassertStatusOK(getExecutorUpdate(txn, collection, &parsedUpdate, debug, &rawExec));
-        std::unique_ptr<PlanExecutor> exec(rawExec);
+        std::unique_ptr<PlanExecutor> exec =
+            uassertStatusOK(getExecutorUpdate(txn, collection, &parsedUpdate, debug));
 
         // Explain the plan tree.
         Explain::explainStages(exec.get(), verbosity, out);
@@ -246,7 +226,7 @@ Status WriteCmd::explain(OperationContext* txn,
         invariant(BatchedCommandRequest::BatchType_Delete == _writeType);
 
         // Create the delete request.
-        DeleteRequest deleteRequest(nsString);
+        DeleteRequest deleteRequest(request.getNS());
         deleteRequest.setQuery(batchItem.getDelete()->getQuery());
         deleteRequest.setMulti(batchItem.getDelete()->getLimit() != 1);
         deleteRequest.setGod(false);
@@ -263,20 +243,17 @@ Status WriteCmd::explain(OperationContext* txn,
 
         // Explains of write commands are read-only, but we take write locks so that timing
         // info is more accurate.
-        AutoGetDb autoDb(txn, nsString.db(), MODE_IX);
-        Lock::CollectionLock colLock(txn->lockState(), nsString.ns(), MODE_IX);
-
-        ensureShardVersionOKOrThrow(txn->getClient(), nsString.ns());
+        AutoGetDb autoDb(txn, request.getNS().db(), MODE_IX);
+        Lock::CollectionLock colLock(txn->lockState(), request.getNS().ns(), MODE_IX);
 
         // Get a pointer to the (possibly NULL) collection.
         Collection* collection = NULL;
         if (autoDb.getDb()) {
-            collection = autoDb.getDb()->getCollection(nsString.ns());
+            collection = autoDb.getDb()->getCollection(request.getNS());
         }
 
-        PlanExecutor* rawExec;
-        uassertStatusOK(getExecutorDelete(txn, collection, &parsedDelete, &rawExec));
-        std::unique_ptr<PlanExecutor> exec(rawExec);
+        std::unique_ptr<PlanExecutor> exec =
+            uassertStatusOK(getExecutorDelete(txn, collection, &parsedDelete));
 
         // Explain the plan tree.
         Explain::explainStages(exec.get(), verbosity, out);

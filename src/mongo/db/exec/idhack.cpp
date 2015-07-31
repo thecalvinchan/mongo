@@ -39,11 +39,13 @@
 #include "mongo/db/index/btree_access_method.h"
 #include "mongo/db/storage/record_fetcher.h"
 #include "mongo/s/d_state.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* IDHackStage::kStageType = "IDHACK";
@@ -52,13 +54,13 @@ IDHackStage::IDHackStage(OperationContext* txn,
                          const Collection* collection,
                          CanonicalQuery* query,
                          WorkingSet* ws)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _collection(collection),
       _workingSet(ws),
       _key(query->getQueryObj()["_id"].wrap()),
       _done(false),
-      _idBeingPagedIn(WorkingSet::INVALID_ID),
-      _commonStats(kStageType) {
+      _idBeingPagedIn(WorkingSet::INVALID_ID) {
     if (NULL != query->getProj()) {
         _addKeyMetadata = query->getProj()->wantIndexKey();
     } else {
@@ -70,14 +72,14 @@ IDHackStage::IDHackStage(OperationContext* txn,
                          Collection* collection,
                          const BSONObj& key,
                          WorkingSet* ws)
-    : _txn(txn),
+    : PlanStage(kStageType),
+      _txn(txn),
       _collection(collection),
       _workingSet(ws),
       _key(key),
       _done(false),
       _addKeyMetadata(false),
-      _idBeingPagedIn(WorkingSet::INVALID_ID),
-      _commonStats(kStageType) {}
+      _idBeingPagedIn(WorkingSet::INVALID_ID) {}
 
 IDHackStage::~IDHackStage() {}
 
@@ -105,10 +107,10 @@ PlanStage::StageState IDHackStage::work(WorkingSetID* out) {
         invariant(_recordCursor);
         WorkingSetID id = _idBeingPagedIn;
         _idBeingPagedIn = WorkingSet::INVALID_ID;
+
+        invariant(WorkingSetCommon::fetchIfUnfetched(_txn, _workingSet, id, _recordCursor));
+
         WorkingSetMember* member = _workingSet->get(id);
-
-        invariant(WorkingSetCommon::fetchIfUnfetched(_txn, member, _recordCursor));
-
         return advance(id, member, out);
     }
 
@@ -139,8 +141,8 @@ PlanStage::StageState IDHackStage::work(WorkingSetID* out) {
         // Create a new WSM for the result document.
         id = _workingSet->allocate();
         WorkingSetMember* member = _workingSet->get(id);
-        member->state = WorkingSetMember::LOC_AND_IDX;
         member->loc = loc;
+        _workingSet->transitionToLocAndIdx(id);
 
         if (!_recordCursor)
             _recordCursor = _collection->getCursor(_txn);
@@ -157,7 +159,7 @@ PlanStage::StageState IDHackStage::work(WorkingSetID* out) {
         }
 
         // The doc was already in memory, so we go ahead and return it.
-        if (!WorkingSetCommon::fetch(_txn, member, _recordCursor)) {
+        if (!WorkingSetCommon::fetch(_txn, _workingSet, id, _recordCursor)) {
             // _id is immutable so the index would return the only record that could
             // possibly match the query.
             _workingSet->free(id);
@@ -197,24 +199,30 @@ PlanStage::StageState IDHackStage::advance(WorkingSetID id,
     return PlanStage::ADVANCED;
 }
 
-void IDHackStage::saveState() {
-    _txn = NULL;
-    ++_commonStats.yields;
+void IDHackStage::doSaveState() {
     if (_recordCursor)
         _recordCursor->saveUnpositioned();
 }
 
-void IDHackStage::restoreState(OperationContext* opCtx) {
-    invariant(_txn == NULL);
-    _txn = opCtx;
-    ++_commonStats.unyields;
+void IDHackStage::doRestoreState() {
     if (_recordCursor)
-        _recordCursor->restore(opCtx);
+        _recordCursor->restore();
 }
 
-void IDHackStage::invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
-    ++_commonStats.invalidates;
+void IDHackStage::doDetachFromOperationContext() {
+    _txn = NULL;
+    if (_recordCursor)
+        _recordCursor->detachFromOperationContext();
+}
 
+void IDHackStage::doReattachToOperationContext(OperationContext* opCtx) {
+    invariant(_txn == NULL);
+    _txn = opCtx;
+    if (_recordCursor)
+        _recordCursor->reattachToOperationContext(opCtx);
+}
+
+void IDHackStage::doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {
     // Since updates can't mutate the '_id' field, we can ignore mutation invalidations.
     if (INVALIDATION_MUTATION == type) {
         return;
@@ -239,20 +247,11 @@ bool IDHackStage::supportsQuery(const CanonicalQuery& query) {
         !query.getParsed().isTailable();
 }
 
-vector<PlanStage*> IDHackStage::getChildren() const {
-    vector<PlanStage*> empty;
-    return empty;
-}
-
-PlanStageStats* IDHackStage::getStats() {
+unique_ptr<PlanStageStats> IDHackStage::getStats() {
     _commonStats.isEOF = isEOF();
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_IDHACK));
-    ret->specific.reset(new IDHackStats(_specificStats));
-    return ret.release();
-}
-
-const CommonStats* IDHackStage::getCommonStats() const {
-    return &_commonStats;
+    unique_ptr<PlanStageStats> ret = make_unique<PlanStageStats>(_commonStats, STAGE_IDHACK);
+    ret->specific = make_unique<IDHackStats>(_specificStats);
+    return ret;
 }
 
 const SpecificStats* IDHackStage::getSpecificStats() const {

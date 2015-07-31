@@ -29,7 +29,7 @@ typedef struct {
 
 	/* Track whether all changes to the page are written. */
 	uint64_t max_txn;
-	uint64_t skipped_txn;
+	uint64_t first_dirty_txn;
 	uint32_t orig_write_gen;
 
 	/*
@@ -162,7 +162,7 @@ typedef struct {
 		 * be evicted as new, in-memory pages, restoring the updates on
 		 * those pages.
 		 */
-		WT_UPD_SKIPPED *skip;		/* Skipped updates */
+		WT_UPD_SKIPPED *skip;	/* Skipped updates */
 		uint32_t	skip_next;
 		size_t		skip_allocated;
 
@@ -362,6 +362,19 @@ __wt_reconcile(WT_SESSION_IMPL *session,
 		WT_STAT_FAST_CONN_INCR(session, rec_pages_eviction);
 		WT_STAT_FAST_DATA_INCR(session, rec_pages_eviction);
 	}
+
+#ifdef HAVE_DIAGNOSTIC
+	{
+	/*
+	 * Check that transaction time always moves forward for a given page.
+	 * If this check fails, reconciliation can free something that a future
+	 * reconciliation will need.
+	 */
+	uint64_t oldest_id = __wt_txn_oldest_id(session);
+	WT_ASSERT(session, WT_TXNID_LE(mod->last_oldest_id, oldest_id));
+	mod->last_oldest_id = oldest_id;
+	}
+#endif
 
 	/* Record the most recent transaction ID we will *not* write. */
 	mod->disk_snap_min = session->txn.snap_min;
@@ -689,7 +702,7 @@ __rec_write_init(WT_SESSION_IMPL *session,
 	 * Running transactions may update the page after we write it, so
 	 * this is the highest ID we can be confident we will see.
 	 */
-	r->skipped_txn = S2C(session)->txn_global.last_running;
+	r->first_dirty_txn = S2C(session)->txn_global.last_running;
 
 	return (0);
 }
@@ -760,7 +773,7 @@ __rec_bnd_cleanup(WT_SESSION_IMPL *session, WT_RECONCILE *r, int destroy)
 	 * During some big-page evictions we have seen boundary arrays that have
 	 * millions of elements.  That should not be a normal event, but if the
 	 * memory is associated with a random session, it won't be discarded
-	 * until the session is closed.   If there are more than 10,000 boundary
+	 * until the session is closed. If there are more than 10,000 boundary
 	 * structure elements, destroy the boundary array and we'll start over.
 	 */
 	if (destroy || r->bnd_entries > 10 * 1000) {
@@ -838,6 +851,7 @@ static inline int
 __rec_txn_read(WT_SESSION_IMPL *session, WT_RECONCILE *r,
     WT_INSERT *ins, WT_ROW *rip, WT_CELL_UNPACK *vpack, WT_UPDATE **updp)
 {
+	WT_DECL_RET;
 	WT_ITEM ovfl;
 	WT_PAGE *page;
 	WT_UPDATE *upd, *upd_list, *upd_ovfl;
@@ -850,12 +864,17 @@ __rec_txn_read(WT_SESSION_IMPL *session, WT_RECONCILE *r,
 	page = r->page;
 
 	/*
-	 * If we're called with an WT_INSERT reference, use its WT_UPDATE
-	 * list, else is an on-page row-store WT_UPDATE list.
+	 * If called with a WT_INSERT item, use its WT_UPDATE list (which must
+	 * exist), otherwise check for an on-page row-store WT_UPDATE list
+	 * (which may not exist). Return immediately if the item has no updates.
 	 */
-	upd_list = ins == NULL ? WT_ROW_UPDATE(page, rip) : ins->upd;
-	skipped = 0;
+	if (ins == NULL) {
+		if ((upd_list = WT_ROW_UPDATE(page, rip)) == NULL)
+			return (0);
+	} else
+		upd_list = ins->upd;
 
+	skipped = 0;
 	for (max_txn = WT_TXN_NONE, min_txn = UINT64_MAX, upd = upd_list;
 	    upd != NULL; upd = upd->next) {
 		if ((txnid = upd->txnid) == WT_TXN_ABORTED)
@@ -866,9 +885,9 @@ __rec_txn_read(WT_SESSION_IMPL *session, WT_RECONCILE *r,
 			max_txn = txnid;
 		if (WT_TXNID_LT(txnid, min_txn))
 			min_txn = txnid;
-		if (WT_TXNID_LT(txnid, r->skipped_txn) &&
+		if (WT_TXNID_LT(txnid, r->first_dirty_txn) &&
 		    !__wt_txn_visible_all(session, txnid))
-			r->skipped_txn = txnid;
+			r->first_dirty_txn = txnid;
 
 		/*
 		 * Record whether any updates were skipped on the way to finding
@@ -898,15 +917,15 @@ __rec_txn_read(WT_SESSION_IMPL *session, WT_RECONCILE *r,
 		r->max_txn = max_txn;
 
 	/*
-	 * If all updates are globally visible and no updates were skipped, the
+	 * If no updates were skipped and all updates are globally visible, the
 	 * page can be marked clean and we're done, regardless of whether we're
 	 * evicting or checkpointing.
 	 *
-	 * The oldest transaction ID may have moved while we were scanning the
-	 * page, so it is possible to skip an update but then find that by the
-	 * end of the scan, all updates are stable.
+	 * We have to check both: the oldest transaction ID may have moved while
+	 * we were scanning the update list, so it is possible to skip an update
+	 * but then find that by the end of the scan, all updates are stable.
 	 */
-	if (__wt_txn_visible_all(session, max_txn) && !skipped)
+	if (!skipped && __wt_txn_visible_all(session, max_txn))
 		return (0);
 
 	/*
@@ -976,8 +995,11 @@ __rec_txn_read(WT_SESSION_IMPL *session, WT_RECONCILE *r,
 	 */
 	if (vpack != NULL && vpack->raw == WT_CELL_VALUE_OVFL_RM &&
 	    !__wt_txn_visible_all(session, min_txn)) {
-		WT_RET(__wt_ovfl_txnc_search(
-		    page, vpack->data, vpack->size, &ovfl));
+		if ((ret = __wt_ovfl_txnc_search(
+		    page, vpack->data, vpack->size, &ovfl)) != 0)
+			WT_PANIC_RET(session, ret,
+			    "cached overflow item discarded early");
+
 		/*
 		 * Create an update structure with an impossibly low transaction
 		 * ID and append it to the update list we're about to save.
@@ -1164,7 +1186,7 @@ __rec_child_modify(WT_SESSION_IMPL *session,
 in_memory:
 	/*
 	 * In-memory states: the child is potentially modified if the page's
-	 * modify structure has been instantiated.   If the modify structure
+	 * modify structure has been instantiated. If the modify structure
 	 * exists and the page has actually been modified, set that state.
 	 * If that's not the case, we would normally use the original cell's
 	 * disk address as our reference, but, if we're forced to instantiate
@@ -1220,10 +1242,6 @@ __rec_child_deleted(
 		if (F_ISSET(r, WT_SKIP_UPDATE_ERR))
 			WT_PANIC_RET(session, EINVAL,
 			    "reconciliation illegally skipped an update");
-
-		/* If this page cannot be evicted, quit now. */
-		if (F_ISSET(r, WT_EVICTING))
-			return (EBUSY);
 	}
 
 	/*
@@ -1261,6 +1279,18 @@ __rec_child_deleted(
 			__wt_free(session, ref->addr);
 		}
 		ref->addr = NULL;
+	}
+
+	/*
+	 * If there are deleted child pages that we can't discard immediately,
+	 * keep the page dirty so they are eventually freed.
+	 */
+	if (ref->addr != NULL) {
+		r->leave_dirty = 1;
+
+		/* This page cannot be evicted, quit now. */
+		if (F_ISSET(r, WT_EVICTING))
+			return (EBUSY);
 	}
 
 	/*
@@ -1411,7 +1441,7 @@ __rec_key_state_update(WT_RECONCILE *r, int ovfl_key)
 	 * distinguish between the "last key" and "cur key", compressing the
 	 * size of keys on internal nodes.  If we just built an overflow key,
 	 * we're not going to update the "last key", making suffix compression
-	 * impossible for the next key.   Alternatively, we could remember where
+	 * impossible for the next key. Alternatively, we could remember where
 	 * the last key was on the page, detect it's an overflow key, read it
 	 * from disk and do suffix compression, but that's too much work for an
 	 * unlikely event.)
@@ -1647,7 +1677,7 @@ __rec_split_init(WT_SESSION_IMPL *session,
 	/*
 	 * If we have to split, we want to choose a smaller page size for the
 	 * split pages, because otherwise we could end up splitting one large
-	 * packed page over and over.   We don't want to pick the minimum size
+	 * packed page over and over. We don't want to pick the minimum size
 	 * either, because that penalizes an application that did a bulk load
 	 * and subsequently inserted a few items into packed pages.  Currently
 	 * defaulted to 75%, but I have no empirical evidence that's "correct".
@@ -1819,7 +1849,7 @@ __rec_split_row_promote(
 	 * only need enough bytes in the promoted key to ensure searches go to
 	 * the correct page: the promoted key has to be larger than the last key
 	 * on the leaf page preceding it, but we don't need any more bytes than
-	 * that.   In other words, we can discard any suffix bytes not required
+	 * that. In other words, we can discard any suffix bytes not required
 	 * to distinguish between the key being promoted and the last key on the
 	 * leaf page preceding it.  This can only be done for the first level of
 	 * internal pages, you cannot repeat suffix truncation as you split up
@@ -2267,7 +2297,7 @@ __rec_split_raw_worker(WT_SESSION_IMPL *session,
 	 * First, find out how much space the compress_raw function might need,
 	 * either the value returned from pre_size, or the initial source size.
 	 * Add the compress-skip bytes, and then correct that value for the
-	 * underlying block manager.   As a result, we have a destination buffer
+	 * underlying block manager. As a result, we have a destination buffer
 	 * that's large enough when calling the compress_raw method, and there
 	 * are bytes in the header just for us.
 	 */
@@ -2526,7 +2556,7 @@ __rec_raw_decompress(
 
 	/*
 	 * We skipped an update and we can't write a block, but unfortunately,
-	 * the block has already been compressed.   Decompress the block so we
+	 * the block has already been compressed. Decompress the block so we
 	 * can subsequently re-instantiate it in memory.
 	 */
 	WT_RET(__wt_scr_alloc(session, dsk->mem_size, &tmp));
@@ -3548,7 +3578,7 @@ __rec_col_var_helper(WT_SESSION_IMPL *session, WT_RECONCILE *r,
 	/*
 	 * Occasionally, salvage needs to discard records from the beginning or
 	 * end of the page, and because the items may be part of a RLE cell, do
-	 * the adjustments here.   It's not a mistake we don't bother telling
+	 * the adjustments here. It's not a mistake we don't bother telling
 	 * our caller we've handled all the records from the page we care about,
 	 * and can quit processing the page: salvage is a rare operation and I
 	 * don't want to complicate our caller's loop.
@@ -4080,7 +4110,7 @@ __rec_row_int(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE *page)
 	WT_INTL_FOREACH_BEGIN(session, page, ref) {
 		/*
 		 * There are different paths if the key is an overflow item vs.
-		 * a straight-forward on-page value.   If an overflow item, we
+		 * a straight-forward on-page value. If an overflow item, we
 		 * would have instantiated it, and we can use that fact to set
 		 * things up.
 		 *
@@ -5056,23 +5086,37 @@ err:			__wt_scr_free(session, &tkey);
 	 * be set before a subsequent checkpoint reads it, and because the
 	 * current checkpoint is waiting on this reconciliation to complete,
 	 * there's no risk of that happening).
-	 *
-	 * Otherwise, if no updates were skipped, we have a new maximum
-	 * transaction written for the page (used to decide if a clean page can
-	 * be evicted).  The page only might be clean; if the write generation
-	 * is unchanged since reconciliation started, clear it and update cache
-	 * dirty statistics, if the write generation changed, then the page has
-	 * been written since we started reconciliation, it cannot be
-	 * discarded.
 	 */
 	if (r->leave_dirty) {
-		mod->first_dirty_txn = r->skipped_txn;
+		mod->first_dirty_txn = r->first_dirty_txn;
 
 		btree->modified = 1;
 		WT_FULL_BARRIER();
 	} else {
+		/*
+		 * If no updates were skipped, we have a new maximum transaction
+		 * written for the page (used to decide if a clean page can be
+		 * evicted). Set the highest transaction ID for the page.
+		 *
+		 * Track the highest transaction ID for the tree (used to decide
+		 * if it's safe to discard all of the pages in the tree without
+		 * further checking). Reconciliation in the service of eviction
+		 * is multi-threaded, only update the tree's maximum transaction
+		 * ID when doing a checkpoint. That's sufficient, we only care
+		 * about the highest transaction ID of any update currently in
+		 * the tree, and checkpoint visits every dirty page in the tree.
+		 */
 		mod->rec_max_txn = r->max_txn;
+		if (!F_ISSET(r, WT_EVICTING) &&
+		    WT_TXNID_LT(btree->rec_max_txn, r->max_txn))
+			btree->rec_max_txn = r->max_txn;
 
+		/*
+		 * The page only might be clean; if the write generation is
+		 * unchanged since reconciliation started, it's clean. If the
+		 * write generation changed, the page has been written since
+		 * we started reconciliation and remains dirty.
+		 */
 		if (WT_ATOMIC_CAS4(mod->write_gen, r->orig_write_gen, 0))
 			__wt_cache_dirty_decr(session, page);
 	}

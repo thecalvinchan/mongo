@@ -55,6 +55,7 @@
 #include "mongo/db/jsobj.h"
 #include "mongo/db/matcher/expression_parser.h"
 #include "mongo/db/query/plan_executor.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
@@ -62,6 +63,7 @@ namespace mongo {
 using std::unique_ptr;
 using std::string;
 using std::vector;
+using stdx::make_unique;
 
 /**
  * A command for manually constructing a query tree and running it.
@@ -168,13 +170,13 @@ public:
 
         // Add a fetch at the top for the user so we can get obj back for sure.
         // TODO: Do we want to do this for the user?  I think so.
-        PlanStage* rootFetch = new FetchStage(txn, ws.get(), userRoot, NULL, collection);
+        unique_ptr<PlanStage> rootFetch =
+            make_unique<FetchStage>(txn, ws.get(), userRoot, nullptr, collection);
 
-        PlanExecutor* rawExec;
-        Status execStatus = PlanExecutor::make(
-            txn, ws.release(), rootFetch, collection, PlanExecutor::YIELD_AUTO, &rawExec);
-        fassert(28536, execStatus);
-        std::unique_ptr<PlanExecutor> exec(rawExec);
+        auto statusWithPlanExecutor = PlanExecutor::make(
+            txn, std::move(ws), std::move(rootFetch), collection, PlanExecutor::YIELD_AUTO);
+        fassert(28536, statusWithPlanExecutor.getStatus());
+        std::unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
         BSONArrayBuilder resultBuilder(result.subarrayStart("results"));
 
@@ -228,13 +230,14 @@ public:
             }
             BSONObj argObj = e.Obj();
             if (filterTag == e.fieldName()) {
-                StatusWithMatchExpression swme = MatchExpressionParser::parse(
+                StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(
                     argObj, WhereCallbackReal(txn, collection->ns().db()));
-                if (!swme.isOK()) {
+                if (!statusWithMatcher.isOK()) {
                     return NULL;
                 }
+                std::unique_ptr<MatchExpression> me = std::move(statusWithMatcher.getValue());
                 // exprs is what will wind up deleting this.
-                matcher = swme.getValue();
+                matcher = me.release();
                 verify(NULL != matcher);
                 exprs->mutableVector().push_back(matcher);
             } else if (argsTag == e.fieldName()) {
@@ -336,6 +339,9 @@ public:
                 16929, "Node argument must be provided to fetch", nodeArgs["node"].isABSONObj());
             PlanStage* subNode =
                 parseQuery(txn, collection, nodeArgs["node"].Obj(), workingSet, exprs);
+            uassert(28731,
+                    "Can't parse sub-node of FETCH: " + nodeArgs["node"].Obj().toString(),
+                    NULL != subNode);
             return new FetchStage(txn, workingSet, subNode, matcher, collection);
         } else if ("limit" == nodeName) {
             uassert(
@@ -345,6 +351,9 @@ public:
             uassert(16931, "Num argument must be provided to limit", nodeArgs["num"].isNumber());
             PlanStage* subNode =
                 parseQuery(txn, collection, nodeArgs["node"].Obj(), workingSet, exprs);
+            uassert(28732,
+                    "Can't parse sub-node of LIMIT: " + nodeArgs["node"].Obj().toString(),
+                    NULL != subNode);
             return new LimitStage(nodeArgs["num"].numberInt(), workingSet, subNode);
         } else if ("skip" == nodeName) {
             uassert(
@@ -353,6 +362,9 @@ public:
             uassert(16933, "Num argument must be provided to skip", nodeArgs["num"].isNumber());
             PlanStage* subNode =
                 parseQuery(txn, collection, nodeArgs["node"].Obj(), workingSet, exprs);
+            uassert(28733,
+                    "Can't parse sub-node of SKIP: " + nodeArgs["node"].Obj().toString(),
+                    NULL != subNode);
             return new SkipStage(nodeArgs["num"].numberInt(), workingSet, subNode);
         } else if ("cscan" == nodeName) {
             CollectionScanParams params;
@@ -454,6 +466,9 @@ public:
                     nodeArgs["shouldCallLogOp"].type() == Bool);
             PlanStage* subNode =
                 parseQuery(txn, collection, nodeArgs["node"].Obj(), workingSet, exprs);
+            uassert(28734,
+                    "Can't parse sub-node of DELETE: " + nodeArgs["node"].Obj().toString(),
+                    NULL != subNode);
             DeleteStageParams params;
             params.isMulti = nodeArgs["isMulti"].Bool();
             params.shouldCallLogOp = nodeArgs["shouldCallLogOp"].Bool();

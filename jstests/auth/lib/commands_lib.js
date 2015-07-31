@@ -1440,34 +1440,6 @@ var authCommandsLib = {
                 }
             ]
         },
-/*      temporarily removed see SERVER-13555 
-        {
-            testname: "indexStats",
-            command: {indexStats: "x", index: "a_1"},
-            skipSharded: true, 
-            setup: function (db) {
-                db.x.save({a: 10});
-                db.x.ensureIndex({a: 1});
-            },
-            teardown: function (db) { db.x.drop(); },
-            testcases: [
-                {
-                    runOnDb: firstDbName,
-                    roles: roles_dbAdmin,
-                    privileges: [
-                        { resource: {db: firstDbName, collection: "x"}, actions: ["indexStats"] }
-                    ]
-                },
-                {
-                    runOnDb: secondDbName,
-                    roles: roles_dbAdminAny,
-                    privileges: [
-                        { resource: {db: secondDbName, collection: "x"}, actions: ["indexStats"] }
-                    ]
-                }
-            ]
-        },
-*/
         {
             testname: "isMaster",
             command: {isMaster: 1},
@@ -1475,6 +1447,46 @@ var authCommandsLib = {
                 { runOnDb: adminDbName, roles: roles_all, privileges: [ ] },
                 { runOnDb: firstDbName, roles: roles_all, privileges: [ ] },
                 { runOnDb: secondDbName, roles: roles_all, privileges: [ ] }
+            ]
+        },
+        {
+            testname: "killCursors",
+            command: {killCursors: "foo", cursors: [NumberLong("123")]},
+            skipSharded: true, // TODO enable when killCursors command is implemented on mongos
+            testcases: [
+                {
+                    runOnDb: firstDbName,
+                    roles: {
+                        read: 1,
+                        readAnyDatabase: 1,
+                        readWrite: 1,
+                        readWriteAnyDatabase: 1,
+                        dbOwner: 1,
+                        hostManager: 1,
+                        clusterAdmin: 1,
+                        root: 1,
+                        __system: 1
+                    },
+                    privileges: [
+                        { resource: {db: firstDbName, collection: "foo"}, actions: ["killCursors"] }
+                    ],
+                    expectFail: true
+                },
+                {
+                    runOnDb: secondDbName,
+                    roles: {
+                        readAnyDatabase: 1,
+                        readWriteAnyDatabase: 1,
+                        hostManager: 1,
+                        clusterAdmin: 1,
+                        root: 1,
+                        __system: 1
+                    },
+                    privileges: [
+                        { resource: {db: secondDbName, collection: "foo"}, actions: ["killCursors"] }
+                    ],
+                    expectFail: true
+                }
             ]
         },
         {

@@ -9,7 +9,7 @@ env.Library(
         'path_internal.cpp'
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/common',
     ],
 )
@@ -36,9 +36,10 @@ env.Library(
         'expression_where_noop.cpp',
         'match_details.cpp',
         'matchable.cpp',
+        "matcher.cpp",
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/bson/bson',
+        '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/common',
         '$BUILD_DIR/third_party/shim_pcrecpp',
         'path',

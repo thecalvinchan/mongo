@@ -35,7 +35,7 @@ namespace tinyjs {
 
 NonTerminalNode::NonTerminalNode(TokenType type) : Node(type) {}
 
-const Value NonTerminalNode::evaluate(Scope* scope) const {
+const Value NonTerminalNode::evaluate(Scope* scope, Value& returnValue) const {
     return Value();
 }
 

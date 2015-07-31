@@ -83,7 +83,7 @@ size_t PlanRanker::pickBestPlan(const vector<CandidatePlan>& candidates, PlanRan
     // because multi plan runner will need its own stats
     // trees for explain.
     for (size_t i = 0; i < candidates.size(); ++i) {
-        statTrees.push_back(candidates[i].root->getStats());
+        statTrees.push_back(candidates[i].root->getStats().release());
     }
 
     // Holds (score, candidateInndex).
@@ -196,7 +196,7 @@ double PlanRanker::scoreTree(const PlanStageStats* stats) {
 
     // Just enough to break a tie. Must be small enough to ensure that a more productive
     // plan doesn't lose to a less productive plan due to tie breaking.
-    static const double epsilon = std::min(1.0 / static_cast<double>(10 * workUnits), 1e-4);
+    const double epsilon = std::min(1.0 / static_cast<double>(10 * workUnits), 1e-4);
 
     // We prefer covered projections.
     //

@@ -36,9 +36,12 @@ namespace tinyjs {
 
 MultiplicationOperator::MultiplicationOperator() : BinaryOperator(TokenType::kMultiply) {}
 
-const Value MultiplicationOperator::evaluate(Scope* scope) const {
-    Value leftValue = this->getLeftChild()->evaluate(scope);
-    Value rightValue = this->getRightChild()->evaluate(scope);
+const Value MultiplicationOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    Value leftValue = this->getLeftChild()->evaluate(scope, returnValue);
+    Value rightValue = this->getRightChild()->evaluate(scope, returnValue);
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
         return Value(std::nan(""));
     }

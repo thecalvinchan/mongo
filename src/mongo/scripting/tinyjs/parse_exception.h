@@ -43,7 +43,6 @@ public:
 
     virtual const char* what() const throw() {
         std::string m = "Unparseable token " + tokenValue + ": " + _message;
-        std::cout << m << std::endl;
         return m.c_str();
     };
 

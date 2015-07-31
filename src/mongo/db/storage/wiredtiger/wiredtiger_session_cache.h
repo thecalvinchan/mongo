@@ -31,20 +31,30 @@
 
 #pragma once
 
-#include <map>
+#include <list>
 #include <string>
-#include <vector>
 
 #include <boost/thread/shared_mutex.hpp>
 #include <wiredtiger.h>
 
-#include "mongo/stdx/mutex.h"
+#include "mongo/db/storage/wiredtiger/wiredtiger_snapshot_manager.h"
 #include "mongo/platform/atomic_word.h"
+#include "mongo/stdx/mutex.h"
 #include "mongo/util/concurrency/spin_lock.h"
 
 namespace mongo {
 
 class WiredTigerKVEngine;
+
+class WiredTigerCachedCursor {
+public:
+    WiredTigerCachedCursor(uint64_t id, uint64_t gen, WT_CURSOR* cursor)
+        : _id(id), _gen(gen), _cursor(cursor) {}
+
+    uint64_t _id;   // Source ID, assigned to each URI
+    uint64_t _gen;  // Generation, used to age out old cursors
+    WT_CURSOR* _cursor;
+};
 
 /**
  * This is a structure that caches 1 cursor for each uri.
@@ -64,7 +74,7 @@ public:
      *          of -1 means that this value is not necessary since the session will not be
      *          cached.
      */
-    WiredTigerSession(WT_CONNECTION* conn, int cachePartition = -1, int epoch = -1);
+    WiredTigerSession(WT_CONNECTION* conn, int epoch = -1);
     ~WiredTigerSession();
 
     WT_SESSION* getSession() const {
@@ -72,6 +82,7 @@ public:
     }
 
     WT_CURSOR* getCursor(const std::string& uri, uint64_t id, bool forRecordStore);
+
     void releaseCursor(uint64_t id, WT_CURSOR* cursor);
 
     void closeAllCursors();
@@ -80,82 +91,94 @@ public:
         return _cursorsOut;
     }
 
-    static uint64_t genCursorId();
+    static uint64_t genTableId();
 
     /**
-     * For "metadata:" cursors. Guaranteed never to collide with genCursorId() ids.
+     * For "metadata:" cursors. Guaranteed never to collide with genTableId() ids.
      */
-    static const uint64_t kMetadataCursorId = 0;
+    static const uint64_t kMetadataTableId = 0;
 
 private:
     friend class WiredTigerSessionCache;
 
-    typedef std::vector<WT_CURSOR*> Cursors;
-    typedef std::map<uint64_t, Cursors> CursorMap;
-
+    // The cursor cache is a list of pairs that contain an ID and cursor
+    typedef std::list<WiredTigerCachedCursor> CursorCache;
 
     // Used internally by WiredTigerSessionCache
-    int _getEpoch() const {
+    uint64_t _getEpoch() const {
         return _epoch;
     }
-    int _getCachePartition() const {
-        return _cachePartition;
-    }
 
-
-    const int _cachePartition;
-    const int _epoch;
+    const uint64_t _epoch;
     WT_SESSION* _session;  // owned
-    CursorMap _curmap;     // owned
-    int _cursorsOut;
+    CursorCache _cursors;  // owned
+    uint64_t _cursorGen;
+    int _cursorsCached, _cursorsOut;
 };
 
+/**
+ *  This cache implements a shared pool of WiredTiger sessions with the goal to amortize the
+ *  cost of session creation and destruction over multiple uses.
+ */
 class WiredTigerSessionCache {
 public:
     WiredTigerSessionCache(WiredTigerKVEngine* engine);
     WiredTigerSessionCache(WT_CONNECTION* conn);
     ~WiredTigerSessionCache();
 
+    /**
+     * Returns a previously released session for reuse, or creates a new session.
+     * This method must only be called while holding the global lock to avoid races with
+     * shuttingDown, but otherwise is thread safe.
+     */
     WiredTigerSession* getSession();
+
+    /**
+     * Returns a session to the cache for later reuse. If closeAll was called between getting this
+     * session and releasing it, the session is directly released. This method is thread safe.
+     */
     void releaseSession(WiredTigerSession* session);
 
+    /**
+     * Free all cached sessions and ensures that previously acquired sessions will be freed on
+     * release.
+     */
     void closeAll();
 
+    /**
+     * Transitions the cache to shutting down mode. Any already released sessions are freed and
+     * any sessions released subsequently are leaked. Must be called while holding the global
+     * lock in exclusive mode to avoid races with getSession.
+     */
     void shuttingDown();
 
     WT_CONNECTION* conn() const {
         return _conn;
     }
 
+    WiredTigerSnapshotManager& snapshotManager() {
+        return _snapshotManager;
+    }
+    const WiredTigerSnapshotManager& snapshotManager() const {
+        return _snapshotManager;
+    }
+
 private:
-    typedef std::vector<WiredTigerSession*> SessionPool;
-
-    enum { NumSessionCachePartitions = 64 };
-
-    struct SessionCachePartition {
-        SessionCachePartition() : epoch(0) {}
-        ~SessionCachePartition() {
-            invariant(pool.empty());
-        }
-
-        SpinLock lock;
-        int epoch;
-        SessionPool pool;
-    };
-
-
     WiredTigerKVEngine* _engine;  // not owned, might be NULL
     WT_CONNECTION* _conn;         // not owned
+    WiredTigerSnapshotManager _snapshotManager;
 
-    // Partitioned cache of WT sessions. The partition key is not important, but it is
-    // important that sessions be returned to the same partition they were taken from in order
-    // to have some form of balance between the partitions.
-    SessionCachePartition _cache[NumSessionCachePartitions];
+    // Used as follows:
+    //   The low 31 bits are a count of active calls to releaseSession.
+    //   The high bit is a flag that is set if and only if we're shutting down.
+    AtomicUInt32 _shuttingDown;
+    static const uint32_t kShuttingDownMask = 1 << 31;
 
-    // Regular operations take it in shared mode. Shutdown sets the _shuttingDown flag and
-    // then takes it in exclusive mode. This ensures that all threads, which would return
-    // sessions to the cache would leak them.
-    boost::shared_mutex _shutdownLock;
-    AtomicUInt32 _shuttingDown;  // Used as boolean - 0 = false, 1 = true
+    SpinLock _cacheLock;
+    typedef std::vector<WiredTigerSession*> SessionCache;
+    SessionCache _sessions;
+
+    // Bumped when all open sessions need to be closed
+    AtomicUInt64 _epoch;  // atomic so we can check it outside of the lock
 };
 }

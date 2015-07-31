@@ -52,6 +52,9 @@
 // Defined if unitstd.h is available
 @mongo_config_have_header_unistd_h@
 
+// Defined if memset_s is available
+@mongo_config_have_memset_s@
+
 // Defined if a POSIX monotonic clock is available
 @mongo_config_have_posix_monotonic_clock@
 
@@ -66,7 +69,3 @@
 
 // Defined if SSL support is enabled
 @mongo_config_ssl@
-
-// Defined if gdbserver support is enabled
-@mongo_config_use_gdbserver@
-

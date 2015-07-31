@@ -80,8 +80,8 @@ TEST(QueuedDataStageTest, validateStats) {
     ASSERT_EQUALS(stats->needTime, 1U);
 
     // advanced, with pushed data
-    const WorkingSetMember member;
-    mock->pushBack(member);
+    WorkingSetID id = ws.allocate();
+    mock->pushBack(id);
     mock->work(&wsID);
     ASSERT_EQUALS(stats->works, 2U);
     ASSERT_EQUALS(stats->advanced, 1U);
@@ -91,7 +91,7 @@ TEST(QueuedDataStageTest, validateStats) {
     ASSERT_EQUALS(stats->yields, 1U);
 
     // unyields
-    mock->restoreState(NULL);
+    mock->restoreState();
     ASSERT_EQUALS(stats->unyields, 1U);
 
     // invalidates

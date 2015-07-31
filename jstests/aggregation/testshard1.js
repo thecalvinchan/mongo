@@ -129,6 +129,10 @@ jsTestLog('sum of an arithmetic progression S(n) = (n/2)(a(1) + a(n));');
 assert.eq(a2[0].total, (nItems/2)*(1 + nItems),
        'agg sharded test counter sum failed');
 
+jsTestLog('A group combining all documents into one, averaging a null field.');
+assert.eq(aggregateOrdered(db.ts1, [{$group: {_id: null, avg: {$avg: "$missing"}}}]),
+          [{_id: null, avg: null}]);
+
 jsTestLog('an initial group starts the group in the shards, and combines them in mongos');
 var a3 = aggregateOrdered(db.ts1, [
     { $group: {
@@ -221,6 +225,15 @@ function testAvgStdDev() {
     assert.close(res[0].stdDevPop, stdDev, '', 10 /*decimal places*/);
 }
 testAvgStdDev();
+
+function testSample() {
+    jsTestLog('testing $sample');
+    [0, 1, 10, nItems, nItems + 1].forEach(function(size) {
+        var res = db.ts1.aggregate([{$sample: {size: size}}]).toArray();
+        assert.eq(res.length, Math.min(nItems, size));
+    });
+}
+testSample();
 
 jsTestLog('test $out by copying source collection verbatim to output');
 var outCollection = db.ts1_out;

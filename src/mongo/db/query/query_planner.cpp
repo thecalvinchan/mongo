@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "mongo/client/dbclientinterface.h"  // For QueryOption_foobar
+#include "mongo/db/matcher/expression_algo.h"
 #include "mongo/db/matcher/expression_geo.h"
 #include "mongo/db/matcher/expression_text.h"
 #include "mongo/db/query/canonical_query.h"
@@ -370,7 +371,7 @@ Status QueryPlanner::planFromCache(const CanonicalQuery& query,
     // cases, and we proceed by using the PlanCacheIndexTree to tag the query tree.
 
     // Create a copy of the expression tree.  We use cachedSoln to annotate this with indices.
-    MatchExpression* clone = query.root()->shallowClone();
+    unique_ptr<MatchExpression> clone = std::move(query.root()->shallowClone());
 
     LOG(5) << "Tagging the match expression according to cache data: " << endl
            << "Filter:" << endl
@@ -387,20 +388,20 @@ Status QueryPlanner::planFromCache(const CanonicalQuery& query,
         LOG(5) << "Index " << i << ": " << ie.keyPattern.toString() << endl;
     }
 
-    Status s = tagAccordingToCache(clone, winnerCacheData.tree.get(), indexMap);
+    Status s = tagAccordingToCache(clone.get(), winnerCacheData.tree.get(), indexMap);
     if (!s.isOK()) {
         return s;
     }
 
     // The planner requires a defined sort order.
-    sortUsingTags(clone);
+    sortUsingTags(clone.get());
 
     LOG(5) << "Tagged tree:" << endl
            << clone->toString();
 
-    // Use the cached index assignments to build solnRoot.  Takes ownership of clone.
-    QuerySolutionNode* solnRoot =
-        QueryPlannerAccess::buildIndexedDataAccess(query, clone, false, params.indices, params);
+    // Use the cached index assignments to build solnRoot.
+    QuerySolutionNode* solnRoot = QueryPlannerAccess::buildIndexedDataAccess(
+        query, clone.release(), false, params.indices, params);
 
     if (!solnRoot) {
         return Status(ErrorCodes::BadValue,
@@ -661,7 +662,7 @@ Status QueryPlanner::plan(const CanonicalQuery& query,
            << query.root()->toString();
 
     // If there is a GEO_NEAR it must have an index it can use directly.
-    MatchExpression* gnNode = NULL;
+    const MatchExpression* gnNode = NULL;
     if (QueryPlannerCommon::hasNode(query.root(), MatchExpression::GEO_NEAR, &gnNode)) {
         // No index for GEO_NEAR?  No query.
         RelevantTag* tag = static_cast<RelevantTag*>(gnNode->getTag());
@@ -676,7 +677,7 @@ Status QueryPlanner::plan(const CanonicalQuery& query,
     }
 
     // Likewise, if there is a TEXT it must have an index it can use directly.
-    MatchExpression* textNode = NULL;
+    const MatchExpression* textNode = NULL;
     if (QueryPlannerCommon::hasNode(query.root(), MatchExpression::TEXT, &textNode)) {
         RelevantTag* tag = static_cast<RelevantTag*>(textNode->getTag());
 
@@ -814,15 +815,9 @@ Status QueryPlanner::plan(const CanonicalQuery& query,
         if (!usingIndexToSort) {
             for (size_t i = 0; i < params.indices.size(); ++i) {
                 const IndexEntry& index = params.indices[i];
-                // Only regular (non-plugin) indexes can be used to provide a sort.
-                if (index.type != INDEX_BTREE) {
-                    continue;
-                }
-                // Only non-sparse indexes can be used to provide a sort.
-                if (index.sparse) {
-                    continue;
-                }
-
+                // Only regular (non-plugin) indexes can be used to provide a sort, and only
+                // non-sparse indexes can be used to provide a sort.
+                //
                 // TODO: Sparse indexes can't normally provide a sort, because non-indexed
                 // documents could potentially be missing from the result set.  However, if the
                 // query predicate can be used to guarantee that all documents to be returned
@@ -834,6 +829,18 @@ Status QueryPlanner::plan(const CanonicalQuery& query,
                 // - Index {a: 1, b: "2dsphere"} (which is "geo-sparse", if
                 //   2dsphereIndexVersion=2) should be able to provide a sort for
                 //   find({b: GEO}).sort({a:1}).  SERVER-10801.
+                if (index.type != INDEX_BTREE) {
+                    continue;
+                }
+                if (index.sparse) {
+                    continue;
+                }
+
+                // Partial indexes can only be used to provide a sort only if the query predicate is
+                // compatible.
+                if (index.filterExpr && !expression::isSubsetOf(query.root(), index.filterExpr)) {
+                    continue;
+                }
 
                 const BSONObj kp = QueryPlannerAnalysis::getSortPattern(index.keyPattern);
                 if (providesSort(query, kp)) {

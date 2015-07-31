@@ -28,8 +28,6 @@
 
 #include "mongo/platform/basic.h"
 
-#include <boost/thread/locks.hpp>
-
 #include "mongo/bson/bsonobjbuilder.h"
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/authorization_session.h"
@@ -168,11 +166,12 @@ public:
              BSONObjBuilder& result) {
         unique_ptr<MatchExpression> filter;
         if (cmdObj["filter"].isABSONObj()) {
-            StatusWithMatchExpression res = MatchExpressionParser::parse(cmdObj["filter"].Obj());
-            if (!res.isOK()) {
-                return appendCommandStatus(result, res.getStatus());
+            StatusWithMatchExpression statusWithMatcher =
+                MatchExpressionParser::parse(cmdObj["filter"].Obj());
+            if (!statusWithMatcher.isOK()) {
+                return appendCommandStatus(result, statusWithMatcher.getStatus());
             }
-            filter.reset(res.getValue());
+            filter = std::move(statusWithMatcher.getValue());
         }
 
         result.appendArray("operations",

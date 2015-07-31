@@ -35,6 +35,7 @@
 #include <sstream>
 
 #include "mongo/base/checked_cast.h"
+#include "mongo/bson/bsontypes.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/mongoutils/str.h"
@@ -65,7 +66,10 @@ std::string ASTParser::traverse() {
 }
 
 Value ASTParser::evaluate(Scope* s) {
-    return this->_head->evaluate(s);
+    Value returnValue;
+    returnValue = Value(BSONUndefined);
+    this->_head->evaluate(s, returnValue);
+    return returnValue;
 }
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {

@@ -38,6 +38,7 @@
 #include "mongo/db/auth/authorization_manager.h"
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/catalog/document_validation.h"
+#include "mongo/db/client.h"
 #include "mongo/db/client_basic.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/operation_context.h"
@@ -142,11 +143,6 @@ public:
             return false;
         }
 
-        if (!grid.catalogManager()->isShardHost(toShard->getConnString())) {
-            errmsg = "that server isn't known to me";
-            return false;
-        }
-
         log() << "Moving " << dbname << " primary from: " << fromShard->toString()
               << " to: " << toShard->toString();
 
@@ -165,7 +161,8 @@ public:
         BSONObj moveStartDetails =
             _buildMoveEntry(dbname, fromShard->toString(), toShard->toString(), shardedColls);
 
-        grid.catalogManager()->logChange(txn, "movePrimary.start", dbname, moveStartDetails);
+        grid.catalogManager()->logChange(
+            txn->getClient()->clientAddress(true), "movePrimary.start", dbname, moveStartDetails);
 
         BSONArrayBuilder barr;
         barr.append(shardedColls);
@@ -243,7 +240,8 @@ public:
         BSONObj moveFinishDetails =
             _buildMoveEntry(dbname, oldPrimary, toShard->toString(), shardedColls);
 
-        grid.catalogManager()->logChange(txn, "movePrimary", dbname, moveFinishDetails);
+        grid.catalogManager()->logChange(
+            txn->getClient()->clientAddress(true), "movePrimary", dbname, moveFinishDetails);
         return true;
     }
 

@@ -148,8 +148,10 @@ unsigned remapFileToStartAt;
 enum { DurStatsResetIntervalMillis = 3 * 1000 };
 
 // Size sanity checks
-BOOST_STATIC_ASSERT(UncommittedBytesLimit > BSONObjMaxInternalSize * 3);
-BOOST_STATIC_ASSERT(sizeof(void*) == 4 || UncommittedBytesLimit > BSONObjMaxInternalSize * 6);
+static_assert(UncommittedBytesLimit > BSONObjMaxInternalSize * 3,
+              "UncommittedBytesLimit > BSONObjMaxInternalSize * 3");
+static_assert(sizeof(void*) == 4 || UncommittedBytesLimit > BSONObjMaxInternalSize * 6,
+              "sizeof(void*) == 4 || UncommittedBytesLimit > BSONObjMaxInternalSize * 6");
 
 
 /**
@@ -687,7 +689,7 @@ static void durThread() {
             stdx::unique_lock<stdx::mutex> lock(flushMutex);
 
             for (unsigned i = 0; i <= 2; i++) {
-                if (boost::cv_status::no_timeout ==
+                if (stdx::cv_status::no_timeout ==
                     flushRequested.wait_for(lock, Milliseconds(oneThird))) {
                     // Someone forced a flush
                     break;

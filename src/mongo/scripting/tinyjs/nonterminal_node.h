@@ -41,7 +41,7 @@ public:
     virtual ~NonTerminalNode() {};
     //evaluate and getChildren are only used for testing
     virtual std::vector<Node*> getChildren() const = 0;
-    const Value evaluate(Scope* scope) const;
+    const Value evaluate(Scope* scope, Value& returnValue) const;
     virtual StringData getName() const;
     const static std::string names[];
 private:

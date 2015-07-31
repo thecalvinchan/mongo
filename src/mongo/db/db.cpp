@@ -91,7 +91,7 @@
 #include "mongo/db/storage/storage_engine.h"
 #include "mongo/db/storage_options.h"
 #include "mongo/db/ttl.h"
-#include "mongo/executor/network_interface_impl.h"
+#include "mongo/executor/network_interface_factory.h"
 #include "mongo/platform/process_id.h"
 #include "mongo/scripting/engine.h"
 #include "mongo/stdx/memory.h"
@@ -145,8 +145,6 @@ ntservice::NtServiceDefaultStrings defaultServiceStrings = {
 #endif
 
 Timer startupSrandTimer;
-
-QueryResult::View emptyMoreResult(long long);
 
 class MyMessageHandler : public MessageHandler {
 public:
@@ -515,7 +513,7 @@ static void _initAndListen(int listenPort) {
     // The snapshot thread provides historical collection level and lock statistics for use
     // by the web interface. Only needed when HTTP is enabled.
     if (serverGlobalParams.isHttpInterfaceEnabled) {
-        snapshotThread.go();
+        statsSnapshotThread.go();
 
         invariant(dbWebServer);
         stdx::thread web(stdx::bind(&webServerListenThread, dbWebServer));
@@ -733,12 +731,13 @@ static void startupConfigActions(const std::vector<std::string>& args) {
 #endif
 }
 
-MONGO_INITIALIZER_WITH_PREREQUISITES(CreateReplicationManager, ("SetGlobalEnvironment"))
+MONGO_INITIALIZER_WITH_PREREQUISITES(CreateReplicationManager,
+                                     ("SetGlobalEnvironment", "SSLManager"))
 (InitializerContext* context) {
     auto replCoord = stdx::make_unique<repl::ReplicationCoordinatorImpl>(
         getGlobalReplSettings(),
         new repl::ReplicationCoordinatorExternalStateImpl,
-        new executor::NetworkInterfaceImpl{},
+        executor::makeNetworkInterface().release(),
         new repl::StorageInterfaceImpl{},
         new repl::TopologyCoordinatorImpl(Seconds(repl::maxSyncSourceLagSecs)),
         static_cast<int64_t>(curTimeMillis64()));

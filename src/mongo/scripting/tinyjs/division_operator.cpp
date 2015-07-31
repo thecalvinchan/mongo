@@ -36,9 +36,12 @@ namespace tinyjs {
 
 DivisionOperator::DivisionOperator() : BinaryOperator(TokenType::kDivide) {}
 
-const Value DivisionOperator::evaluate(Scope* scope) const {
-    Value leftValue = this->getLeftChild()->evaluate(scope);
-    Value rightValue = this->getRightChild()->evaluate(scope);
+const Value DivisionOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (!returnValue.nullish()) {
+        return returnValue;
+    }
+    Value leftValue = this->getLeftChild()->evaluate(scope, returnValue);
+    Value rightValue = this->getRightChild()->evaluate(scope, returnValue);
 
     if (!countsAsNumber(leftValue) || !countsAsNumber(rightValue)) {
         return Value(std::nan(""));
@@ -54,10 +57,8 @@ const Value DivisionOperator::evaluate(Scope* scope) const {
 
     if (isZero(rightValue)) {
         if (isZero(leftValue)) {
-            std::cout << "0/0 " << std::endl;
             return Value(std::nan(""));
         } else {
-            std::cout << "right value is 0 " << std::endl;
             return (isNegative(leftValue) ? Value(-std::numeric_limits<double>::infinity()) : Value(std::numeric_limits<double>::infinity()));
         }
     } else if (leftValue.getType() == NumberDouble) {

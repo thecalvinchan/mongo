@@ -87,6 +87,12 @@ __wt_block_verify_start(WT_SESSION_IMPL *session,
 	WT_RET(__bit_alloc(session, block->frags, &block->fragfile));
 
 	/*
+	 * Set this before reading any extent lists: don't panic if we see
+	 * corruption.
+	 */
+	block->verify = 1;
+
+	/*
 	 * We maintain an allocation list that is rolled forward through the
 	 * set of checkpoints.
 	 */
@@ -102,8 +108,6 @@ __wt_block_verify_start(WT_SESSION_IMPL *session,
 	/* Configuration: strict behavior on any error. */
 	WT_RET(__wt_config_gets(session, cfg, "strict", &cval));
 	block->verify_strict = cval.val ? 1 : 0;
-
-	block->verify = 1;
 	return (0);
 }
 
@@ -220,7 +224,7 @@ __wt_verify_ckpt_load(
 	 * Checkpoint verification is similar to deleting checkpoints.  As we
 	 * read each new checkpoint, we merge the allocation lists (accumulating
 	 * all allocated pages as we move through the system), and then remove
-	 * any pages found in the discard list.   The result should be a
+	 * any pages found in the discard list. The result should be a
 	 * one-to-one mapping to the pages we find in this specific checkpoint.
 	 */
 	el = &ci->alloc;
@@ -228,7 +232,7 @@ __wt_verify_ckpt_load(
 		WT_RET(__wt_block_extlist_read(
 		    session, block, el, ci->file_size));
 		WT_RET(__wt_block_extlist_merge(
-		    session, el, &block->verify_alloc));
+		    session, block, el, &block->verify_alloc));
 		__wt_block_extlist_free(session, el);
 	}
 	el = &ci->discard;
@@ -236,7 +240,7 @@ __wt_verify_ckpt_load(
 		WT_RET(__wt_block_extlist_read(
 		    session, block, el, ci->file_size));
 		WT_EXT_FOREACH(ext, el->off)
-			WT_RET(__wt_block_off_remove_overlap(session,
+			WT_RET(__wt_block_off_remove_overlap(session, block,
 			    &block->verify_alloc, ext->off, ext->size));
 		__wt_block_extlist_free(session, el);
 	}
@@ -259,13 +263,13 @@ __wt_verify_ckpt_load(
 
 	/*
 	 * The root page of the checkpoint appears on the alloc list, but not,
-	 * at least until the checkpoint is deleted, on a discard list.   To
+	 * at least until the checkpoint is deleted, on a discard list. To
 	 * handle this case, remove the root page from the accumulated list of
 	 * checkpoint pages, so it doesn't add a new requirement for subsequent
 	 * checkpoints.
 	 */
 	if (ci->root_offset != WT_BLOCK_INVALID_OFFSET)
-		WT_RET(__wt_block_off_remove_overlap(session,
+		WT_RET(__wt_block_off_remove_overlap(session, block,
 		    &block->verify_alloc, ci->root_offset, ci->root_size));
 
 	/*

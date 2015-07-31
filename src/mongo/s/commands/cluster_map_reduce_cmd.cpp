@@ -91,7 +91,7 @@ BSONObj fixForShards(const BSONObj& orig,
         if (fn == bypassDocumentValidationCommandOption() || fn == "map" || fn == "mapreduce" ||
             fn == "mapReduce" || fn == "mapparams" || fn == "reduce" || fn == "query" ||
             fn == "sort" || fn == "scope" || fn == "verbose" || fn == "$queryOptions" ||
-            fn == LiteParsedQuery::cmdOptionMaxTimeMS) {
+            fn == "$readMajorityTemporaryName" || fn == LiteParsedQuery::cmdOptionMaxTimeMS) {
             b.append(e);
         } else if (fn == "out" || fn == "finalize") {
             // We don't want to copy these
@@ -445,7 +445,7 @@ public:
                 BSONObj sortKey = BSON("_id" << 1);
                 ShardKeyPattern sortKeyPattern(sortKey);
                 Status status = grid.catalogManager()->shardCollection(
-                    finalColLong, sortKeyPattern, true, &sortedSplitPts, &outShardIds);
+                    txn, finalColLong, sortKeyPattern, true, sortedSplitPts, outShardIds);
                 if (!status.isOK()) {
                     return appendCommandStatus(result, status);
                 }

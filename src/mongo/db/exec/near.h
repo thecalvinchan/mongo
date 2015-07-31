@@ -50,7 +50,7 @@ namespace mongo {
  * Child stages need to implement functionality which:
  *
  * - defines a distance metric
- * - iterates through ordered distance intervals, nearest to furthest
+ * - iterates through ordered distance intervals, nearest to farthest
  * - provides a covering for each distance interval
  *
  * For example - given a distance search over documents with distances from [0 -> 10], the child
@@ -58,7 +58,8 @@ namespace mongo {
  *
  * Each interval requires a PlanStage which *covers* the interval (returns all results in the
  * interval).  Results in each interval are buffered fully before being returned to ensure that
- * ordering is preserved.
+ * ordering is preserved. Results that are in the cover, but not in the interval will remain
+ * buffered to be returned in subsequent search intervals.
  *
  * For efficient search, the child stage which covers the distance interval in question should
  * not return too many results outside the interval, but correctness only depends on the child
@@ -70,6 +71,15 @@ namespace mongo {
  * Also for efficient search, the intervals should not be too large or too small - though again
  * correctness does not depend on interval size.
  *
+ * The child stage may return duplicate documents, so it is the responsibility of NearStage to
+ * deduplicate. Every document in _resultBuffer is kept track of in _seenDocuments. When a
+ * document is returned or invalidated, it is removed from _seenDocuments.
+ *
+ * TODO: If a document is indexed in multiple cells (Polygons, PolyLines, etc.), there is a
+ * possibility that it will be returned more than once. Since doInvalidate() force fetches a
+ * document and removes it from _seenDocuments, NearStage will not deduplicate if it encounters
+ * another instance of this document.
+ *
  * TODO: Right now the interface allows the nextCovering() to be adaptive, but doesn't allow
  * aborting and shrinking a covered range being buffered if we guess wrong.
  */
@@ -77,37 +87,27 @@ class NearStage : public PlanStage {
 public:
     struct CoveredInterval;
 
-    virtual ~NearStage();
+    ~NearStage();
 
-    virtual bool isEOF();
-    virtual StageState work(WorkingSetID* out);
+    bool isEOF() final;
+    StageState work(WorkingSetID* out) final;
 
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
+    void doReattachToOperationContext(OperationContext* opCtx) final;
+    void doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) final;
 
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const;
-    virtual PlanStageStats* getStats();
-    virtual const CommonStats* getCommonStats() const;
-    virtual const SpecificStats* getSpecificStats() const;
+    StageType stageType() const final;
+    std::unique_ptr<PlanStageStats> getStats() final;
+    const SpecificStats* getSpecificStats() const final;
 
 protected:
     /**
      * Subclasses of NearStage must provide basics + a stats object which gets owned here.
-     * The stats object must have specific stats which are a subclass of NearStats, otherwise
-     * it's generated automatically.
      */
     NearStage(OperationContext* txn,
+              const char* typeName,
+              StageType type,
               WorkingSet* workingSet,
-              Collection* collection,
-              PlanStageStats* stats);
-
-    /**
-     * Exposes NearStats for adaptive search, allows additional specific stats in subclasses.
-     */
-    NearStats* getNearStats();
+              Collection* collection);
 
     //
     // Methods implemented for specific search functionality
@@ -144,19 +144,10 @@ protected:
                                   Collection* collection,
                                   WorkingSetID* out) = 0;
 
+    // Filled in by subclasses.
+    NearStats _specificStats;
+
 private:
-    //
-    // Save/restore/invalidate work specific to the search type.
-    //
-
-    virtual void finishSaveState() = 0;
-
-    virtual void finishRestoreState(OperationContext* txn) = 0;
-
-    virtual void finishInvalidate(OperationContext* txn,
-                                  const RecordId& dl,
-                                  InvalidationType type) = 0;
-
     //
     // Generic methods for progressive search functionality
     //
@@ -186,17 +177,18 @@ private:
 
     // May need to track disklocs from the child stage to do our own deduping, also to do
     // invalidation of buffered results.
-    unordered_map<RecordId, WorkingSetID, RecordId::Hasher> _nextIntervalSeen;
+    unordered_map<RecordId, WorkingSetID, RecordId::Hasher> _seenDocuments;
 
     // Stats for the stage covering this interval
-    std::unique_ptr<IntervalStats> _nextIntervalStats;
+    // This is owned by _specificStats
+    IntervalStats* _nextIntervalStats;
 
     // Sorted buffered results to be returned - the current interval
     struct SearchResult;
     std::priority_queue<SearchResult> _resultBuffer;
 
     // Stats
-    std::unique_ptr<PlanStageStats> _stats;
+    const StageType _stageType;
 
     // The current stage from which this stage should buffer results
     // Pointer to the last interval in _childrenIntervals. Owned by _childrenIntervals.
@@ -219,8 +211,7 @@ struct NearStage::CoveredInterval {
                     double maxDistance,
                     bool inclusiveMax);
 
-    // Owned by NearStage
-    std::unique_ptr<PlanStage> const covering;
+    PlanStage* const covering;  // Owned in PlanStage::_children.
     const bool dedupCovering;
 
     const double minDistance;

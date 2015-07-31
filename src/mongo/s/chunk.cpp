@@ -34,7 +34,8 @@
 
 #include "mongo/client/connpool.h"
 #include "mongo/client/dbclientcursor.h"
-#include "mongo/config.h"
+#include "mongo/client/remote_command_targeter.h"
+#include "mongo/db/commands.h"
 #include "mongo/db/lasterror.h"
 #include "mongo/db/query/query_solution.h"
 #include "mongo/db/write_concern.h"
@@ -46,8 +47,7 @@
 #include "mongo/s/catalog/type_settings.h"
 #include "mongo/s/chunk_manager.h"
 #include "mongo/s/client/shard_registry.h"
-#include "mongo/s/config.h"
-#include "mongo/s/cursors.h"
+#include "mongo/s/client/shard_connection.h"
 #include "mongo/s/grid.h"
 #include "mongo/s/shard_key_pattern.h"
 #include "mongo/util/log.h"
@@ -249,6 +249,11 @@ BSONObj Chunk::_getExtremeKey(bool doSplitAtLower) const {
                                                         1, /* nToReturn */
                                                         1 /* nToSkip */);
 
+        uassert(28736,
+                str::stream() << "failed to initialize cursor during auto split due to "
+                              << "connection problem with " << conn->getServerAddress(),
+                cursor.get() != nullptr);
+
         if (cursor->more()) {
             end = cursor->next().getOwned();
         }
@@ -293,9 +298,6 @@ void Chunk::pickSplitVector(vector<BSONObj>& splitPoints,
                             long long chunkSize /* bytes */,
                             int maxPoints,
                             int maxObjs) const {
-    // Ask the mongod holding this chunk to figure out the split points.
-    ScopedDbConnection conn(_getShardConnectionString());
-    BSONObj result;
     BSONObjBuilder cmd;
     cmd.append("splitVector", _manager->getns());
     cmd.append("keyPattern", _manager->getShardKeyPattern().toBSON());
@@ -306,18 +308,20 @@ void Chunk::pickSplitVector(vector<BSONObj>& splitPoints,
     cmd.append("maxChunkObjects", maxObjs);
     BSONObj cmdObj = cmd.obj();
 
-    if (!conn->runCommand("admin", cmdObj, result)) {
-        conn.done();
-        ostringstream os;
-        os << "splitVector command failed: " << result;
-        uassert(13345, os.str(), 0);
-    }
+    const auto primaryShard = grid.shardRegistry()->getShard(getShardId());
+    auto targetStatus =
+        primaryShard->getTargeter()->findHost({ReadPreference::PrimaryPreferred, TagSet{}});
+    uassertStatusOK(targetStatus);
 
-    BSONObjIterator it(result.getObjectField("splitKeys"));
+    auto result = grid.shardRegistry()->runCommand(targetStatus.getValue(), "admin", cmdObj);
+
+    uassertStatusOK(result.getStatus());
+    uassertStatusOK(Command::getStatusFromCommandResult(result.getValue()));
+
+    BSONObjIterator it(result.getValue().getObjectField("splitKeys"));
     while (it.more()) {
         splitPoints.push_back(it.next().Obj().getOwned());
     }
-    conn.done();
 }
 
 void Chunk::determineSplitPoints(bool atMedian, vector<BSONObj>* splitPoints) const {
@@ -536,6 +540,7 @@ bool Chunk::splitIfShould(long dataWritten) const {
             LOG(1) << "won't auto split because not enough tickets: " << getManager()->getns();
             return false;
         }
+
         TicketHolderReleaser releaser(&(getManager()->_splitHeuristics._splitTickets));
 
         // this is a bit ugly
@@ -580,9 +585,6 @@ bool Chunk::splitIfShould(long dataWritten) const {
 
         log() << "autosplitted " << _manager->getns() << " shard: " << toString() << " into "
               << (splitCount + 1) << " (splitThreshold " << splitThreshold << ")"
-#ifdef MONGO_CONFIG_DEBUG_BUILD
-              << " size: " << getPhysicalSize()  // slow - but can be useful when debugging
-#endif
               << (res["shouldMigrate"].eoo() ? "" : (string) " (migrate suggested" +
                           (shouldBalance ? ")" : ", but no migrations allowed)"));
 

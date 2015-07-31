@@ -12,12 +12,24 @@ env.Append(CPPPATH=[
         "src/include",
     ])
 
-# Enable asserts, and optional rich logging in debug builds
+# Enable asserts in debug builds
 if debugBuild:
     env.Append(CPPDEFINES=[
         "HAVE_DIAGNOSTIC",
-        "HAVE_VERBOSE",
         ])
+
+# Enable optional rich logging
+env.Append(CPPDEFINES=["HAVE_VERBOSE"])
+
+conf = Configure(env)
+if conf.CheckFunc("fallocate"):
+        env.Append(CPPDEFINES=[
+                "HAVE_FALLOCATE"
+    ])
+if conf.CheckFunc("sync_file_range"):
+        env.Append(CPPDEFINES=[
+                "HAVE_SYNC_FILE_RANGE"
+    ])
 
 if env.TargetOSIs('windows'):
     env.Append(CPPPATH=["build_win"])
@@ -116,7 +128,12 @@ if useSnappy:
 
 wtlib = env.Library(
     target="wiredtiger",
-    source=wtsources)
+    source=wtsources,
+    LIBDEPS=[
+        '$BUILD_DIR/third_party/shim_snappy',
+        '$BUILD_DIR/third_party/shim_zlib',
+    ],
+)
 
 env.Depends(wtlib, [filelistfile, version_file])
 

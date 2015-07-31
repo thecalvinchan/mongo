@@ -55,7 +55,7 @@ ReplicationCoordinatorExternalStateMock::ReplicationCoordinatorExternalStateMock
 
 ReplicationCoordinatorExternalStateMock::~ReplicationCoordinatorExternalStateMock() {}
 
-void ReplicationCoordinatorExternalStateMock::startThreads() {}
+void ReplicationCoordinatorExternalStateMock::startThreads(executor::TaskExecutor* taskExecutor) {}
 void ReplicationCoordinatorExternalStateMock::startMasterSlave(OperationContext*) {}
 void ReplicationCoordinatorExternalStateMock::initiateOplog(OperationContext* txn) {}
 void ReplicationCoordinatorExternalStateMock::shutdown() {}
@@ -184,5 +184,14 @@ OperationContext* ReplicationCoordinatorExternalStateMock::createOperationContex
 
 void ReplicationCoordinatorExternalStateMock::dropAllTempCollections(OperationContext* txn) {}
 
+void ReplicationCoordinatorExternalStateMock::dropAllSnapshots() {}
+
+void ReplicationCoordinatorExternalStateMock::updateCommittedSnapshot(OpTime newCommitPoint) {}
+
+void ReplicationCoordinatorExternalStateMock::forceSnapshotCreation() {}
+
+bool ReplicationCoordinatorExternalStateMock::snapshotsEnabled() const {
+    return true;
+}
 }  // namespace repl
 }  // namespace mongo

@@ -28,31 +28,39 @@
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
 
+#include "mongo/platform/basic.h"
+
 #include "mongo/db/exec/shard_filter.h"
 
 #include "mongo/db/exec/filter.h"
 #include "mongo/db/exec/scoped_timer.h"
 #include "mongo/db/exec/working_set_common.h"
+#include "mongo/db/s/collection_metadata.h"
 #include "mongo/s/shard_key_pattern.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
 
+using std::shared_ptr;
 using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 // static
 const char* ShardFilterStage::kStageType = "SHARDING_FILTER";
 
-ShardFilterStage::ShardFilterStage(const CollectionMetadataPtr& metadata,
+ShardFilterStage::ShardFilterStage(const shared_ptr<CollectionMetadata>& metadata,
                                    WorkingSet* ws,
                                    PlanStage* child)
-    : _ws(ws), _child(child), _commonStats(kStageType), _metadata(metadata) {}
+    : PlanStage(kStageType), _ws(ws), _metadata(metadata) {
+    _children.emplace_back(child);
+}
 
 ShardFilterStage::~ShardFilterStage() {}
 
 bool ShardFilterStage::isEOF() {
-    return _child->isEOF();
+    return child()->isEOF();
 }
 
 PlanStage::StageState ShardFilterStage::work(WorkingSetID* out) {
@@ -66,7 +74,7 @@ PlanStage::StageState ShardFilterStage::work(WorkingSetID* out) {
         return PlanStage::IS_EOF;
     }
 
-    StageState status = _child->work(out);
+    StageState status = child()->work(out);
 
     if (PlanStage::ADVANCED == status) {
         // If we're sharded make sure that we don't return data that is not owned by us,
@@ -123,39 +131,13 @@ PlanStage::StageState ShardFilterStage::work(WorkingSetID* out) {
     return status;
 }
 
-void ShardFilterStage::saveState() {
-    ++_commonStats.yields;
-    _child->saveState();
-}
-
-void ShardFilterStage::restoreState(OperationContext* opCtx) {
-    ++_commonStats.unyields;
-    _child->restoreState(opCtx);
-}
-
-void ShardFilterStage::invalidate(OperationContext* txn,
-                                  const RecordId& dl,
-                                  InvalidationType type) {
-    ++_commonStats.invalidates;
-    _child->invalidate(txn, dl, type);
-}
-
-vector<PlanStage*> ShardFilterStage::getChildren() const {
-    vector<PlanStage*> children;
-    children.push_back(_child.get());
-    return children;
-}
-
-PlanStageStats* ShardFilterStage::getStats() {
+unique_ptr<PlanStageStats> ShardFilterStage::getStats() {
     _commonStats.isEOF = isEOF();
-    unique_ptr<PlanStageStats> ret(new PlanStageStats(_commonStats, STAGE_SHARDING_FILTER));
-    ret->children.push_back(_child->getStats());
-    ret->specific.reset(new ShardingFilterStats(_specificStats));
-    return ret.release();
-}
-
-const CommonStats* ShardFilterStage::getCommonStats() const {
-    return &_commonStats;
+    unique_ptr<PlanStageStats> ret =
+        make_unique<PlanStageStats>(_commonStats, STAGE_SHARDING_FILTER);
+    ret->children.push_back(child()->getStats().release());
+    ret->specific = make_unique<ShardingFilterStats>(_specificStats);
+    return ret;
 }
 
 const SpecificStats* ShardFilterStage::getSpecificStats() const {

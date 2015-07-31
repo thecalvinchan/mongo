@@ -40,8 +40,7 @@ class ChunkManager;
 class CollectionType;
 class DatabaseType;
 class DBConfig;
-
-typedef std::shared_ptr<DBConfig> DBConfigPtr;
+class OperationContext;
 
 struct CollectionInfo {
     CollectionInfo() {
@@ -97,6 +96,7 @@ private:
 class DBConfig {
 public:
     DBConfig(std::string name, const DatabaseType& dbt);
+    ~DBConfig();
 
     /**
      * The name of the database which this entry caches.
@@ -116,7 +116,7 @@ public:
         return _primaryId;
     }
 
-    void enableSharding(bool save = true);
+    void enableSharding();
 
     /**
        @return true if there was sharding info to remove
@@ -151,7 +151,7 @@ public:
     bool load();
     bool reload();
 
-    bool dropDatabase(std::string& errmsg);
+    bool dropDatabase(OperationContext*, std::string& errmsg);
 
     void getAllShardIds(std::set<ShardId>* shardIds);
     void getAllShardedCollections(std::set<std::string>& namespaces);
@@ -159,18 +159,14 @@ public:
 protected:
     typedef std::map<std::string, CollectionInfo> CollectionInfoMap;
 
-
-    /**
-        lockless
-    */
-    bool _isSharded(const std::string& ns);
-
-    bool _dropShardedCollections(int& num, std::set<ShardId>& shardIds, std::string& errmsg);
+    bool _dropShardedCollections(OperationContext* txn,
+                                 int& num,
+                                 std::set<ShardId>& shardIds,
+                                 std::string& errmsg);
 
     bool _load();
-    bool _reload();
-    void _save(bool db = true, bool coll = true);
 
+    void _save(bool db = true, bool coll = true);
 
     // Name of the database which this entry caches
     const std::string _name;

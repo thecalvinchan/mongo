@@ -51,12 +51,13 @@
 #include "mongo/db/repl/last_vote.h"
 #include "mongo/db/repl/master_slave.h"
 #include "mongo/db/repl/oplog.h"
-#include "mongo/db/repl/replication_executor.h"
 #include "mongo/db/repl/rs_sync.h"
+#include "mongo/db/repl/snapshot_thread.h"
+#include "mongo/db/server_parameters.h"
 #include "mongo/db/service_context.h"
+#include "mongo/db/s/sharding_state.h"
 #include "mongo/db/storage/storage_engine.h"
 #include "mongo/executor/network_interface.h"
-#include "mongo/s/d_state.h"
 #include "mongo/stdx/functional.h"
 #include "mongo/stdx/thread.h"
 #include "mongo/util/assert_util.h"
@@ -77,13 +78,19 @@ const char lastVoteDatabaseName[] = "local";
 const char meCollectionName[] = "local.me";
 const char meDatabaseName[] = "local";
 const char tsFieldName[] = "ts";
+
+// Set this to false to disable the background creation of snapshots. This can be used for A-B
+// benchmarking to find how much overhead repl::SnapshotThread introduces.
+// TODO SERVER-19213 Make this the default once secondaries can advance their commit
+//                   points (SERVER-19208) and we've validated the performance impact.
+MONGO_EXPORT_STARTUP_SERVER_PARAMETER(enableReplSnapshotThread, bool, false);
 }  // namespace
 
 ReplicationCoordinatorExternalStateImpl::ReplicationCoordinatorExternalStateImpl()
     : _startedThreads(false), _nextThreadId(0) {}
 ReplicationCoordinatorExternalStateImpl::~ReplicationCoordinatorExternalStateImpl() {}
 
-void ReplicationCoordinatorExternalStateImpl::startThreads() {
+void ReplicationCoordinatorExternalStateImpl::startThreads(executor::TaskExecutor* taskExecutor) {
     stdx::lock_guard<stdx::mutex> lk(_threadMutex);
     if (_startedThreads) {
         return;
@@ -91,9 +98,13 @@ void ReplicationCoordinatorExternalStateImpl::startThreads() {
     log() << "Starting replication applier threads";
     _applierThread.reset(new stdx::thread(runSyncThread));
     BackgroundSync* bgsync = BackgroundSync::get();
-    _producerThread.reset(new stdx::thread(stdx::bind(&BackgroundSync::producerThread, bgsync)));
+    _producerThread.reset(
+        new stdx::thread(stdx::bind(&BackgroundSync::producerThread, bgsync, taskExecutor)));
     _syncSourceFeedbackThread.reset(
         new stdx::thread(stdx::bind(&SyncSourceFeedback::run, &_syncSourceFeedback)));
+    if (enableReplSnapshotThread) {
+        _snapshotThread = SnapshotThread::start(getGlobalServiceContext());
+    }
     _startedThreads = true;
 }
 
@@ -111,6 +122,9 @@ void ReplicationCoordinatorExternalStateImpl::shutdown() {
         BackgroundSync* bgsync = BackgroundSync::get();
         bgsync->shutdown();
         _producerThread->join();
+
+        if (_snapshotThread)
+            _snapshotThread->shutdown();
     }
 }
 
@@ -288,7 +302,7 @@ void ReplicationCoordinatorExternalStateImpl::killAllUserOperations(OperationCon
 }
 
 void ReplicationCoordinatorExternalStateImpl::clearShardingState() {
-    shardingState.clearCollectionMetadata();
+    ShardingState::get(getGlobalServiceContext())->clearCollectionMetadata();
 }
 
 void ReplicationCoordinatorExternalStateImpl::signalApplierToChooseNewSyncSource() {
@@ -321,5 +335,24 @@ void ReplicationCoordinatorExternalStateImpl::dropAllTempCollections(OperationCo
     }
 }
 
+void ReplicationCoordinatorExternalStateImpl::dropAllSnapshots() {
+    if (auto manager = getGlobalServiceContext()->getGlobalStorageEngine()->getSnapshotManager())
+        manager->dropAllSnapshots();
+}
+
+void ReplicationCoordinatorExternalStateImpl::updateCommittedSnapshot(OpTime newCommitPoint) {
+    auto manager = getGlobalServiceContext()->getGlobalStorageEngine()->getSnapshotManager();
+    invariant(manager);  // This should never be called if there is no SnapshotManager.
+    manager->setCommittedSnapshot(SnapshotName(newCommitPoint.getTimestamp()));
+}
+
+void ReplicationCoordinatorExternalStateImpl::forceSnapshotCreation() {
+    if (_snapshotThread)
+        _snapshotThread->forceSnapshot();
+}
+
+bool ReplicationCoordinatorExternalStateImpl::snapshotsEnabled() const {
+    return _snapshotThread != nullptr;
+}
 }  // namespace repl
 }  // namespace mongo

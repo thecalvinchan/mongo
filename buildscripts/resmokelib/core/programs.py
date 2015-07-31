@@ -25,9 +25,14 @@ def mongod_program(logger, executable=None, process_kwargs=None, **kwargs):
     executable = utils.default_if_none(executable, config.DEFAULT_MONGOD_EXECUTABLE)
     args = [executable]
 
-    # Apply the --setParameter command line argument.
-    set_parameter = kwargs.pop("set_parameters", {})
-    _apply_set_parameters(args, set_parameter)
+    # Apply the --setParameter command line argument. Command line options to resmoke.py override
+    # the YAML configuration.
+    suite_set_parameters = kwargs.pop("set_parameters", {})
+
+    if config.MONGOD_SET_PARAMETERS is not None:
+        suite_set_parameters.update(utils.load_yaml(config.MONGOD_SET_PARAMETERS))
+
+    _apply_set_parameters(args, suite_set_parameters)
 
     shortcut_opts = {
         "nojournal": config.NO_JOURNAL,
@@ -56,8 +61,7 @@ def mongod_program(logger, executable=None, process_kwargs=None, **kwargs):
     # Apply the rest of the command line arguments.
     _apply_kwargs(args, kwargs)
 
-    if "keyFile" in kwargs:
-        _set_keyfile_permissions(kwargs["keyFile"])
+    _set_keyfile_permissions(kwargs)
 
     process_kwargs = utils.default_if_none(process_kwargs, {})
     return _process.Process(logger, args, **process_kwargs)
@@ -72,15 +76,19 @@ def mongos_program(logger, executable=None, process_kwargs=None, **kwargs):
     executable = utils.default_if_none(executable, config.DEFAULT_MONGOS_EXECUTABLE)
     args = [executable]
 
-    # Apply the --setParameter command line argument.
-    set_parameter = kwargs.pop("set_parameters", {})
-    _apply_set_parameters(args, set_parameter)
+    # Apply the --setParameter command line argument. Command line options to resmoke.py override
+    # the YAML configuration.
+    suite_set_parameters = kwargs.pop("set_parameters", {})
+
+    if config.MONGOS_SET_PARAMETERS is not None:
+        suite_set_parameters.update(utils.load_yaml(config.MONGOS_SET_PARAMETERS))
+
+    _apply_set_parameters(args, suite_set_parameters)
 
     # Apply the rest of the command line arguments.
     _apply_kwargs(args, kwargs)
 
-    if "keyFile" in kwargs:
-        _set_keyfile_permissions(kwargs["keyFile"])
+    _set_keyfile_permissions(kwargs)
 
     process_kwargs = utils.default_if_none(process_kwargs, {})
     return _process.Process(logger, args, **process_kwargs)
@@ -137,8 +145,7 @@ def mongo_shell_program(logger, executable=None, filename=None, process_kwargs=N
     # Have the mongos shell run the specified file.
     args.append(filename)
 
-    if "keyFile" in global_vars["TestData"]:
-        _set_keyfile_permissions(global_vars["TestData"]["keyFile"])
+    _set_keyfile_permissions(global_vars["TestData"])
 
     process_kwargs = utils.default_if_none(process_kwargs, {})
     return _process.Process(logger, args, **process_kwargs)
@@ -220,12 +227,18 @@ def _apply_kwargs(args, kwargs):
             args.append(arg_value)
 
 
-def _set_keyfile_permissions(keyfile_path):
+def _set_keyfile_permissions(opts):
     """
-    Change the permissions on 'keyfile_path' to 600, i.e. only the user
-    can read and write the file.
+    Change the permissions of keyfiles in 'opts' to 600, i.e. only the
+    user can read and write the file.
 
     This necessary to avoid having the mongod/mongos fail to start up
-    because "permissions on 'keyfile_path' are too open".
+    because "permissions on the keyfiles are too open".
+
+    We can't permanently set the keyfile permissions because git is not
+    aware of them.
     """
-    os.chmod(keyfile_path, stat.S_IRUSR | stat.S_IWUSR)
+    if "keyFile" in opts:
+        os.chmod(opts["keyFile"], stat.S_IRUSR | stat.S_IWUSR)
+    if "encryptionKeyFile" in opts:
+        os.chmod(opts["encryptionKeyFile"], stat.S_IRUSR | stat.S_IWUSR)

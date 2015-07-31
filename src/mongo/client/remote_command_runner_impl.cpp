@@ -35,11 +35,15 @@
 #include "mongo/db/query/cursor_responses.h"
 #include "mongo/db/query/getmore_request.h"
 #include "mongo/rpc/get_status_from_command_result.h"
+#include "mongo/rpc/protocol.h"
 #include "mongo/base/status_with.h"
 #include "mongo/util/assert_util.h"
 
 namespace mongo {
 namespace {
+
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 
 /**
  * Calculates the timeout for a network operation expiring at "expDate", given
@@ -137,6 +141,13 @@ Status runDownconvertedFindCommand(DBClientConnection* conn,
 
     std::unique_ptr<DBClientCursor> cursor =
         conn->query(ns, query, nToReturn, nToSkip, fieldsToReturn, queryOptions, batchSize);
+
+    if (!cursor) {
+        return {ErrorCodes::HostUnreachable,
+                str::stream() << "cursor initialization failed due to connection problems with "
+                              << conn->getServerAddress()};
+    }
+
     cursor->decouple();
 
     Status status = getStatusFromCursorResult(*cursor);
@@ -177,6 +188,13 @@ Status runDownconvertedGetMoreCommand(DBClientConnection* conn,
 
     std::unique_ptr<DBClientCursor> cursor =
         conn->getMore(ns, req.cursorid, req.batchSize.value_or(0));
+
+    if (!cursor) {
+        return {ErrorCodes::HostUnreachable,
+                str::stream() << "cursor initialization failed due to connection problems with "
+                              << conn->getServerAddress()};
+    }
+
     cursor->decouple();
 
     Status status = getStatusFromCursorResult(*cursor);
@@ -218,8 +236,6 @@ void RemoteCommandRunnerImpl::shutdown() {
 StatusWith<RemoteCommandResponse> RemoteCommandRunnerImpl::runCommand(
     const RemoteCommandRequest& request) {
     try {
-        BSONObj output;
-
         const Date_t requestStartDate = Date_t::now();
         const auto timeoutMillis = getTimeoutMillis(request.expirationDate, requestStartDate);
         if (!timeoutMillis.isOK()) {
@@ -229,28 +245,48 @@ StatusWith<RemoteCommandResponse> RemoteCommandRunnerImpl::runCommand(
         ConnectionPool::ConnectionPtr conn(
             &_connPool, request.target, requestStartDate, timeoutMillis.getValue());
 
-        bool ok = conn.get()->runCommand(request.dbname, request.cmdObj, output);
+        BSONObj output;
+        BSONObj metadata;
 
         // If remote server does not support either find or getMore commands, down convert
         // to using DBClientInterface::query()/getMore().
-        // TODO: Perform down conversion based on wire protocol version.
-        //       Refer to the down conversion implementation in the shell.
-        if (!ok && getStatusFromCommandResult(output).code() == ErrorCodes::CommandNotFound) {
-            // 'commandName' will be an empty string if the command object is an empty BSON
-            // document.
-            StringData commandName = request.cmdObj.firstElement().fieldNameStringData();
-            if (commandName == "find") {
-                runDownconvertedFindCommand(conn.get(), request.dbname, request.cmdObj, &output);
-            } else if (commandName == "getMore") {
-                runDownconvertedGetMoreCommand(conn.get(), request.dbname, request.cmdObj, &output);
-            }
+        // Perform down conversion based on wire protocol version.
+
+        // 'commandName' will be an empty string if the command object is an empty BSON
+        // document.
+        StringData commandName = request.cmdObj.firstElement().fieldNameStringData();
+        const auto isFindCmd = commandName == LiteParsedQuery::kFindCommandName;
+        const auto isGetMoreCmd = commandName == GetMoreRequest::kGetMoreCommandName;
+        const auto isFindOrGetMoreCmd = isFindCmd || isGetMoreCmd;
+
+        // We are using the wire version to check if we need to downconverting find/getMore
+        // requests because coincidentally, the find/getMore command is only supported by
+        // servers that also accept OP_COMMAND.
+        bool supportsFindAndGetMoreCommands = rpc::supportsWireVersionForOpCommandInMongod(
+            conn.get()->getMinWireVersion(), conn.get()->getMaxWireVersion());
+
+        if (!isFindOrGetMoreCmd || supportsFindAndGetMoreCommands) {
+            rpc::UniqueReply commandResponse =
+                conn.get()->runCommandWithMetadata(request.dbname,
+                                                   request.cmdObj.firstElementFieldName(),
+                                                   request.metadata,
+                                                   request.cmdObj);
+
+            output = commandResponse->getCommandReply().getOwned();
+            metadata = commandResponse->getMetadata().getOwned();
+        } else if (isFindCmd) {
+            runDownconvertedFindCommand(conn.get(), request.dbname, request.cmdObj, &output);
+        } else if (isGetMoreCmd) {
+            runDownconvertedGetMoreCommand(conn.get(), request.dbname, request.cmdObj, &output);
         }
 
         const Date_t requestFinishDate = Date_t::now();
         conn.done(requestFinishDate);
 
         return StatusWith<RemoteCommandResponse>(
-            RemoteCommandResponse(output, Milliseconds(requestFinishDate - requestStartDate)));
+            RemoteCommandResponse(std::move(output),
+                                  std::move(metadata),
+                                  Milliseconds(requestFinishDate - requestStartDate)));
     } catch (const DBException& ex) {
         return StatusWith<RemoteCommandResponse>(ex.toStatus());
     } catch (const std::exception& ex) {

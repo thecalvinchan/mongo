@@ -57,6 +57,8 @@ bool stringContains(const std::string& haystack, const std::string& needle) {
 }  // namespace
 
 using executor::NetworkInterfaceMock;
+using executor::RemoteCommandRequest;
+using executor::RemoteCommandResponse;
 
 ReplicaSetConfig ReplCoordTest::assertMakeRSConfig(const BSONObj& configBson) {
     ReplicaSetConfig config;
@@ -160,7 +162,7 @@ void ReplCoordTest::assertStartSuccess(const BSONObj& configDoc, const HostAndPo
 
 ResponseStatus ReplCoordTest::makeResponseStatus(const BSONObj& doc, Milliseconds millis) {
     log() << "Responding with " << doc;
-    return ResponseStatus(RemoteCommandResponse(doc, millis));
+    return ResponseStatus(RemoteCommandResponse(doc, BSONObj(), millis));
 }
 
 void ReplCoordTest::simulateSuccessfulV1Election() {

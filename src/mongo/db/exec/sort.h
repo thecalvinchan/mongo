@@ -139,30 +139,23 @@ private:
  * Preconditions: For each field in 'pattern', all inputs in the child must handle a
  * getFieldDotted for that field.
  */
-class SortStage : public PlanStage {
+class SortStage final : public PlanStage {
 public:
     SortStage(const SortStageParams& params, WorkingSet* ws, PlanStage* child);
+    ~SortStage();
 
-    virtual ~SortStage();
+    bool isEOF() final;
+    StageState work(WorkingSetID* out) final;
 
-    virtual bool isEOF();
-    virtual StageState work(WorkingSetID* out);
+    void doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) final;
 
-    virtual void saveState();
-    virtual void restoreState(OperationContext* opCtx);
-    virtual void invalidate(OperationContext* txn, const RecordId& dl, InvalidationType type);
-
-    virtual std::vector<PlanStage*> getChildren() const;
-
-    virtual StageType stageType() const {
+    StageType stageType() const final {
         return STAGE_SORT;
     }
 
-    PlanStageStats* getStats();
+    std::unique_ptr<PlanStageStats> getStats();
 
-    virtual const CommonStats* getCommonStats() const;
-
-    virtual const SpecificStats* getSpecificStats() const;
+    const SpecificStats* getSpecificStats() const final;
 
     static const char* kStageType;
 
@@ -176,9 +169,6 @@ private:
 
     // Not owned by us.
     WorkingSet* _ws;
-
-    // Where we're reading data to sort from.
-    std::unique_ptr<PlanStage> _child;
 
     // The raw sort _pattern as expressed by the user
     BSONObj _pattern;
@@ -260,11 +250,6 @@ private:
     typedef unordered_map<RecordId, WorkingSetID, RecordId::Hasher> DataMap;
     DataMap _wsidByDiskLoc;
 
-    //
-    // Stats
-    //
-
-    CommonStats _commonStats;
     SortStats _specificStats;
 
     // The usage in bytes of all buffered data that we're sorting.

@@ -135,7 +135,6 @@ bool isString(Value v) {
         return false;
     }
     std::string s = makeString(v);
-    std::cout << s << std::endl;
     return (((s != "NaN") && (s != "Infinity")) && (s != "-Infinity"));
 }
 

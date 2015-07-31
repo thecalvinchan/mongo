@@ -140,48 +140,44 @@ public:
      * Right now this is only for idhack updates which neither canonicalize
      * nor go through normal planning.
      */
-    static Status make(OperationContext* opCtx,
-                       WorkingSet* ws,
-                       PlanStage* rt,
-                       const Collection* collection,
-                       YieldPolicy yieldPolicy,
-                       PlanExecutor** out);
+    static StatusWith<std::unique_ptr<PlanExecutor>> make(OperationContext* opCtx,
+                                                          std::unique_ptr<WorkingSet> ws,
+                                                          std::unique_ptr<PlanStage> rt,
+                                                          const Collection* collection,
+                                                          YieldPolicy yieldPolicy);
 
     /**
      * Used when we have a NULL collection and no canonical query. In this case,
      * we need to explicitly pass a namespace to the plan executor.
      */
-    static Status make(OperationContext* opCtx,
-                       WorkingSet* ws,
-                       PlanStage* rt,
-                       const std::string& ns,
-                       YieldPolicy yieldPolicy,
-                       PlanExecutor** out);
+    static StatusWith<std::unique_ptr<PlanExecutor>> make(OperationContext* opCtx,
+                                                          std::unique_ptr<WorkingSet> ws,
+                                                          std::unique_ptr<PlanStage> rt,
+                                                          const std::string& ns,
+                                                          YieldPolicy yieldPolicy);
 
     /**
      * Used when there is a canonical query but no query solution (e.g. idhack
      * queries, queries against a NULL collection, queries using the subplan stage).
      */
-    static Status make(OperationContext* opCtx,
-                       WorkingSet* ws,
-                       PlanStage* rt,
-                       CanonicalQuery* cq,
-                       const Collection* collection,
-                       YieldPolicy yieldPolicy,
-                       PlanExecutor** out);
+    static StatusWith<std::unique_ptr<PlanExecutor>> make(OperationContext* opCtx,
+                                                          std::unique_ptr<WorkingSet> ws,
+                                                          std::unique_ptr<PlanStage> rt,
+                                                          std::unique_ptr<CanonicalQuery> cq,
+                                                          const Collection* collection,
+                                                          YieldPolicy yieldPolicy);
 
     /**
-     * The constructor for the normal case, when you have both a canonical query
+     * The constructor for the normal case, when you have a collection, a canonical query,
      * and a query solution.
      */
-    static Status make(OperationContext* opCtx,
-                       WorkingSet* ws,
-                       PlanStage* rt,
-                       QuerySolution* qs,
-                       CanonicalQuery* cq,
-                       const Collection* collection,
-                       YieldPolicy yieldPolicy,
-                       PlanExecutor** out);
+    static StatusWith<std::unique_ptr<PlanExecutor>> make(OperationContext* opCtx,
+                                                          std::unique_ptr<WorkingSet> ws,
+                                                          std::unique_ptr<PlanStage> rt,
+                                                          std::unique_ptr<QuerySolution> qs,
+                                                          std::unique_ptr<CanonicalQuery> cq,
+                                                          const Collection* collection,
+                                                          YieldPolicy yieldPolicy);
 
     ~PlanExecutor();
 
@@ -221,20 +217,21 @@ public:
 
     /**
      * Generates a tree of stats objects with a separate lifetime from the execution
-     * stage tree wrapped by this PlanExecutor. The caller owns the returned pointer.
+     * stage tree wrapped by this PlanExecutor.
      *
      * This is OK even if we were killed.
      */
-    PlanStageStats* getStats() const;
+    std::unique_ptr<PlanStageStats> getStats() const;
 
     //
     // Methods that just pass down to the PlanStage tree.
     //
 
     /**
-     * Save any state required to either
-     * 1. hibernate waiting for a getMore, or
-     * 2. yield the lock (on applicable storage engines) to allow writes to proceed.
+     * Save any state required to recover from changes to the underlying collection's data.
+     *
+     * While in the "saved" state, it is only legal to call restoreState,
+     * detachFromOperationContext, or the destructor.
      */
     void saveState();
 
@@ -248,7 +245,24 @@ public:
      *
      * Returns false otherwise.  The execution tree cannot be worked and should be deleted.
      */
-    bool restoreState(OperationContext* opCtx);
+    bool restoreState();
+
+    /**
+     * Detaches from the OperationContext and releases any storage-engine state.
+     *
+     * It is only legal to call this when in a "saved" state. While in the "detached" state, it is
+     * only legal to call reattachToOperationContext or the destructor. It is not legal to call
+     * detachFromOperationContext() while already in the detached state.
+     */
+    void detachFromOperationContext();
+
+    /**
+     * Reattaches to the OperationContext and reacquires any storage-engine state.
+     *
+     * It is only legal to call this in the "detached" state. On return, the cursor is left in a
+     * "saved" state, so callers must still call restoreState to use this object.
+     */
+    void reattachToOperationContext(OperationContext* opCtx);
 
     /**
      * Same as restoreState but without the logic to retry if a WriteConflictException is
@@ -256,7 +270,7 @@ public:
      *
      * This is only public for PlanYieldPolicy. DO NOT CALL ANYWHERE ELSE.
      */
-    bool restoreStateWithoutRetrying(OperationContext* opCtx);
+    bool restoreStateWithoutRetrying();
 
     //
     // Running Support
@@ -355,6 +369,8 @@ public:
     void enqueue(const BSONObj& obj);
 
 private:
+    ExecState getNextImpl(Snapshotted<BSONObj>* objOut, RecordId* dlOut);
+
     /**
      * RAII approach to ensuring that plan executors are deregistered.
      *
@@ -377,25 +393,24 @@ private:
      * New PlanExecutor instances are created with the static make() methods above.
      */
     PlanExecutor(OperationContext* opCtx,
-                 WorkingSet* ws,
-                 PlanStage* rt,
-                 QuerySolution* qs,
-                 CanonicalQuery* cq,
+                 std::unique_ptr<WorkingSet> ws,
+                 std::unique_ptr<PlanStage> rt,
+                 std::unique_ptr<QuerySolution> qs,
+                 std::unique_ptr<CanonicalQuery> cq,
                  const Collection* collection,
                  const std::string& ns);
 
     /**
      * Public factory methods delegate to this private factory to do their work.
      */
-    static Status make(OperationContext* opCtx,
-                       WorkingSet* ws,
-                       PlanStage* rt,
-                       QuerySolution* qs,
-                       CanonicalQuery* cq,
-                       const Collection* collection,
-                       const std::string& ns,
-                       YieldPolicy yieldPolicy,
-                       PlanExecutor** out);
+    static StatusWith<std::unique_ptr<PlanExecutor>> make(OperationContext* txn,
+                                                          std::unique_ptr<WorkingSet> ws,
+                                                          std::unique_ptr<PlanStage> rt,
+                                                          std::unique_ptr<QuerySolution> qs,
+                                                          std::unique_ptr<CanonicalQuery> cq,
+                                                          const Collection* collection,
+                                                          const std::string& ns,
+                                                          YieldPolicy yieldPolicy);
 
     /**
      * Clients of PlanExecutor expect that on receiving a new instance from one of the make()
@@ -446,6 +461,10 @@ private:
     // to consume yet. We empty the queue before retrieving further results from the plan
     // stages.
     std::queue<BSONObj> _stash;
+
+    enum { kUsable, kSaved, kDetached } _currentState = kUsable;
+
+    bool _everDetachedFromOperationContext = false;
 };
 
 }  // namespace mongo

@@ -40,29 +40,6 @@ class RemoteCommandTargeter;
 
 using ShardId = std::string;
 
-/**
- * Contains runtime information obtained from the shard.
- */
-class ShardStatus {
-public:
-    ShardStatus(long long dataSizeBytes, const std::string& version);
-
-    long long dataSizeBytes() const {
-        return _dataSizeBytes;
-    }
-    const std::string& mongoVersion() const {
-        return _mongoVersion;
-    }
-
-    std::string toString() const;
-
-    bool operator<(const ShardStatus& other) const;
-
-private:
-    long long _dataSizeBytes;
-    std::string _mongoVersion;
-};
-
 class Shard;
 using ShardPtr = std::shared_ptr<Shard>;
 
@@ -95,33 +72,12 @@ public:
         return _targeter.get();
     }
 
-    BSONObj runCommand(const std::string& db, const std::string& simple) const;
-    BSONObj runCommand(const std::string& db, const BSONObj& cmd) const;
-
-    bool runCommand(const std::string& db, const std::string& simple, BSONObj& res) const;
-    bool runCommand(const std::string& db, const BSONObj& cmd, BSONObj& res) const;
-
-    /**
-     * Returns metadata and stats for this shard.
-     */
-    ShardStatus getStatus() const;
-
     /**
      * Returns a string description of this shard entry.
      */
     std::string toString() const;
 
-    static ShardPtr lookupRSName(const std::string& name);
-
-    /**
-     * @parm current - shard where the chunk/database currently lives in
-     * @return the currently emptiest shard, if best then current, or nullptr
-     */
-    static ShardPtr pick();
-
     static void reloadShardInfo();
-
-    static void removeShard(const ShardId& id);
 
 private:
     /**

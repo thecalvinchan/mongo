@@ -46,8 +46,10 @@
 #include "mongo/db/operation_context_impl.h"
 #include "mongo/db/op_observer.h"
 #include "mongo/db/ops/insert.h"
+#include "mongo/db/repl/repl_client_info.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
-#include "mongo/s/d_state.h"
+#include "mongo/db/s/collection_metadata.h"
+#include "mongo/db/s/sharding_state.h"
 #include "mongo/s/shard_key_pattern.h"
 
 namespace mongo {
@@ -82,7 +84,7 @@ public:
 
     BSONObj _addNsToSpec(const NamespaceString& ns, const BSONObj& obj) {
         BSONObjBuilder b;
-        b.append("ns", ns);
+        b.append("ns", ns.ns());
         b.appendElements(obj);
         return b.obj();
     }
@@ -186,6 +188,8 @@ public:
         if (specs.size() == 0) {
             result.append("numIndexesAfter", numIndexesBefore);
             result.append("note", "all indexes already exist");
+            // No-ops need to reset lastOp in the client, for write concern.
+            repl::ReplClientInfo::forClient(txn->getClient()).setLastOpToSystemLastOpTime(txn);
             return true;
         }
 
@@ -291,9 +295,10 @@ private:
                                               const BSONObj& newIdxKey) {
         invariant(txn->lockState()->isCollectionLockedForMode(ns, MODE_X));
 
-        if (shardingState.enabled()) {
-            CollectionMetadataPtr metadata(shardingState.getCollectionMetadata(ns.toString()));
-
+        if (ShardingState::get(getGlobalServiceContext())->enabled()) {
+            std::shared_ptr<CollectionMetadata> metadata(
+                ShardingState::get(getGlobalServiceContext())
+                    ->getCollectionMetadata(ns.toString()));
             if (metadata) {
                 ShardKeyPattern shardKeyPattern(metadata->getKeyPattern());
                 if (!shardKeyPattern.isUniqueIndexCompatible(newIdxKey)) {
@@ -307,6 +312,5 @@ private:
 
         return Status::OK();
     }
-
 } cmdCreateIndex;
 }

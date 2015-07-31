@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -47,7 +48,6 @@
 #include "mongo/db/storage/capped_callback.h"
 #include "mongo/db/storage/record_store.h"
 #include "mongo/db/storage/snapshot.h"
-#include "mongo/platform/cstdint.h"
 #include "mongo/stdx/condition_variable.h"
 #include "mongo/stdx/mutex.h"
 
@@ -318,6 +318,12 @@ public:
      */
     Status setValidator(OperationContext* txn, BSONObj validator);
 
+    Status setValidationLevel(OperationContext* txn, StringData newLevel);
+    Status setValidationAction(OperationContext* txn, StringData newAction);
+
+    StringData getValidationLevel() const;
+    StringData getValidationAction() const;
+
     // -----------
 
     //
@@ -358,7 +364,7 @@ private:
     /**
      * Returns a non-ok Status if validator is not legal for this collection.
      */
-    StatusWith<std::unique_ptr<MatchExpression>> parseValidator(const BSONObj& validator) const;
+    StatusWithMatchExpression parseValidator(const BSONObj& validator) const;
 
     Status recordStoreGoingToMove(OperationContext* txn,
                                   const RecordId& oldLocation,
@@ -393,6 +399,11 @@ private:
     BSONObj _validatorDoc;
     // Points into _validatorDoc. Null means no filter.
     std::unique_ptr<MatchExpression> _validator;
+    enum ValidationAction { WARN, ERROR_V } _validationAction;
+    enum ValidationLevel { OFF, MODERATE, STRICT_V } _validationLevel;
+
+    static StatusWith<ValidationLevel> _parseValidationLevel(StringData);
+    static StatusWith<ValidationAction> _parseValidationAction(StringData);
 
     // this is mutable because read only users of the Collection class
     // use it keep state.  This seems valid as const correctness of Collection
@@ -404,6 +415,8 @@ private:
     //
     // This is non-null if and only if the collection is a capped collection.
     std::shared_ptr<CappedInsertNotifier> _cappedNotifier;
+
+    const bool _mustTakeCappedLockOnInsert;
 
     friend class Database;
     friend class IndexCatalog;
