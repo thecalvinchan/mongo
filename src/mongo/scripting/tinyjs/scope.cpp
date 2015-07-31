@@ -35,13 +35,13 @@
 namespace mongo {
 namespace tinyjs {
 
-Scope::Scope() {}
+Scope::Scope(): _parent(nullptr) {}
 
 Scope::Scope(Scope* parent) : _parent(parent) {}
 
 
 void Scope::setObject(const char* field, const BSONObj& obj, bool readOnly) {
-    put(StringData("this"), obj);
+    _thisDocument = obj;
 }
 
 bool Scope::getBoolean(const char* field) {
@@ -80,12 +80,14 @@ int Scope::invoke(ScriptingFunction func,
 }
 
 
-void Scope::put(StringData variableName, const BSONObj& value) {
+void Scope::put(StringData variableName, const Value& value) {
     _variables[variableName] = value;
 }
 
-BSONObj Scope::get(StringData variableName) const {
-    std::map<StringData, BSONObj>::const_iterator it = _variables.find(variableName);
+Value Scope::get(StringData variableName) const {
+
+    std::map<StringData, Value>::const_iterator it = _variables.find(variableName);
+
     if (it != _variables.end()) {
         // Case where variableName is found in this scope
         return it->second;
@@ -94,11 +96,15 @@ BSONObj Scope::get(StringData variableName) const {
         return _parent->get(variableName);
     } else {
         // variable is out of scope
-        return BSONObj();
+        return Value();
     }
 }
 
-const Scope* Scope::getParent() const {
+BSONObj Scope::getDocument() const {
+    return _thisDocument;
+}
+
+Scope* Scope::getParent() const {
     return _parent;
 }
 

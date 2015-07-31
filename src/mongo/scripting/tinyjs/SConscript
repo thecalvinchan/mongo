@@ -6,8 +6,10 @@ env.Library(
     target='ast_parser',
     source=[
         'ast_parser.cpp',
+        'assignment_operator.cpp',
         'array_literal.cpp',
         'binary_operator.cpp',
+        'block.cpp',
         'nonterminal_node.cpp',
         'terminal_node.cpp',
         'identifier.cpp',
@@ -28,7 +30,8 @@ env.Library(
         'not_equals_operator.cpp',
         'double_not_equals_operator.cpp',
         'logical_and_operator.cpp',
-        'logical_or_operator.cpp'
+        'logical_or_operator.cpp', 
+        'while_loop.cpp'
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/pipeline/document_value',

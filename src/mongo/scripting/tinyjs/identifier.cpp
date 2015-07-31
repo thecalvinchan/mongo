@@ -29,6 +29,7 @@
 #include "mongo/platform/basic.h"
 
 #include "mongo/scripting/tinyjs/identifier.h"
+#include "mongo/bson/bsonobj.h"
 
 
 namespace mongo {
@@ -37,7 +38,13 @@ namespace tinyjs {
 Identifier::Identifier(const StringData& value) : TerminalNode(value) {}
 
 const Value Identifier::evaluate(Scope* scope) const {
-    return Value(scope->get(StringData(_value.toString())));
+    Value obj = scope->get(getName());
+    if (obj == Value()) {
+        std::cout << "cannot find identifier" << std::endl;
+        const ExceptionInfo ei("Undefined identifier", 16722);
+        throw DBException(ei);
+    }
+    return obj;
 }
 
 }  // namespace tinyjs

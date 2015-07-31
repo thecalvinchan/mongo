@@ -6,7 +6,6 @@ t.save( { a : 2 , b : "hi" } );
 
 assert( t.findOne( {a : 1} ).b == t.findOne( { $where: 'return this.a == 1;' } ).b, "A");
 
-tests = []
 
 // Document generation functions
 
@@ -147,7 +146,7 @@ function whereTripleEquals(t) {
 // Queries that can be written in query language and using $where
 
 
-generateDocs(1000, increasingXGenerator())(t);
+/*generateDocs(1000, increasingXGenerator())(t);
 
 var queryLanguageCursorEquals = queryEquals(t);
 var whereCursorDoubleEquals = whereDoubleEquals(t);
@@ -161,10 +160,10 @@ while (queryLanguageCursorEquals.hasNext()) {
   var z = whereCursorTripleEquals.next();
   assert( x.x == y.x, "double equals doesn't match query language");
   assert( x.x == z.x, "triple equals doesn't match query language");
-}
+}*/
 
 /** Simple Nested **/
-generateDocs(13, nestedGenerator())(t);
+/*generateDocs(13, nestedGenerator())(t);
 var queryCursor = t.find( {'d.c.b.a' : 7} );
 var whereCursor = t.find( { $where: 'return this.d.c.b.a == 7;' } );
 while (queryCursor.hasNext()) {
@@ -211,48 +210,32 @@ while (compareFields.hasNext()) {
   var doc = compareFields.next();
   assert((doc.x == 2) || (doc.y == 3));
 }
-
+*/
 generateDocs(10, nestedGenerator(true))(t);
 
-var complexNested = t.find({'$where': function() { return this.d.c.b.a === this.a.b.c.d; }});
+/*var complexNested = t.find({'$where': function() { return this.d.c.b.a ==  1; }});
 while (complexNested.hasNext()) {
   var doc = complexNested.next();
-  assert(doc.d.c.b.a == doc.a.b.c.d);
-}
+  assert(doc.d.c.b.a == 1);
+}*/
 
+
+/*generateDocs(10, nestedGenerator(true))(t);
+*/
+var nestedAgg = t.aggregate([{'$match': {'d.c.b.a': 1}}]);
+while (nestedAgg.hasNext()) {
+  var doc = nestedAgg.next();
+  assert(doc.d.c.b.a == 1);
+}
 
 // Queries to experiment with document size
 
-/*
- * Setup: Creates a collection of 10 documents, each with 4 nested levels of 26 fields
- * Test: Find document through match of a deeply nested field using $where
- */
-tests.push({name: "Where.ReallyBigNestedComparison.Where",
-            tags: ['query','where'],
-            pre: generateDocs(10, nestedGenerator(true)),
-            ops: [
-              {op: "find", query: {'$where': function() { return this.a.b.c.d == 1; }}}
-            ]
-            } );
-
-generateDocs(10, nestedGenerator(true))(t);
+/*generateDocs(10, nestedGenerator(true))(t);
 var whereCursor = t.find({$where: 'return this.a.b.c.d ==1;'});
 var queryCursor = t.find({'a.b.c.d': 1});
 while (queryCursor.hasNext()) {
     assert(whereCursor.next().a.b.c.d == queryCursor.next().a.b.c.d, "Really Big Nested Comparison");
 }
-
-/*
- * Setup: Creates a collection of 10 documents, each with 4 nested levels of 26 fields
- * Test: Find document through match of a deeply nested field using query language
- */
-tests.push({name: "Where.ReallyBigNestedComparison.QueryLanguage",
-            tags: ['query','compare'],
-            pre: generateDocs(10, nestedGenerator(true)),
-            ops: [
-              {op: "find", query: { 'a.b.c.d' : 1 }}
-            ]
-            });
 
 lookAtDocumentMetrics = false;
 
@@ -260,4 +243,4 @@ if ( lookAtDocumentMetrics ) {
     // ignore mongos
     nscannedEnd = db.serverStatus().metrics.queryExecutor.scanned
     assert.lte( nscannedStart + 1, nscannedEnd );
-}
+}*/

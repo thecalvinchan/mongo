@@ -97,7 +97,7 @@ Scope* generateScope() {
 
     BSONObj result = fromjson(json);
 
-    s->put(StringData("this"),result);
+    s->setObject("this", result);
     return s;
 }
 
@@ -154,10 +154,67 @@ TEST(EvaluationTest, simple) {
     testEvaluation(input, Value(1));
 }
 
+TEST(EvaluationTest, multiline) {
+    string input = "3; return true;";
+    testEvaluation(input, Value(true));
+}
+
 TEST(EvaluationTest, simpleNegation) {
     string input = "return -1;";
     testEvaluation(input, Value(-1));
 }
+
+TEST(EvaluationTest, assignment1) {
+    string input = "var x = 1; \n return (x == 1);";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, assignment2) {
+    string input = "var x = \"cat\"; \n return (x == \"dog\");";
+    testEvaluation(input, Value(false));
+}
+
+TEST(EvaluationTest, assignment3) {
+    string input = "var x = \"cat\"; \n return (x == \"cat\");";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, assignment4) {
+    string input = "x = 1; \n return (x == 1);";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, assignment5) {
+    string input = "var x = 1;\nx = 2;\nreturn (x == 2);";
+    testEvaluation(input, Value(true));
+}
+
+TEST(EvaluationTest, test) {
+    string input = "function() {var z = 42; z = 41; return this.x == 42;}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
+
+TEST(EvaluationTest, assignment6) {
+    string input = "function() {var z = 42; z = 41; return this.x == z;}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(false), s);
+}
+
+TEST(EvaluationTest, assignment7) {
+    string input = "function() {var z = 41; z = 42; return this.x == z;}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
+
+
+TEST(EvaluationTest, assignment8) {
+    string input = "function() {var z = 41; z = z + 1; return this.x == z;}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
+
+
 
 /*
  * Addition tests
@@ -2936,7 +2993,7 @@ TEST(EvaluationTest, comparison12) {
     string input = "return [2] >= 1;";
     testEvaluation(input, Value(true));
 }
-
+/*
 TEST(EvaluationTest, comparison13) {
     string input = "return [0] < 2;";
     testEvaluation(input, Value(true));
@@ -2945,7 +3002,7 @@ TEST(EvaluationTest, comparison13) {
 TEST(EvaluationTest, comparison14) {
     string input = "return [0] <= 2;";
     testEvaluation(input, Value(true));
-}
+}*/
 
 TEST(EvaluationTest, comparison15) {
     string input = "return [2] < [3];";
@@ -2961,11 +3018,11 @@ TEST(EvaluationTest, comparison17) {
     string input = "return [2, 3, 3] < [4, 1];";
     testEvaluation(input, Value(true));
 }
-
+/*
 TEST(EvaluationTest, comparison18) {
     string input = "return 1 < [4, 5, 6];";
     testEvaluation(input, Value(false));
-}
+}*/
 
 } // namespace tinyjs
 } // namespace mongo

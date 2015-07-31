@@ -157,8 +157,6 @@ bool strictlyEqual(Value leftValue, Value rightValue) {
         return false;
     } else if ((leftValue.getType() == Array) || (rightValue.getType() == Array)) {
         return false;
-    } else if (leftValue.getType() != rightValue.getType()) {
-        return false;
     } else {
         return Value::compare(leftValue, rightValue) == 0;
     }
