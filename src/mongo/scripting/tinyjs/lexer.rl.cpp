@@ -53,6 +53,9 @@ namespace {
     kNullLiteral         = 'null';
     kUndefinedLiteral    = 'undefined';
     kFunctionKeyword     = 'function';
+    kVarKeyword          = 'var';
+    kWhileKeyword        = 'while';
+    kForKeyword          = 'for';
     kIntegerLiteral      = ([1-9][0-9]*) | '0' ;
     kFloatLiteral        = [0-9]*'.'[0-9]+ | 'NaN' | 'Infinity';
     kBooleanLiteral      = 'true' | 'false';
@@ -86,6 +89,7 @@ namespace {
     kCloseSquareBracket  = ']';
     kOpenCurlyBrace      = '{';
     kCloseCurlyBrace     = '}';
+    kAssignment          = '=';
     kError               = any;
   
     main := |*
@@ -104,6 +108,18 @@ namespace {
 
         kFunctionKeyword => {
         emit(TokenType::kFunctionKeyword, &tokenData, ts, te);
+        };
+
+        kVarKeyword => {
+        emit(TokenType::kVarKeyword, &tokenData, ts, te);
+        };
+
+        kWhileKeyword => {
+        emit(TokenType::kWhileKeyword, &tokenData, ts, te);
+        };
+
+        kForKeyword => {
+        emit(TokenType::kForKeyword, &tokenData, ts, te);
         };
 
         kIntegerLiteral => {
@@ -229,7 +245,11 @@ namespace {
         kCloseCurlyBrace => {
         emit(TokenType::kCloseCurlyBrace, &tokenData, ts, te);
         };
-        
+
+        kAssignment => {
+        emit(TokenType::kAssignment, &tokenData, ts, te);
+        };
+
         space;
 
         kError => {

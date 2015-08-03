@@ -45,6 +45,9 @@ enum class TokenType {
     kNullLiteral,
     kUndefinedLiteral,
     kFunctionKeyword,
+    kVarKeyword,
+    kWhileKeyword,
+    kForKeyword,
     kIntegerLiteral,
     kFloatLiteral,
     kBooleanLiteral,
@@ -75,7 +78,8 @@ enum class TokenType {
     kOpenSquareBracket,
     kCloseSquareBracket,
     kOpenCurlyBrace,
-    kCloseCurlyBrace
+    kCloseCurlyBrace, 
+    kAssignment
 };
 
 /**

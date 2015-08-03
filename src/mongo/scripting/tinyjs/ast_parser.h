@@ -38,8 +38,8 @@
 #include "mongo/scripting/tinyjs/parse_exception.h"
 #include "mongo/scripting/tinyjs/unary_operator.h"
 #include "mongo/scripting/tinyjs/array_literal.h"
-
-
+#include "mongo/scripting/tinyjs/block.h"
+#include "mongo/scripting/tinyjs/assignment_operator.h"
 
 #include "mongo/scripting/tinyjs/object_accessor_operator.h"
 #include "mongo/scripting/tinyjs/multiplication_operator.h"
@@ -56,6 +56,7 @@
 #include "mongo/scripting/tinyjs/double_not_equals_operator.h"
 #include "mongo/scripting/tinyjs/logical_and_operator.h"
 #include "mongo/scripting/tinyjs/logical_or_operator.h"
+#include "mongo/scripting/tinyjs/while_loop.h"
 
 
 namespace mongo {
@@ -117,6 +118,12 @@ private:
      * TODO: more explanation of the functions
      */
     std::unique_ptr<Node> clauseAction();
+    std::unique_ptr<Node> blockAction();
+    std::unique_ptr<Node> statementOrLoopAction();
+    std::unique_ptr<Node> statementAction();
+    std::unique_ptr<Node> varAssignmentAction();
+    std::unique_ptr<Node> noVarAssignmentAction();
+    std::unique_ptr<Node> whileLoopAction();
     std::unique_ptr<Node> variableAction();
     std::unique_ptr<Node> objectAction();
     std::unique_ptr<Node> objectAccessorAction(std::unique_ptr<Node> leftChild);

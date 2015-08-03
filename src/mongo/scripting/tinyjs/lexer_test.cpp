@@ -48,7 +48,9 @@ using std::string;
  * the types and lexemes in the lexer output to the input arrays "types" and "lexemes"
  */
 void testValidLine(string input, TokenType *types, string *lexemes, std::size_t expectedLength) {
+    std::cout << "about to lex" << std::endl;
     std::vector<Token> tokenData = lex(input).getValue();
+    std::cout << "finished lexing" << std::endl;
 
     ASSERT(tokenData.size() == expectedLength);
 
@@ -254,6 +256,24 @@ TEST(LexerTest, kCloseCurlyBrace) {
     testSingleToken("}", TokenType::kCloseCurlyBrace);
 }
 
+TEST(LexerTest, kAssignment) {
+    testSingleToken("=", TokenType::kAssignment);
+}
+
+TEST(LexerTest, kVarKeyword) {
+    testSingleToken("var", TokenType::kVarKeyword);
+}
+
+TEST(LexerTest, kWhileKeyword) {
+    testSingleToken("while", TokenType::kWhileKeyword);
+}
+
+
+TEST(LexerTest, kForKeyword) {
+    testSingleToken("for", TokenType::kForKeyword);
+}
+
+
 TEST(LexerTest, functionOnly) {
     string input = "function hello";
 
@@ -430,6 +450,27 @@ TEST(LexerTest, weirdSpacing) {
     testValidLine(input, types, lexemes, 9);
 }
 
+TEST(LexerTest, varAssignment) {
+    string input = "var x = 1; \n return (x == 1);";
+
+        TokenType types[] = {TokenType::kVarKeyword,
+                             TokenType::kIdentifier,
+                             TokenType::kAssignment,
+                             TokenType::kIntegerLiteral,
+                             TokenType::kSemiColon,
+                             TokenType::kReturnKeyword,
+                             TokenType::kOpenParen,
+                             TokenType::kIdentifier,
+                             TokenType::kDoubleEquals,
+                             TokenType::kIntegerLiteral,
+                             TokenType::kCloseParen,
+                             TokenType::kSemiColon};
+
+    string lexemes[] = {"var", "x", "=", "1", ";", "return", "(", "x", "==", "1", ")", ";"};
+
+    testValidLine(input, types, lexemes, 12);
+}
+
 TEST(LexerTest, specialWordkIdentifier) {
     string input = "thisisnotafunction()";
 
@@ -438,6 +479,20 @@ TEST(LexerTest, specialWordkIdentifier) {
     string lexemes[] = {"thisisnotafunction", "(", ")"};
 
     testValidLine(input, types, lexemes, 3);
+}
+
+TEST(LexerTest, multiline) {
+    string input = "3;\nreturn true;";
+
+    TokenType types[] = {TokenType::kIntegerLiteral,
+                         TokenType::kSemiColon,
+                         TokenType::kReturnKeyword,
+                         TokenType::kBooleanLiteral, 
+                         TokenType::kSemiColon};
+
+    string lexemes[] = {"3", ";", "return", "true", ";"};
+
+    testValidLine(input, types, lexemes, 5);
 }
 
 TEST(LexerTest, empty) {
