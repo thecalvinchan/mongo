@@ -40,7 +40,7 @@
 #include "mongo/scripting/tinyjs/array_literal.h"
 #include "mongo/scripting/tinyjs/block.h"
 #include "mongo/scripting/tinyjs/assignment_operator.h"
-
+#include "mongo/scripting/tinyjs/for_loop.h"
 #include "mongo/scripting/tinyjs/object_accessor_operator.h"
 #include "mongo/scripting/tinyjs/multiplication_operator.h"
 #include "mongo/scripting/tinyjs/division_operator.h"
@@ -124,6 +124,7 @@ private:
     std::unique_ptr<Node> varAssignmentAction();
     std::unique_ptr<Node> noVarAssignmentAction();
     std::unique_ptr<Node> whileLoopAction();
+    std::unique_ptr<Node> forLoopAction();
     std::unique_ptr<Node> variableAction();
     std::unique_ptr<Node> objectAction();
     std::unique_ptr<Node> objectAccessorAction(std::unique_ptr<Node> leftChild);

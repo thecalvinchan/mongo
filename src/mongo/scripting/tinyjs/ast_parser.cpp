@@ -228,6 +228,8 @@ std::unique_ptr<Node> ASTParser::statementOrLoopAction() {
         std::cout << "found a statement" << std::endl;
     } else if ((head = tryProductionMatch((std::bind(&ASTParser::whileLoopAction, this))))) {
         std::cout << "found a while loop" << std::endl;
+    } else if ((head = tryProductionMatch((std::bind(&ASTParser::forLoopAction, this))))) {
+        std::cout << "found a for loop" << std::endl;
     } 
     std::cout << "returning from statement or loop action " << std::endl;
     return head;
@@ -302,25 +304,35 @@ std::unique_ptr<Node> ASTParser::noVarAssignmentAction() {
 
 
 std::unique_ptr<Node> ASTParser::whileLoopAction() {
-    std::cout << "looking for while loop; current token "  << _currentToken.value << std::endl;
     std::unique_ptr<Node> head(new WhileLoop(TokenType::kWhileKeyword));
     expectImplicitTerminal(TokenType::kWhileKeyword);
-    std::cout << "found while keyword" << std::endl;
     expectImplicitTerminal(TokenType::kOpenParen);
     (checked_cast<WhileLoop*>(head.get()))->setCondition(booleanExpressionAction());
-    std::cout << "found the condition; current token "  << _currentToken.value  << std::endl;
     expectImplicitTerminal(TokenType::kCloseParen);  
     expectImplicitTerminal(TokenType::kOpenCurlyBrace);
-    std::cout << "looking for block; current token "  << _currentToken.value  << std::endl;
     (checked_cast<WhileLoop*>(head.get()))->setBlock(blockAction());
-    std::cout << "found the block" << std::endl;
     expectImplicitTerminal(TokenType::kCloseCurlyBrace);
     return head;
 }
 
-
-
-
+std::unique_ptr<Node> ASTParser::forLoopAction() {
+    std::unique_ptr<Node> head(new ForLoop(TokenType::kForKeyword));
+    expectImplicitTerminal(TokenType::kForKeyword);
+    expectImplicitTerminal(TokenType::kOpenParen);
+    std::cout << "found a (; _currentToken is " << _currentToken.value << std::endl;
+    (checked_cast<ForLoop*>(head.get()))->setInitialization(statementAction());
+    std::cout << "initialized; _currentToken is " << _currentToken.value << std::endl;
+    (checked_cast<ForLoop*>(head.get()))->setCondition(booleanExpressionAction());
+    std::cout << "set condition; _currentToken is " << _currentToken.value << std::endl;
+    (checked_cast<ForLoop*>(head.get()))->setUpdate(statementAction());
+    std::cout << "set update; _currentToken is " << _currentToken.value << std::endl;
+    expectImplicitTerminal(TokenType::kCloseParen);  
+    expectImplicitTerminal(TokenType::kOpenCurlyBrace);
+    std::cout << "about to set block; _currentToken is " << _currentToken.value << std::endl;
+    (checked_cast<ForLoop*>(head.get()))->setBlock(blockAction());
+    expectImplicitTerminal(TokenType::kCloseCurlyBrace);
+    return head;
+}
 
 /**
  * variable:

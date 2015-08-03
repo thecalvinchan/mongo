@@ -64,6 +64,7 @@ const Value WhileLoop::evaluate(Scope* scope, Value& returnValue) const {
     } else {
         return Value();
     }
+    
 }
 
 }  // namespace tinyjs

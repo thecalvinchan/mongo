@@ -260,6 +260,18 @@ TEST(EvaluationTest, whileLoop3) {
     testEvaluation(input, Value(true), s);
 }
 
+/*TEST(EvaluationTest, forLoop1) {
+    string input = "function() {\n"
+        "x = 42;\n"
+        "for (i = 0; false; false;) {\n"
+            "x = x + 1;\n"
+        "}\n"
+        "return ((x == 42) && (this.x == x));\n"
+    "}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}*/
+
 
 /*
  * Addition tests
