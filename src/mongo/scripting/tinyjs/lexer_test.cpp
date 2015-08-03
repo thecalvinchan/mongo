@@ -450,6 +450,27 @@ TEST(LexerTest, weirdSpacing) {
     testValidLine(input, types, lexemes, 9);
 }
 
+TEST(LexerTest, varAssignment) {
+    string input = "var x = 1; \n return (x == 1);";
+
+        TokenType types[] = {TokenType::kVarKeyword,
+                             TokenType::kIdentifier,
+                             TokenType::kAssignment,
+                             TokenType::kIntegerLiteral,
+                             TokenType::kSemiColon,
+                             TokenType::kReturnKeyword,
+                             TokenType::kOpenParen,
+                             TokenType::kIdentifier,
+                             TokenType::kDoubleEquals,
+                             TokenType::kIntegerLiteral,
+                             TokenType::kCloseParen,
+                             TokenType::kSemiColon};
+
+    string lexemes[] = {"var", "x", "=", "1", ";", "return", "(", "x", "==", "1", ")", ";"};
+
+    testValidLine(input, types, lexemes, 12);
+}
+
 TEST(LexerTest, specialWordkIdentifier) {
     string input = "thisisnotafunction()";
 

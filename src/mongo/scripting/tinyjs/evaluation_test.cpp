@@ -52,8 +52,11 @@ using std::string;
  * It assumes that the lexing will not return with an error.
  */
 void testEvaluation(string input, Value expected, Scope* s = NULL) {
+    //std::cout << "about to lex " << input << std::endl;
     std::vector<Token> tokenData = lex(input).getValue();
+    std::cout << "lexed successfully" << std::endl;
     ASTParser a(std::move(tokenData));
+    std::cout << "made ASTParser" << std::endl;
     if (s == NULL) {
         s = new Scope();
     }
