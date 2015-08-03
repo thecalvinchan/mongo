@@ -71,7 +71,8 @@ const Value UnaryOperator::evaluate(Scope* scope, Value& returnValue) const {
 }
 
 const Value UnaryOperator::evaluateReturn(Scope* scope, Value& returnValue) const {
-    return (_child->evaluate(scope, returnValue));
+    returnValue = (_child->evaluate(scope, returnValue));
+    return returnValue;
 }
 
 const Value UnaryOperator::evaluateNegativeOperator(Scope* scope, Value& returnValue) const {
