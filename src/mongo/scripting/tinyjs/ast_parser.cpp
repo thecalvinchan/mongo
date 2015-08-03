@@ -238,6 +238,7 @@ std::unique_ptr<Node> ASTParser::statementOrLoopAction() {
  */
 
 std::unique_ptr<Node> ASTParser::blockAction() {
+    std::cout << "in block action" << std::endl;
     std::unique_ptr<Node> head = stdx::make_unique<Block>(TokenType::kCloseSquareBracket);
     std::unique_ptr<Node> statement;
     while ((_currentPosition < (int)_tokens.size()) &&
@@ -301,14 +302,19 @@ std::unique_ptr<Node> ASTParser::noVarAssignmentAction() {
 
 
 std::unique_ptr<Node> ASTParser::whileLoopAction() {
+    std::cout << "looking for while loop; current token "  << _currentToken.value << std::endl;
     std::unique_ptr<Node> head(new WhileLoop(TokenType::kWhileKeyword));
     expectImplicitTerminal(TokenType::kWhileKeyword);
+    std::cout << "found while keyword" << std::endl;
     expectImplicitTerminal(TokenType::kOpenParen);
     (checked_cast<WhileLoop*>(head.get()))->setCondition(booleanExpressionAction());
+    std::cout << "found the condition; current token "  << _currentToken.value  << std::endl;
     expectImplicitTerminal(TokenType::kCloseParen);  
-    expectImplicitTerminal(TokenType::kOpenSquareBracket);
+    expectImplicitTerminal(TokenType::kOpenCurlyBrace);
+    std::cout << "looking for block; current token "  << _currentToken.value  << std::endl;
     (checked_cast<WhileLoop*>(head.get()))->setBlock(blockAction());
-    expectImplicitTerminal(TokenType::kCloseSquareBracket);
+    std::cout << "found the block" << std::endl;
+    expectImplicitTerminal(TokenType::kCloseCurlyBrace);
     return head;
 }
 

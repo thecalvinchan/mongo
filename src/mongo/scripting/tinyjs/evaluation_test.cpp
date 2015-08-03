@@ -217,6 +217,48 @@ TEST(EvaluationTest, assignment8) {
     testEvaluation(input, Value(true), s);
 }
 
+TEST(EvaluationTest, whileLoop1) {
+    string input = "function() {\n"
+        "i = 0; \n"
+        "x = 32;\n"
+        "while (i < 10) {\n"
+            "x = x + 1;\n"
+            "i = i + 1;\n"
+        "}\n"
+        "return ((x == 42) && (this.x == x));\n"
+    "}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
+
+TEST(EvaluationTest, whileLoop2) {
+    string input = "function() {\n"
+        "i = 0; \n"
+        "x = 42;\n"
+        "while (false) {\n"
+            "x = x + 1;\n"
+            "i = i + 1;\n"
+        "}\n"
+        "return ((x == 42) && (this.x == x));\n"
+    "}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
+
+TEST(EvaluationTest, whileLoop3) {
+    string input = "function() {\n"
+        "i = 0; \n"
+        "x = 42;\n"
+        "while (i < 10) {\n"
+            "return ((x == 42) && (this.x == x));\n"
+            "x = x + 1;\n"
+            "i = i + 1;\n"
+        "}\n"
+        "return ((x == 42) && (this.x == x));\n"
+    "}";
+    Scope* s = generateScope();
+    testEvaluation(input, Value(true), s);
+}
 
 
 /*
