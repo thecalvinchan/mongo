@@ -46,8 +46,8 @@ def main(args):
     error_codes, error_classes = parse_error_definitions_from_file(args.err_codes_path)
     check_for_conflicts(error_codes, error_classes)
     if (args.cpp):
-        cpp_generator = cpp.generator(error_codes, error_classes, args.cpp)
-        cpp_generator.generate(args.cpp)
+        cpp_generator = cpp.Generator(error_codes, error_classes, args.cpp)
+        cpp_generator.generate()
 
 def die(message=None):
     sys.stderr.write(message or "Fatal error\n")
