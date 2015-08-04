@@ -1,20 +1,23 @@
 import base
 
-class Cpp_Generator(Generator):
+class Generator(base.Generator):
     def generate():
+        if len(args) != 2:
+            usage("Wrong number of arguments.")
         self.generate_header()
         self.generate_source()
-    def generate_header(filename, error_codes, error_classes):
+
+    def generate_header():
 
         enum_declarations = ',\n            '.join('%s = %s' % ec for ec in self.error_codes)
         predicate_declarations = ';\n        '.join(
-            'static bool is%s(Error err)' % ec[0] for ec in error_classes)
+            'static bool is%s(Error err)' % ec[0] for ec in self.error_classes)
 
-        open(filename, 'wb').write(header_template % dict(
+        open(self.args[0], 'wb').write(header_template % dict(
                 error_code_enum_declarations=enum_declarations,
                 error_code_class_predicate_declarations=predicate_declarations))
 
-    def generate_source(filename, self.error_codes, error_classes):
+    def generate_source():
         symbol_to_string_cases = ';\n        '.join(
             'case %s: return "%s"' % (ec[0], ec[0]) for ec in self.error_codes)
         string_to_symbol_cases = ';\n        '.join(
@@ -23,8 +26,8 @@ class Cpp_Generator(Generator):
         int_to_symbol_cases = ';\n        '.join(
             'case %s: return %s' % (ec[0], ec[0]) for ec in self.error_codes)
         predicate_definitions = '\n    '.join(
-            generate_error_class_predicate_definition(*ec) for ec in error_classes)
-        open(filename, 'wb').write(source_template % dict(
+            generate_error_class_predicate_definition(*ec) for ec in self.error_classes)
+        open(self.args[1], 'wb').write(source_template % dict(
                 symbol_to_string_cases=symbol_to_string_cases,
                 string_to_symbol_cases=string_to_symbol_cases,
                 int_to_symbol_cases=int_to_symbol_cases,

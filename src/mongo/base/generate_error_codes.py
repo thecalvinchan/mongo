@@ -39,17 +39,15 @@ Usage:
     python generate_error_codes.py <path to error_codes.err> <header file path> <source file path>
 """
 
-import sys
-import err_generators.cpp
+import sys, argparse
+import err_generators.cpp as cpp
 
-def main(argv):
-    if len(argv) != 4:
-        usage("Wrong number of arguments.")
-
-    error_codes, error_classes = parse_error_definitions_from_file(argv[1])
+def main(args):
+    error_codes, error_classes = parse_error_definitions_from_file(args.err_codes_path)
     check_for_conflicts(error_codes, error_classes)
-    generate_header(argv[2], error_codes, error_classes)
-    generate_source(argv[3], error_codes, error_classes)
+    if (args.cpp):
+        cpp_generator = cpp.generator(error_codes, error_classes, args.cpp)
+        cpp_generator.generate(args.cpp)
 
 def die(message=None):
     sys.stderr.write(message or "Fatal error\n")
@@ -122,4 +120,9 @@ def has_missing_error_codes(error_codes, error_classes):
     return failed
 
 if __name__ == '__main__':
-    main(sys.argv)
+    parser = argparse.ArgumentParser(description="Generate err codes.")
+    parser.add_argument('err_codes_path', help='path to error codes')
+    parser.add_argument('--cpp', dest='cpp', nargs=2, metavar=('PATH_TO_CPP_HEADER','PATH_TO_CPP_SOURCE'))
+    parser.add_argument('--js', dest='js', nargs=1, metavar='PATH_TO_JS_FILE')
+    args = parser.parse_args()
+    main(args)
