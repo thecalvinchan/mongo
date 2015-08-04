@@ -1,23 +1,23 @@
 import base
 
 class Generator(base.Generator):
-    def generate():
-        if len(args) != 2:
+    def generate(self):
+        if len(self.args) != 2:
             usage("Wrong number of arguments.")
         self.generate_header()
         self.generate_source()
 
-    def generate_header():
+    def generate_header(self):
 
         enum_declarations = ',\n            '.join('%s = %s' % ec for ec in self.error_codes)
         predicate_declarations = ';\n        '.join(
             'static bool is%s(Error err)' % ec[0] for ec in self.error_classes)
 
-        open(self.args[0], 'wb').write(header_template % dict(
+        open(self.args[0], 'wb').write(self.header_template % dict(
                 error_code_enum_declarations=enum_declarations,
                 error_code_class_predicate_declarations=predicate_declarations))
 
-    def generate_source():
+    def generate_source(self):
         symbol_to_string_cases = ';\n        '.join(
             'case %s: return "%s"' % (ec[0], ec[0]) for ec in self.error_codes)
         string_to_symbol_cases = ';\n        '.join(
@@ -26,16 +26,16 @@ class Generator(base.Generator):
         int_to_symbol_cases = ';\n        '.join(
             'case %s: return %s' % (ec[0], ec[0]) for ec in self.error_codes)
         predicate_definitions = '\n    '.join(
-            generate_error_class_predicate_definition(*ec) for ec in self.error_classes)
-        open(self.args[1], 'wb').write(source_template % dict(
+            self.generate_error_class_predicate_definition(*ec) for ec in self.error_classes)
+        open(self.args[1], 'wb').write(self.source_template % dict(
                 symbol_to_string_cases=symbol_to_string_cases,
                 string_to_symbol_cases=string_to_symbol_cases,
                 int_to_symbol_cases=int_to_symbol_cases,
                 error_code_class_predicate_definitions=predicate_definitions))
 
-    def generate_error_class_predicate_definition(class_name, code_names):
+    def generate_error_class_predicate_definition(self, class_name, code_names):
         cases = '\n        '.join('case %s:' % c for c in code_names)
-        return error_class_predicate_template % dict(class_name=class_name, cases=cases)
+        return self.error_class_predicate_template % dict(class_name=class_name, cases=cases)
 
     header_template = '''// AUTO-GENERATED FILE DO NOT EDIT
     // See src/mongo/base/generate_error_codes.py
