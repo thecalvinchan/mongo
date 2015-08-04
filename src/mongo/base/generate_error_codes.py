@@ -36,18 +36,25 @@ error_code("symbol2", code2)
 error_class("class1", ["symbol1", "symbol2, ..."])
 
 Usage:
-    python generate_error_codes.py <path to error_codes.err> <header file path> <source file path>
+    python generate_error_codes.py <path to error_codes.err>
 """
 
-import sys, argparse
+from optparse import OptionParser
+import sys
 import err_generators.cpp as cpp
 
-def main(args):
-    error_codes, error_classes = parse_error_definitions_from_file(args.err_codes_path)
+def main(options, args):
+    if (len(args) != 1):
+        usage('Wrong number of arguments')
+    error_codes, error_classes = parse_error_definitions_from_file(args[0])
     check_for_conflicts(error_codes, error_classes)
-    if (args.cpp):
-        cpp_generator = cpp.Generator(error_codes, error_classes, args.cpp)
+    if (options.cpp):
+        cpp_generator = cpp.Generator(error_codes, error_classes, options.cpp)
         cpp_generator.generate()
+    elif (options.js):
+        print "Use JS generator"
+    else:
+        usage('Must specify which generator(s) to use.')
 
 def die(message=None):
     sys.stderr.write(message or "Fatal error\n")
@@ -120,9 +127,9 @@ def has_missing_error_codes(error_codes, error_classes):
     return failed
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Generate err codes.")
-    parser.add_argument('err_codes_path', help='path to error codes')
-    parser.add_argument('--cpp', dest='cpp', nargs=2, metavar=('PATH_TO_CPP_HEADER','PATH_TO_CPP_SOURCE'))
-    parser.add_argument('--js', dest='js', nargs=1, metavar='PATH_TO_JS_FILE')
-    args = parser.parse_args()
-    main(args)
+    usage_msg = "usage: %prog [options] /path/to/error_codes.err"
+    parser = OptionParser(usage=usage_msg)
+    parser.add_option('--cpp', dest='cpp', nargs=2, metavar=('PATH_TO_CPP_HEADER','PATH_TO_CPP_SOURCE'), help='use cpp generator. Must also provide two arguments to location of generated header and source.')
+    parser.add_option('--js', dest='js', nargs=1, metavar='PATH_TO_JS_FILE', help='user js generator. Must also provide an argument to location of generated js file')
+    (options, args) = parser.parse_args()
+    main(options, args)
