@@ -42,6 +42,7 @@ public:
     virtual std::vector<Node* > getChildren() const = 0;
     virtual StringData getName() const = 0;
     TokenType getType() const { return _type; };
+    virtual bool optimizable(bool optimize=false) const { return false; };
 protected:
      Node(TokenType t) : _type(t) {};
 private:
