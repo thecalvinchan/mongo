@@ -48,6 +48,8 @@ enum class TokenType {
     kVarKeyword,
     kWhileKeyword,
     kForKeyword,
+    kIfKeyword,
+    kElseKeyword,
     kIntegerLiteral,
     kFloatLiteral,
     kBooleanLiteral,

@@ -31,8 +31,7 @@ env.Library(
         'double_not_equals_operator.cpp',
         'logical_and_operator.cpp',
         'logical_or_operator.cpp', 
-        'while_loop.cpp',
-        'for_loop.cpp'
+        'while_loop.cpp'
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/db/pipeline/document_value',

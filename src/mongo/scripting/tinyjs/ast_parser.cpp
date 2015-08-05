@@ -217,21 +217,14 @@ std::unique_ptr<Node> ASTParser::clauseAction() {
     } else {
         head = blockAction();
     } 
-    std::cout << "returning from clause" << std::endl;
     return head;
 }
 
 std::unique_ptr<Node> ASTParser::statementOrLoopAction() {
     std::unique_ptr<Node> head;
-    std::cout << "looking for a statement or loop" << std::endl;
     if ((head = tryProductionMatch((std::bind(&ASTParser::statementAction, this))))) {
-        std::cout << "found a statement" << std::endl;
     } else if ((head = tryProductionMatch((std::bind(&ASTParser::whileLoopAction, this))))) {
-        std::cout << "found a while loop" << std::endl;
-    } else if ((head = tryProductionMatch((std::bind(&ASTParser::forLoopAction, this))))) {
-        std::cout << "found a for loop" << std::endl;
     } 
-    std::cout << "returning from statement or loop action " << std::endl;
     return head;
 }
 
@@ -240,14 +233,11 @@ std::unique_ptr<Node> ASTParser::statementOrLoopAction() {
  */
 
 std::unique_ptr<Node> ASTParser::blockAction() {
-    std::cout << "in block action" << std::endl;
     std::unique_ptr<Node> head = stdx::make_unique<Block>(TokenType::kCloseSquareBracket);
     std::unique_ptr<Node> statement;
     while ((_currentPosition < (int)_tokens.size()) &&
            (statement = tryProductionMatch((std::bind(&ASTParser::statementOrLoopAction, this))))) {
-        std::cout << "adding a child to block" << std::endl;
         (checked_cast<Block*>(head.get()))->setChild(std::move(statement));
-        std::cout << "added a child to block" << std::endl;
     }
     return head;
 }
@@ -255,7 +245,6 @@ std::unique_ptr<Node> ASTParser::blockAction() {
 std::unique_ptr<Node> ASTParser::statementAction() {
     std::unique_ptr<Node> head;
     if ((head = tryProductionMatch((std::bind(&ASTParser::returnStatementAction, this))))) {
-        std::cout << "found a return statement" << std::endl;;
     } else if ((head = tryProductionMatch((std::bind(&ASTParser::noVarAssignmentAction, this))))) {
         ;
     } else if ((head = tryProductionMatch((std::bind(&ASTParser::varAssignmentAction, this))))) {
@@ -311,25 +300,6 @@ std::unique_ptr<Node> ASTParser::whileLoopAction() {
     expectImplicitTerminal(TokenType::kCloseParen);  
     expectImplicitTerminal(TokenType::kOpenCurlyBrace);
     (checked_cast<WhileLoop*>(head.get()))->setBlock(blockAction());
-    expectImplicitTerminal(TokenType::kCloseCurlyBrace);
-    return head;
-}
-
-std::unique_ptr<Node> ASTParser::forLoopAction() {
-    std::unique_ptr<Node> head(new ForLoop(TokenType::kForKeyword));
-    expectImplicitTerminal(TokenType::kForKeyword);
-    expectImplicitTerminal(TokenType::kOpenParen);
-    std::cout << "found a (; _currentToken is " << _currentToken.value << std::endl;
-    (checked_cast<ForLoop*>(head.get()))->setInitialization(statementAction());
-    std::cout << "initialized; _currentToken is " << _currentToken.value << std::endl;
-    (checked_cast<ForLoop*>(head.get()))->setCondition(booleanExpressionAction());
-    std::cout << "set condition; _currentToken is " << _currentToken.value << std::endl;
-    (checked_cast<ForLoop*>(head.get()))->setUpdate(statementAction());
-    std::cout << "set update; _currentToken is " << _currentToken.value << std::endl;
-    expectImplicitTerminal(TokenType::kCloseParen);  
-    expectImplicitTerminal(TokenType::kOpenCurlyBrace);
-    std::cout << "about to set block; _currentToken is " << _currentToken.value << std::endl;
-    (checked_cast<ForLoop*>(head.get()))->setBlock(blockAction());
     expectImplicitTerminal(TokenType::kCloseCurlyBrace);
     return head;
 }

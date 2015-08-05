@@ -56,6 +56,8 @@ namespace {
     kVarKeyword          = 'var';
     kWhileKeyword        = 'while';
     kForKeyword          = 'for';
+    kIfKeyword           = 'if';
+    kElseKeyword         = 'else';
     kIntegerLiteral      = ([1-9][0-9]*) | '0' ;
     kFloatLiteral        = [0-9]*'.'[0-9]+ | 'NaN' | 'Infinity';
     kBooleanLiteral      = 'true' | 'false';
@@ -120,6 +122,14 @@ namespace {
 
         kForKeyword => {
         emit(TokenType::kForKeyword, &tokenData, ts, te);
+        };
+
+        kIfKeyword => {
+        emit(TokenType::kIfKeyword, &tokenData, ts, te);
+        };
+
+        kElseKeyword => {
+        emit(TokenType::kElseKeyword, &tokenData, ts, te);
         };
 
         kIntegerLiteral => {

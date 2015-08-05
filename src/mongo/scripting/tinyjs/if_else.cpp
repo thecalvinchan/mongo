@@ -51,7 +51,7 @@ void IfElse::setBlock(std::unique_ptr<Node> block) {
     _block = std::move(block);
 }
 
-void IfElse::setNext(std::unique_ptr<Node> next) {
+void IfElse::setNext(std::unique_ptr<IfElse> next) {
     _next = std::move(next);
 }
 
@@ -65,10 +65,11 @@ const Value IfElse::evaluate(Scope* scope, Value& returnValue) const {
 
     if ((conditionResult.getType() == Bool) && conditionResult.getBool()) {
         _block->evaluate(scope, returnValue);
-        return evaluate(scope, returnValue);
-    } else {
-        return Value();
+    } else if (_next) {
+        _next->evaluate(scope, returnValue);
     }
+    
+    return Value();
 }
 
 }  // namespace tinyjs

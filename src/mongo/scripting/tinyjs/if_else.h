@@ -42,13 +42,13 @@ public:
     std::vector<Node*> getChildren() const;
     void setCondition(std::unique_ptr<Node>);
     void setBlock(std::unique_ptr<Node>);
-    void setNext(std::unique_ptr<Node>);
+    void setNext(std::unique_ptr<IfElse>);
     const Value evaluate(Scope* scope, Value& returnValue) const;
 
 private:
     std::unique_ptr<Node> _condition;
     std::unique_ptr<Node> _block;
-    std::unique_ptr<Node> _next;
+    std::unique_ptr<IfElse> _next;
 };
 
 }  // namespace tinyjs

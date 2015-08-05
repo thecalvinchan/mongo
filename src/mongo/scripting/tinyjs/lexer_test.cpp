@@ -273,6 +273,14 @@ TEST(LexerTest, kForKeyword) {
     testSingleToken("for", TokenType::kForKeyword);
 }
 
+TEST(LexerTest, kIfKeyword) {
+    testSingleToken("if", TokenType::kIfKeyword);
+}
+
+TEST(LexerTest, kElseKeyword) {
+    testSingleToken("else", TokenType::kElseKeyword);
+}
+
 
 TEST(LexerTest, functionOnly) {
     string input = "function hello";
