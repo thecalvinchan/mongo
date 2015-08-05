@@ -45,5 +45,17 @@ const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) cons
     return Value(Value::compare(leftValue, rightValue) > 0);
 }
 
+GreaterThanOperator::optimizable(bool optimize) const {
+    bool leftChildOptimizable = this->getLeftChild()->optimizable()
+    bool rightChildOptimizable = this->getRightChild()->optimizable()
+    if (!(leftChildOptimizable && rightChildOptimizable)) {
+        //only zero or one branch contains object accessor
+        if (optimize) {
+            //optimize query here
+        }
+    }
+    return leftChildOptimizable || rightChildOptimizable;
+}
+
 }  // namespace tinyjs
 }  // namespace mongo

@@ -53,6 +53,12 @@ const Value LogicalAndOperator::evaluate(Scope* scope, Value& returnValue) const
     }
 }
 
+// returns true if there is one or more object accessors
+bool LogicalAndOperator::optimizable(bool optimize) const {
+    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize);
+    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize);
+    return leftChildOptimizable || rightChildOptimizable;
+}
 
 
 }  // namespace tinyjs

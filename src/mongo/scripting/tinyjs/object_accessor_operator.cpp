@@ -85,5 +85,9 @@ void ObjectAccessorOperator::setPath(std::string path) {
     _objectPathString = path;
 }
 
+ObjectAccessorOperator::optimizable(bool optimize) const {
+    return true;
+}
+
 }  // namespace tinyjs
 }  // namespace mongo
