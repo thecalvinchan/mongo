@@ -103,7 +103,7 @@ const Value UnaryOperator::evaluateNegativeOperator(Scope* scope, Value& returnV
     }
 }
 
-virtual bool UnaryOperator::optimizable(bool optimize) const {
+bool UnaryOperator::optimizable(bool optimize) const {
     switch (this->getType()) {
         case TokenType::kReturnKeyword: {
             return getChild()->optimizable(true);

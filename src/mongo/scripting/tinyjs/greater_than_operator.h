@@ -37,6 +37,7 @@ class GreaterThanOperator : public BinaryOperator {
 public:
     GreaterThanOperator();
     const Value evaluate(Scope* scope, Value& returnValue) const;
+    virtual bool optimizable(bool optimize=false) const;
 };
 
 }  // namespace tinyjs

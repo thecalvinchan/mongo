@@ -298,9 +298,9 @@ bool looselyEqual(Value leftValue, Value rightValue) {
     return Value::compare(leftValue, rightValue) == 0;
 }
 
-BinaryOperator::optimizable(bool optimize) const {
-    bool leftChildOptimizable = this->getLeftChild()->optimizable()
-    bool rightChildOptimizable = this->getRightChild()->optimizable()
+bool BinaryOperator::optimizable(bool optimize) const {
+    bool leftChildOptimizable = this->getLeftChild()->optimizable();
+    bool rightChildOptimizable = this->getRightChild()->optimizable();
     return leftChildOptimizable || rightChildOptimizable;
 }
 
