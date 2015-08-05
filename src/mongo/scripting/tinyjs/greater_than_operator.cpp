@@ -45,13 +45,41 @@ const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) cons
     return Value(Value::compare(leftValue, rightValue) > 0);
 }
 
-GreaterThanOperator::optimizable(bool optimize) const {
-    bool leftChildOptimizable = this->getLeftChild()->optimizable()
-    bool rightChildOptimizable = this->getRightChild()->optimizable()
+GreaterThanOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) const {
+    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, root)
+    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, root)
     if (!(leftChildOptimizable && rightChildOptimizable)) {
         //only zero or one branch contains object accessor
         if (optimize) {
-            //optimize query here
+            // optimize query here
+            if (!(leftChildOptimizable && rightChildOptimizable)) {
+                // case where both sides are constant ]
+                // TODO
+            } else if (leftChildOptimizable) {
+                // case where left child contains an object access and right child doesn't
+                // TODO: for now, just assume that left child is one simple object access
+                BSONElement constant = BSONElement(rightChild->evaluate().getInt());  // TODO
+                std::string fieldName = (checked_cast<ObjectAccessor*>(leftChild.get()))->generateNestedField();
+                std::unique_ptr<ComparisonMatchExpression> eq =
+                    stdx::make_unique<ComparisonMatchExpression>(GT);
+                Status s = eq->init(fieldName, constant);
+                if (!s.isOK())
+                    return s;
+
+                root->add(eq.release());
+            } else {
+                // case where right child contains an object access and left child doesn't
+                // TODO: for now, just assume that left child is one simple object access
+                BSONElement constant = BSONElement(leftChild->evaluate().getInt());  // TODO
+                std::string fieldName = (checked_cast<ObjectAccessor*>(rightChild.get()))->generateNestedField();
+                std::unique_ptr<ComparisonMatchExpression> eq =
+                    stdx::make_unique<ComparisonMatchExpression>(GT);
+                Status s = eq->init(fieldName, constant);
+                if (!s.isOK())
+                    return s;
+
+                root->add(eq.release());
+            }
         }
     }
     return leftChildOptimizable || rightChildOptimizable;

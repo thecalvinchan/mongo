@@ -39,9 +39,9 @@ public:
     const Value evaluate(Scope* scope, Value& returnValue) const;
     void setPath(std::string path);
     StringData getName() const override;
+    std::string generateNestedField(const Node* head, Scope* scope, Value& returnValue) const;
 
 private:
-    std::string generateNestedField(const Node* head, Scope* scope, Value& returnValue) const;
     std::string _objectPathString;
 };
 
