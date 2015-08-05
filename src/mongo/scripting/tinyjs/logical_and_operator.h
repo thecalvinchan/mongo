@@ -37,6 +37,7 @@ class LogicalAndOperator : public BinaryOperator {
 public:
     LogicalAndOperator();
     const Value evaluate(Scope* scope, Value& returnValue) const;
+    virtual bool optimizable(bool optimize=false) const;
 };
 
 }  // namespace tinyjs

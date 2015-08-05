@@ -43,7 +43,7 @@ public:
     void setLeftChild(std::unique_ptr<Node>);
     void setRightChild(std::unique_ptr<Node>);
     virtual const Value evaluate(Scope* scope, Value& returnValue) const = 0;
-
+    virtual bool optimizable(bool optimize=false) const;
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _rightChild;
