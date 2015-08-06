@@ -27,16 +27,25 @@
 
 #include "mongo/platform/basic.h"
 
+#include "mongo/base/checked_cast.h"
+
 #include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/greater_than_operator.h"
+#include "mongo/scripting/tinyjs/object_accessor_operator.h"
+#include "mongo/db/matcher/expression_array.h"
+#include "mongo/db/matcher/expression_leaf.h"
+#include "mongo/db/matcher/expression_tree.h"
 
 
 namespace mongo {
 namespace tinyjs {
 
-GreaterThanOperator::GreaterThanOperator() : BinaryOperator(TokenType::kGreaterThan) {}
+GreaterThanOperator::GreaterThanOperator() : BinaryOperator(TokenType::kGreaterThan), _optimized(false) {}
 
 const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (_optimized) {
+        return Value(true);
+    }
     if (!returnValue.nullish()) {
         return returnValue;
     }
@@ -45,12 +54,14 @@ const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) cons
     return Value(Value::compare(leftValue, rightValue) > 0);
 }
 
-GreaterThanOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) const {
-    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, root)
-    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, root)
+bool GreaterThanOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
+    Value returnValueDummy = Value();
+    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, std::move(root));
+    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, std::move(root));
     if (!(leftChildOptimizable && rightChildOptimizable)) {
         //only zero or one branch contains object accessor
         if (optimize) {
+            _optimized = true;
             // optimize query here
             if (!(leftChildOptimizable && rightChildOptimizable)) {
                 // case where both sides are constant ]
@@ -58,25 +69,29 @@ GreaterThanOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpressi
             } else if (leftChildOptimizable) {
                 // case where left child contains an object access and right child doesn't
                 // TODO: for now, just assume that left child is one simple object access
-                BSONElement constant = BSONElement(rightChild->evaluate().getInt());  // TODO
-                std::string fieldName = (checked_cast<ObjectAccessor*>(leftChild.get()))->generateNestedField();
-                std::unique_ptr<ComparisonMatchExpression> eq =
-                    stdx::make_unique<ComparisonMatchExpression>(GT);
+                BSONObjBuilder* builder = new BSONObjBuilder();
+                Value v = this->getRightChild()->evaluate(nullptr, returnValueDummy);
+                v.addToBsonObj(builder, "constant");
+                BSONElement constant = builder->obj().getField("constant");  // TODO
+                std::string fieldName = (checked_cast<ObjectAccessorOperator*>(this->getLeftChild()))->getFullField();
+                std::unique_ptr<ComparisonMatchExpression> eq(new GTMatchExpression()); // TODO specify GT
                 Status s = eq->init(fieldName, constant);
                 if (!s.isOK())
-                    return s;
+                    return false;
 
                 root->add(eq.release());
             } else {
                 // case where right child contains an object access and left child doesn't
                 // TODO: for now, just assume that left child is one simple object access
-                BSONElement constant = BSONElement(leftChild->evaluate().getInt());  // TODO
-                std::string fieldName = (checked_cast<ObjectAccessor*>(rightChild.get()))->generateNestedField();
-                std::unique_ptr<ComparisonMatchExpression> eq =
-                    stdx::make_unique<ComparisonMatchExpression>(GT);
+                BSONObjBuilder* builder = new BSONObjBuilder();
+                Value v = this->getLeftChild()->evaluate(nullptr, returnValueDummy);
+                v.addToBsonObj(builder, "constant");
+                BSONElement constant = builder->obj().getField("constant");  // TODO
+                std::string fieldName = (checked_cast<ObjectAccessorOperator*>(this->getRightChild()))->getFullField();
+                std::unique_ptr<ComparisonMatchExpression> eq(new GTMatchExpression()); // TODO specify GT
                 Status s = eq->init(fieldName, constant);
                 if (!s.isOK())
-                    return s;
+                    return false;
 
                 root->add(eq.release());
             }

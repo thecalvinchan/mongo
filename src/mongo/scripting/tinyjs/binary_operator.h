@@ -30,6 +30,10 @@
 
 #include "mongo/scripting/tinyjs/nonterminal_node.h"
 
+#include "mongo/db/matcher/expression.h"
+#include "mongo/db/matcher/expression_leaf.h"
+#include "mongo/db/matcher/expression_tree.h"
+
 namespace mongo {
 namespace tinyjs {
 
@@ -43,7 +47,7 @@ public:
     void setLeftChild(std::unique_ptr<Node>);
     void setRightChild(std::unique_ptr<Node>);
     virtual const Value evaluate(Scope* scope, Value& returnValue) const = 0;
-    virtual bool optimizable(bool optimize=false) const;
+    virtual bool optimizable(bool optimize=false, std::unique_ptr<AndMatchExpression> root = nullptr);
 private:
     std::unique_ptr<Node> _leftChild;
     std::unique_ptr<Node> _rightChild;

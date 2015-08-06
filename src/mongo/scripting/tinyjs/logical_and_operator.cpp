@@ -54,9 +54,9 @@ const Value LogicalAndOperator::evaluate(Scope* scope, Value& returnValue) const
 }
 
 // returns true if there is one or more object accessors
-bool LogicalAndOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) const {
-    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, root);
-    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, root);
+bool LogicalAndOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
+    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, std::move(root));
+    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, std::move(root));
     return leftChildOptimizable || rightChildOptimizable;
 }
 

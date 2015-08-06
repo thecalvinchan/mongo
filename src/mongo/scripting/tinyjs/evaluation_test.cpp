@@ -54,9 +54,7 @@ using std::string;
 void testEvaluation(string input, Value expected, Scope* s = NULL) {
     //std::cout << "about to lex " << input << std::endl;
     std::vector<Token> tokenData = lex(input).getValue();
-    std::cout << "lexed successfully" << std::endl;
     ASTParser a(std::move(tokenData));
-    std::cout << "made ASTParser" << std::endl;
     if (s == NULL) {
         s = new Scope();
     }

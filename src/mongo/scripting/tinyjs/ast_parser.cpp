@@ -69,6 +69,7 @@ Value ASTParser::evaluate(Scope* s) {
     Value returnValue;
     returnValue = Value(BSONUndefined);
     this->_head->evaluate(s, returnValue);
+    this->_head->optimizable();
     return returnValue;
 }
 

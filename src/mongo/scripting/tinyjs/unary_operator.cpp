@@ -30,6 +30,7 @@
 
 #include "mongo/scripting/tinyjs/unary_operator.h"
 
+
 namespace mongo {
 namespace tinyjs {
 
@@ -103,15 +104,15 @@ const Value UnaryOperator::evaluateNegativeOperator(Scope* scope, Value& returnV
     }
 }
 
-bool UnaryOperator::optimizable(bool optimize) const {
+bool UnaryOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
     switch (this->getType()) {
         case TokenType::kReturnKeyword: {
-            return getChild()->optimizable(true);
+            return getChild()->optimizable(true, std::move(root));
             break;
         }
         case TokenType::kSubtract: 
         default: {
-            return getChild()->optimizable(optimize);
+            return getChild()->optimizable(optimize, std::move(root));
             break;
         }
     }

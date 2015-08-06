@@ -52,6 +52,11 @@ const Value ObjectAccessorOperator::evaluate(Scope* scope, Value& returnValue) c
     return Value(el);
 }
 
+std::string ObjectAccessorOperator::getFullField() {
+    Value returnValueDummy = Value();
+    return generateNestedField(this, nullptr, returnValueDummy);
+}
+
 
 std::string ObjectAccessorOperator::generateNestedField(const Node* head, Scope* scope, Value& returnValue) const {
     TokenType type = head->getType();
@@ -85,7 +90,7 @@ void ObjectAccessorOperator::setPath(std::string path) {
     _objectPathString = path;
 }
 
-bool ObjectAccessorOperator::optimizable(bool optimize) const {
+bool ObjectAccessorOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
     return true;
 }
 
