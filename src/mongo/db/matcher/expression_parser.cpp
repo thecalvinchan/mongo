@@ -330,9 +330,12 @@ StatusWithMatchExpression MatchExpressionParser::_parse(const BSONObj& obj, int 
             } else if (mongoutils::str::equals("where", rest)) {
                 std::cout << "about to parse $where query" << std::endl;
                 StatusWithMatchExpression s = _whereCallback->parseWhere(e, std::move(root));
+                std::cout << "finished parsing $where" << std::endl;
                 if (!s.isOK())
                     return s;
+                std::cout << "about to call getvalue" << std::endl;
                 root->add(s.getValue().release());
+                std::cout << "called getvalue" << std::endl;
             } else if (mongoutils::str::equals("text", rest)) {
                 if (e.type() != Object) {
                     return {Status(ErrorCodes::BadValue, "$text expects an object")};
