@@ -28,6 +28,8 @@
 
 #include "mongo/platform/basic.h"
 
+#include <iostream>
+
 #include "mongo/scripting/tinyjs/scope.h"
 #include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/scripting/tinyjs/ast_parser.h"
@@ -60,11 +62,14 @@ ScriptingFunction Scope::createFunction(const char* code, std::unique_ptr<AndMat
 
 ScriptingFunction Scope::_createFunction(const char* code, std::unique_ptr<AndMatchExpression> root, 
                                               ScriptingFunction functionNumber) {
+    std::cout << "in createFunction with root" << std::endl;
     std::string input(code);
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser* func = new ASTParser(std::move(tokenData));
     if (root != nullptr) {
+        std::cout << "about to optimize" << std::endl;
         func->optimize(std::move(root));
+        std::cout << "finished optimize" << std::endl;
     }
     _funcs.push_back(func);
     return functionNumber;

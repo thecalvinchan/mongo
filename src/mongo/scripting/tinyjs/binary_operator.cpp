@@ -27,6 +27,7 @@
 
 #include <boost/lexical_cast.hpp>
 #include <math.h>
+#include <iostream>
 
 #include "mongo/platform/basic.h"
 #include "mongo/bson/bsontypes.h"
@@ -299,6 +300,7 @@ bool looselyEqual(Value leftValue, Value rightValue) {
 }
 
 bool BinaryOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
+    std::cout << "optimize in binary_operator" << std::endl;
     bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, std::move(root));
     bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, std::move(root));
     return leftChildOptimizable || rightChildOptimizable;

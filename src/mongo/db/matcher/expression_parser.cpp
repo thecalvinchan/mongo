@@ -30,6 +30,8 @@
 
 #include "mongo/db/matcher/expression_parser.h"
 
+#include <iostream>
+
 #include "mongo/bson/bsonmisc.h"
 #include "mongo/bson/bsonobj.h"
 #include "mongo/bson/bsonobjbuilder.h"
@@ -326,6 +328,7 @@ StatusWithMatchExpression MatchExpressionParser::_parse(const BSONObj& obj, int 
                 if (e.trueValue())
                     root->add(new AtomicMatchExpression());
             } else if (mongoutils::str::equals("where", rest)) {
+                std::cout << "about to parse $where query" << std::endl;
                 StatusWithMatchExpression s = _whereCallback->parseWhere(e, std::move(root));
                 if (!s.isOK())
                     return s;

@@ -30,6 +30,8 @@
 
 #include "mongo/platform/basic.h"
 
+#include <iostream>
+
 #include "mongo/base/init.h"
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/namespace_string.h"
@@ -211,6 +213,8 @@ WhereCallbackReal::WhereCallbackReal(OperationContext* txn, StringData dbName)
     : _txn(txn), _dbName(dbName) {}
 
 StatusWithMatchExpression WhereCallbackReal::parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const {
+    std::cout << "in parseWhere with root" << std::endl;
+
     if (!globalScriptEngine)
         return StatusWithMatchExpression(ErrorCodes::BadValue,
                                          "no globalScriptEngine in $where parsing");
