@@ -54,13 +54,13 @@ bool Scope::getBoolean(const char* field) {
     }
 }
 
-ScriptingFunction Scope::createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) {
+ScriptingFunction Scope::createFunction(const char* code, AndMatchExpression* root) {
     ScriptingFunction func = _funcs.size();
     _createFunction(code, std::move(root), func);
     return func + 1;
 }
 
-ScriptingFunction Scope::_createFunction(const char* code, std::unique_ptr<AndMatchExpression> root, 
+ScriptingFunction Scope::_createFunction(const char* code, AndMatchExpression* root, 
                                               ScriptingFunction functionNumber) {
     std::cout << "in createFunction with root" << std::endl;
     std::string input(code);

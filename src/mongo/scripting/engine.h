@@ -106,7 +106,7 @@ public:
     virtual void gc() = 0;
 
     virtual ScriptingFunction createFunction(const char* code);
-    virtual ScriptingFunction createFunction(const char* code, std::unique_ptr<AndMatchExpression> root);
+    virtual ScriptingFunction createFunction(const char* code, AndMatchExpression* root);
 
     /**
      * @return 0 on success
@@ -219,7 +219,7 @@ protected:
                                               ScriptingFunction functionNumber = 0) = 0;
 
     virtual ScriptingFunction _createFunction(const char* code,
-                                              std::unique_ptr<AndMatchExpression> root,
+                                              AndMatchExpression* root,
                                               ScriptingFunction functionNumber = 0) = 0;
 
     std::string _localDBName;

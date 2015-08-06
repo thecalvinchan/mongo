@@ -81,7 +81,7 @@ public:
     /*ScriptingFunction createFunction(const char* code) override {
       return createFunction(code, nullptr);
     }*/
-    ScriptingFunction createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) override;
+    ScriptingFunction createFunction(const char* code, AndMatchExpression* root) override;
     /**
     * @return 0 on success
     */
@@ -119,7 +119,7 @@ private:
     ScriptingFunction _createFunction(const char* code,
                                       ScriptingFunction functionNumber = 0) override;
     ScriptingFunction _createFunction(const char* code,
-                                              std::unique_ptr<AndMatchExpression> root,
+                                              AndMatchExpression* root,
                                               ScriptingFunction functionNumber = 0) override;
     std::vector<ASTParser*> _funcs;
 };

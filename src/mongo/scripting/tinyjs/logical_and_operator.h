@@ -37,7 +37,7 @@ class LogicalAndOperator : public BinaryOperator {
 public:
     LogicalAndOperator();
     const Value evaluate(Scope* scope, Value& returnValue) const;
-    virtual bool optimizable(bool optimize=false, std::unique_ptr<AndMatchExpression> root = nullptr);
+    virtual bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr);
 };
 
 }  // namespace tinyjs

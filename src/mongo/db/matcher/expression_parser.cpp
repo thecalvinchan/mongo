@@ -329,11 +329,14 @@ StatusWithMatchExpression MatchExpressionParser::_parse(const BSONObj& obj, int 
                     root->add(new AtomicMatchExpression());
             } else if (mongoutils::str::equals("where", rest)) {
                 std::cout << "about to parse $where query" << std::endl;
-                StatusWithMatchExpression s = _whereCallback->parseWhere(e, std::move(root));
+                StatusWithMatchExpression s = _whereCallback->parseWhere(e, root.get());
                 std::cout << "finished parsing $where" << std::endl;
-                if (!s.isOK())
+                std::cout << "s.getValue(): " << (s.getValue() ? "not null" : "null") << std::endl;
+                if (!s.isOK()) {
+                    std::cout << "not ok";
                     return s;
-                std::cout << "about to call getvalue" << std::endl;
+                }
+                std::cout << "about to call release" << std::endl;
                 root->add(s.getValue().release());
                 std::cout << "called getvalue" << std::endl;
             } else if (mongoutils::str::equals("text", rest)) {

@@ -43,7 +43,7 @@ public:
     Node* getChild() const;
     void setChild(std::unique_ptr<Node> node);
     const Value evaluate(Scope* scope, Value& returnValue) const;
-    virtual bool optimizable(bool optimize=false, std::unique_ptr<AndMatchExpression> root = nullptr);
+    virtual bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr);
 private:
     std::unique_ptr<Node> _child;
     const Value evaluateReturn(Scope* scope, Value& returnValue) const;

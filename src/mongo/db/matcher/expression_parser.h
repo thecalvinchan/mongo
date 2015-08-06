@@ -55,7 +55,7 @@ public:
      */
     class WhereCallback {
     public:
-        virtual StatusWithMatchExpression parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const {
+        virtual StatusWithMatchExpression parseWhere(const BSONElement& where, AndMatchExpression* root) const {
             return parseWhere(where);
         }
         virtual StatusWithMatchExpression parseWhere(const BSONElement& where) const;
@@ -183,7 +183,7 @@ public:
     WhereCallbackReal(OperationContext* txn, StringData dbName);
 
     virtual StatusWithMatchExpression parseWhere(const BSONElement& where) const;
-    virtual StatusWithMatchExpression parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const;
+    virtual StatusWithMatchExpression parseWhere(const BSONElement& where, AndMatchExpression* root) const;
 
 private:
     // Not owned here

@@ -104,7 +104,7 @@ const Value UnaryOperator::evaluateNegativeOperator(Scope* scope, Value& returnV
     }
 }
 
-bool UnaryOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
+bool UnaryOperator::optimizable(bool optimize, AndMatchExpression* root) {
     switch (this->getType()) {
         case TokenType::kReturnKeyword: {
             return getChild()->optimizable(true, std::move(root));

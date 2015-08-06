@@ -50,7 +50,7 @@ public:
      * returns a bool that determines if the subtree contains at least 1 object access
      * input: if optimize is true, when it hits a comparison operator, it will attempt to optimize 
      */ 
-    virtual bool optimizable(bool optimize=false, std::unique_ptr<AndMatchExpression> root = nullptr) { return false; };
+    virtual bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr) { return false; };
 protected:
      Node(TokenType t) : _type(t) {};
 private:

@@ -60,10 +60,10 @@ const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) cons
     return Value(Value::compare(leftValue, rightValue) > 0);
 }
 
-bool GreaterThanOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
+bool GreaterThanOperator::optimizable(bool optimize, AndMatchExpression* root) {
     Value returnValueDummy = Value();
-    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, std::move(root));
-    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, std::move(root));
+    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, root);
+    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, root);
     if (!(leftChildOptimizable && rightChildOptimizable)) {
         //only zero or one branch contains object accessor
         if (optimize) {

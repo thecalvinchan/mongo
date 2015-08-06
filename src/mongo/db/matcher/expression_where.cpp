@@ -63,7 +63,7 @@ public:
 
     Status init(StringData dbName, StringData theCode, const BSONObj& scope);
 
-    Status init(StringData dbName, StringData theCode, const BSONObj& scope, std::unique_ptr<AndMatchExpression> root);
+    Status init(StringData dbName, StringData theCode, const BSONObj& scope, AndMatchExpression* root);
 
     virtual bool matches(const MatchableDocument* doc, MatchDetails* details = 0) const;
 
@@ -131,7 +131,7 @@ Status WhereMatchExpression::init(StringData dbName, StringData theCode, const B
     return Status::OK();
 }
 
-Status WhereMatchExpression::init(StringData dbName, StringData theCode, const BSONObj& scope, std::unique_ptr<AndMatchExpression> root) {
+Status WhereMatchExpression::init(StringData dbName, StringData theCode, const BSONObj& scope, AndMatchExpression* root) {
     if (dbName.size() == 0) {
         return Status(ErrorCodes::BadValue, "ns for $where cannot be empty");
     }
@@ -149,7 +149,7 @@ Status WhereMatchExpression::init(StringData dbName, StringData theCode, const B
 
     try {
         _scope = globalScriptEngine->getPooledScope(_txn, _dbName, "where" + userToken);
-        _func = _scope->createFunction(_code.c_str(), std::move(root));
+        _func = _scope->createFunction(_code.c_str(), root);
     } catch (...) {
         return exceptionToStatus();
     }
@@ -212,7 +212,7 @@ bool WhereMatchExpression::equivalent(const MatchExpression* other) const {
 WhereCallbackReal::WhereCallbackReal(OperationContext* txn, StringData dbName)
     : _txn(txn), _dbName(dbName) {}
 
-StatusWithMatchExpression WhereCallbackReal::parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const {
+StatusWithMatchExpression WhereCallbackReal::parseWhere(const BSONElement& where, AndMatchExpression* root) const {
     std::cout << "in parseWhere with root" << std::endl;
 
     if (!globalScriptEngine)
