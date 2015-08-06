@@ -73,8 +73,8 @@ Value ASTParser::evaluate(Scope* s) {
 }
 
 
-void ASTParser::optimize(std::unique_ptr<AndMatchExpression> root) {
-    _head->optimizable(false, std::move(root));
+void ASTParser::optimize(AndMatchExpression* root) {
+    _head->optimizable(false, root);
 }
 
 

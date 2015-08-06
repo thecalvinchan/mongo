@@ -90,7 +90,7 @@ void ObjectAccessorOperator::setPath(std::string path) {
     _objectPathString = path;
 }
 
-bool ObjectAccessorOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
+bool ObjectAccessorOperator::optimizable(bool optimize, AndMatchExpression* root) {
     return true;
 }
 

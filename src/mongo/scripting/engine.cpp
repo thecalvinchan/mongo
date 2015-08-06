@@ -269,7 +269,7 @@ ScriptingFunction Scope::createFunction(const char* code) {
     return actualFunctionNumber;
 }
 
-ScriptingFunction Scope::createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) {
+ScriptingFunction Scope::createFunction(const char* code, AndMatchExpression* root) {
     if (code[0] == '/' && code[1] == '*') {
         code += 2;
         while (code[0] && code[1]) {
@@ -483,7 +483,7 @@ public:
     void setFunction(const char* field, const char* code) {
         _real->setFunction(field, code);
     }
-    ScriptingFunction createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) {
+    ScriptingFunction createFunction(const char* code, AndMatchExpression* root) {
         return _real->createFunction(code, std::move(root));
     }
     ScriptingFunction createFunction(const char* code) {
@@ -526,7 +526,7 @@ protected:
     }
 
     ScriptingFunction _createFunction(const char* code,
-                                      std::unique_ptr<AndMatchExpression> root,
+                                      AndMatchExpression* root,
                                       ScriptingFunction functionNumber = 0) {
         return _real->_createFunction(code, std::move(root), functionNumber);
     }

@@ -70,7 +70,7 @@ public:
      * BFS-traversal order.
      */
     std::string traverse();
-    void optimize(std::unique_ptr<AndMatchExpression> root);
+    void optimize(AndMatchExpression* root);
     Value evaluate(Scope* s);
 private:
     void parseTokens(std::vector<Token> tokens);

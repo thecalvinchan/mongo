@@ -40,7 +40,7 @@ public:
     void setPath(std::string path);
     StringData getName() const override;
     std::string generateNestedField(const Node* head, Scope* scope, Value& returnValue) const;
-    virtual bool optimizable(bool optimize=false, std::unique_ptr<AndMatchExpression> root = nullptr);
+    virtual bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr);
     std::string getFullField();
 private:
     std::string _objectPathString;
