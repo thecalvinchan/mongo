@@ -32,6 +32,8 @@
 #include "mongo/base/init.h"
 #include "mongo/db/matcher/expression.h"
 #include "mongo/db/matcher/expression_parser.h"
+#include "mongo/db/matcher/expression_leaf.h"
+#include "mongo/db/matcher/expression_tree.h"
 #include "mongo/stdx/memory.h"
 
 namespace mongo {
@@ -136,8 +138,8 @@ StatusWithMatchExpression WhereCallbackNoop::parseWhere(const BSONElement& where
     return StatusWithMatchExpression(ErrorCodes::BadValue, "$where got bad type");
 }
 
-StatusWithMatchExpression WhereCallbackNoop::parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const {
+/*StatusWithMatchExpression WhereCallbackNoop::parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const {
     return parseWhere(where);
-}
+}*/
 
 }
