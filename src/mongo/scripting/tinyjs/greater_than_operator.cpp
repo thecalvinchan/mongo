@@ -27,6 +27,8 @@
 
 #include "mongo/platform/basic.h"
 
+#include <iostream>
+
 #include "mongo/base/checked_cast.h"
 
 #include "mongo/scripting/tinyjs/binary_operator.h"
@@ -37,13 +39,17 @@
 #include "mongo/db/matcher/expression_tree.h"
 
 
+
 namespace mongo {
 namespace tinyjs {
+
+using namespace std;
 
 GreaterThanOperator::GreaterThanOperator() : BinaryOperator(TokenType::kGreaterThan), _optimized(false) {}
 
 const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) const {
     if (_optimized) {
+        cout << "_optimized" << endl;
         return Value(true);
     }
     if (!returnValue.nullish()) {

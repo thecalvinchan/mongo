@@ -61,6 +61,8 @@ public:
 
     Status init(StringData dbName, StringData theCode, const BSONObj& scope);
 
+    Status init(StringData dbName, StringData theCode, const BSONObj& scope, AndMatchExpression* root);
+
     virtual bool matches(const MatchableDocument* doc, MatchDetails* details = 0) const;
 
     virtual bool matchesSingleElement(const BSONElement& e) const {
@@ -127,6 +129,35 @@ Status WhereMatchExpression::init(StringData dbName, StringData theCode, const B
     return Status::OK();
 }
 
+Status WhereMatchExpression::init(StringData dbName, StringData theCode, const BSONObj& scope, AndMatchExpression* root) {
+    if (dbName.size() == 0) {
+        return Status(ErrorCodes::BadValue, "ns for $where cannot be empty");
+    }
+
+    if (theCode.size() == 0) {
+        return Status(ErrorCodes::BadValue, "code for $where cannot be empty");
+    }
+
+    _dbName = dbName.toString();
+    _code = theCode.toString();
+    _userScope = scope.getOwned();
+
+    const string userToken =
+        AuthorizationSession::get(ClientBasic::getCurrent())->getAuthenticatedUserNamesToken();
+
+    try {
+        _scope = globalScriptEngine->getPooledScope(_txn, _dbName, "where" + userToken);
+        _func = _scope->createFunction(_code.c_str(), root);
+    } catch (...) {
+        return exceptionToStatus();
+    }
+
+    if (!_func)
+        return Status(ErrorCodes::BadValue, "$where compile error");
+
+    return Status::OK();
+}
+
 bool WhereMatchExpression::matches(const MatchableDocument* doc, MatchDetails* details) const {
     uassert(28692, "$where compile error", _func);
     BSONObj obj = doc->toBSON();
@@ -178,6 +209,30 @@ bool WhereMatchExpression::equivalent(const MatchExpression* other) const {
 
 WhereCallbackReal::WhereCallbackReal(OperationContext* txn, StringData dbName)
     : _txn(txn), _dbName(dbName) {}
+
+StatusWithMatchExpression WhereCallbackReal::parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const {
+    if (!globalScriptEngine)
+        return StatusWithMatchExpression(ErrorCodes::BadValue,
+                                         "no globalScriptEngine in $where parsing");
+
+    unique_ptr<WhereMatchExpression> exp(new WhereMatchExpression(_txn));
+    if (where.type() == String || where.type() == Code) {
+        Status s = exp->init(_dbName, where.valuestr(), BSONObj(), std::move(root));
+        if (!s.isOK())
+            return StatusWithMatchExpression(s);
+        return {std::move(exp)};
+    }
+
+    if (where.type() == CodeWScope) {
+        Status s =
+            exp->init(_dbName, where.codeWScopeCode(), BSONObj(where.codeWScopeScopeDataUnsafe()));
+        if (!s.isOK())
+            return StatusWithMatchExpression(s);
+        return {std::move(exp)};
+    }
+
+    return StatusWithMatchExpression(ErrorCodes::BadValue, "$where got bad type");
+}
 
 StatusWithMatchExpression WhereCallbackReal::parseWhere(const BSONElement& where) const {
     if (!globalScriptEngine)

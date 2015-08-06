@@ -269,6 +269,30 @@ ScriptingFunction Scope::createFunction(const char* code) {
     return actualFunctionNumber;
 }
 
+ScriptingFunction Scope::createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) {
+    if (code[0] == '/' && code[1] == '*') {
+        code += 2;
+        while (code[0] && code[1]) {
+            if (code[0] == '*' && code[1] == '/') {
+                code += 2;
+                break;
+            }
+            code++;
+        }
+    }
+
+    FunctionCacheMap::iterator i = _cachedFunctions.find(code);
+    if (i != _cachedFunctions.end())
+        return i->second;
+    // NB: we calculate the function number for v8 so the cache can be utilized to
+    //     lookup the source on an exception, but SpiderMonkey uses the value
+    //     returned by JS_CompileFunction.
+    ScriptingFunction defaultFunctionNumber = getFunctionCache().size() + 1;
+    ScriptingFunction actualFunctionNumber = _createFunction(code,  std::move(root), defaultFunctionNumber);
+    _cachedFunctions[code] = actualFunctionNumber;
+    return actualFunctionNumber;
+}
+
 namespace JSFiles {
 extern const JSFile collection;
 extern const JSFile db;
@@ -459,6 +483,9 @@ public:
     void setFunction(const char* field, const char* code) {
         _real->setFunction(field, code);
     }
+    ScriptingFunction createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) {
+        return _real->createFunction(code, std::move(root));
+    }
     ScriptingFunction createFunction(const char* code) {
         return _real->createFunction(code);
     }
@@ -496,6 +523,12 @@ protected:
 
     ScriptingFunction _createFunction(const char* code, ScriptingFunction functionNumber = 0) {
         return _real->_createFunction(code, functionNumber);
+    }
+
+    ScriptingFunction _createFunction(const char* code,
+                                      std::unique_ptr<AndMatchExpression> root,
+                                      ScriptingFunction functionNumber = 0) {
+        return _real->_createFunction(code, std::move(root), functionNumber);
     }
 
 private:

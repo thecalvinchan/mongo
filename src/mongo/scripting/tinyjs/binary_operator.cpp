@@ -299,8 +299,8 @@ bool looselyEqual(Value leftValue, Value rightValue) {
 }
 
 bool BinaryOperator::optimizable(bool optimize, std::unique_ptr<AndMatchExpression> root) {
-    bool leftChildOptimizable = this->getLeftChild()->optimizable();
-    bool rightChildOptimizable = this->getRightChild()->optimizable();
+    bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, std::move(root));
+    bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, std::move(root));
     return leftChildOptimizable || rightChildOptimizable;
 }
 

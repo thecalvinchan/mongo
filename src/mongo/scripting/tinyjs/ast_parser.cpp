@@ -69,9 +69,14 @@ Value ASTParser::evaluate(Scope* s) {
     Value returnValue;
     returnValue = Value(BSONUndefined);
     this->_head->evaluate(s, returnValue);
-    this->_head->optimizable();
     return returnValue;
 }
+
+
+void ASTParser::optimize(std::unique_ptr<AndMatchExpression> root) {
+    _head->optimizable(false, std::move(root));
+}
+
 
 void ASTParser::parseTokens(std::vector<Token> tokens) {
     this->_head = clauseAction();

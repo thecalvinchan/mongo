@@ -55,6 +55,7 @@ public:
      */
     class WhereCallback {
     public:
+        virtual StatusWithMatchExpression parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const;
         virtual StatusWithMatchExpression parseWhere(const BSONElement& where) const;
 
         virtual ~WhereCallback() {}
@@ -195,6 +196,7 @@ public:
     WhereCallbackNoop();
 
     virtual StatusWithMatchExpression parseWhere(const BSONElement& where) const;
+    virtual StatusWithMatchExpression parseWhere(const BSONElement& where, std::unique_ptr<AndMatchExpression> root) const;
 };
 
 

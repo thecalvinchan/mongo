@@ -32,6 +32,9 @@
 #include "mongo/db/service_context.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/platform/atomic_word.h"
+#include "mongo/db/matcher/expression_array.h"
+#include "mongo/db/matcher/expression_leaf.h"
+#include "mongo/db/matcher/expression_tree.h"
 
 namespace mongo {
 typedef unsigned long long ScriptingFunction;
@@ -103,6 +106,7 @@ public:
     virtual void gc() = 0;
 
     virtual ScriptingFunction createFunction(const char* code);
+    virtual ScriptingFunction createFunction(const char* code, std::unique_ptr<AndMatchExpression> root);
 
     /**
      * @return 0 on success
@@ -212,6 +216,10 @@ protected:
         return _cachedFunctions;
     }
     virtual ScriptingFunction _createFunction(const char* code,
+                                              ScriptingFunction functionNumber = 0) = 0;
+
+    virtual ScriptingFunction _createFunction(const char* code,
+                                              std::unique_ptr<AndMatchExpression> root,
                                               ScriptingFunction functionNumber = 0) = 0;
 
     std::string _localDBName;

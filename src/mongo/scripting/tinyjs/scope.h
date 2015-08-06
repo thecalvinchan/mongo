@@ -78,7 +78,10 @@ public:
         return false;
     }
     void gc() override {}
-    ScriptingFunction createFunction(const char* code) override;  // IMPLEMENT
+    /*ScriptingFunction createFunction(const char* code) override {
+      return createFunction(code, nullptr);
+    }*/
+    ScriptingFunction createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) override;
     /**
     * @return 0 on success
     */
@@ -115,6 +118,9 @@ private:
     bool _currentResult;
     ScriptingFunction _createFunction(const char* code,
                                       ScriptingFunction functionNumber = 0) override;
+    ScriptingFunction _createFunction(const char* code,
+                                              std::unique_ptr<AndMatchExpression> root,
+                                              ScriptingFunction functionNumber = 0) override;
     std::vector<ASTParser*> _funcs;
 };
 

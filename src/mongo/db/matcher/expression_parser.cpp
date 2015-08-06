@@ -326,7 +326,7 @@ StatusWithMatchExpression MatchExpressionParser::_parse(const BSONObj& obj, int 
                 if (e.trueValue())
                     root->add(new AtomicMatchExpression());
             } else if (mongoutils::str::equals("where", rest)) {
-                StatusWithMatchExpression s = _whereCallback->parseWhere(e);
+                StatusWithMatchExpression s = _whereCallback->parseWhere(e, std::move(root));
                 if (!s.isOK())
                     return s;
                 root->add(s.getValue().release());

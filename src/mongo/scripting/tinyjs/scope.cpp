@@ -52,19 +52,26 @@ bool Scope::getBoolean(const char* field) {
     }
 }
 
-ScriptingFunction Scope::createFunction(const char* code) {
+ScriptingFunction Scope::createFunction(const char* code, std::unique_ptr<AndMatchExpression> root) {
     ScriptingFunction func = _funcs.size();
-    _createFunction(code, func);
+    _createFunction(code, std::move(root), func);
     return func + 1;
 }
 
-ScriptingFunction Scope::_createFunction(const char* code,
+ScriptingFunction Scope::_createFunction(const char* code, std::unique_ptr<AndMatchExpression> root, 
                                               ScriptingFunction functionNumber) {
     std::string input(code);
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser* func = new ASTParser(std::move(tokenData));
+    if (root != nullptr) {
+        func->optimize(std::move(root));
+    }
     _funcs.push_back(func);
     return functionNumber;
+}
+
+ScriptingFunction Scope::_createFunction(const char* code, ScriptingFunction functionNumber) {
+    return _createFunction(code, nullptr, functionNumber);
 }
 
 int Scope::invoke(ScriptingFunction func,
