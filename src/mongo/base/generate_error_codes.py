@@ -41,7 +41,6 @@ Usage:
 
 from optparse import OptionParser
 import sys, yaml
-import err_generators.cpp as cpp
 
 def main(options, args):
     if (len(args) != 1):
@@ -49,7 +48,6 @@ def main(options, args):
     error_codes, error_classes = parse_error_definitions_from_file(args[0])
     check_for_conflicts(error_codes, error_classes)
     generator_options = yaml.load(options.generator_options)
-    print generator_options
     if (options.generator == 'cpp'):
         if (generator_options['cpp_header'] and generator_options['cpp_source']):
             cpp_generator = CPP_Generator(error_codes, error_classes, generator_options)
@@ -320,8 +318,6 @@ class CPP_Generator(Base_Generator):
 if __name__ == '__main__':
     usage_msg = "usage: %prog [options] /path/to/error_codes.err"
     parser = OptionParser(usage=usage_msg)
-    parser.add_option('--cpp', dest='cpp', nargs=2, metavar=('PATH_TO_CPP_HEADER','PATH_TO_CPP_SOURCE'), help='use cpp generator. Must also provide two arguments to location of generated header and source.')
-    parser.add_option('--js', dest='js', nargs=1, metavar='PATH_TO_JS_FILE', help='user js generator. Must also provide an argument to location of generated js file')
     parser.add_option('--generator', dest='generator', nargs=1, metavar='GENERATOR', type='choice', choices=['cpp','js'], help='specify generator to use')
     parser.add_option('--generator_options', dest='generator_options', nargs=1, metavar='GENERATOR_OPTIONS', help='specify generator options')
     (options, args) = parser.parse_args()
