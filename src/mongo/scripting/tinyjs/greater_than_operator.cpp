@@ -64,12 +64,17 @@ bool GreaterThanOperator::optimizable(bool optimize, AndMatchExpression* root) {
     Value returnValueDummy = Value();
     bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, root);
     bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, root);
+    std::cout << (leftChildOptimizable ? "trueLeft" : "falseLeft") << std::endl;
+    std::cout << (rightChildOptimizable ? "trueRight" : "falseRight") << std::endl;
     if (!(leftChildOptimizable && rightChildOptimizable)) {
         //only zero or one branch contains object accessor
         if (optimize) {
             _optimized = true;
             // optimize query here
-            if (!(leftChildOptimizable && rightChildOptimizable)) {
+            if (!(leftChildOptimizable || rightChildOptimizable)) {
+            //if (!(leftChildOptimizable && rightChildOptimizable)) {
+                // NOTE: THIS WAS CAUSING IT TO FAIL AHHHH
+                // NOTE: BOOLEAN ALGEBRA
                 // case where both sides are constant ]
                 // TODO
             } else if (leftChildOptimizable) {
@@ -77,11 +82,17 @@ bool GreaterThanOperator::optimizable(bool optimize, AndMatchExpression* root) {
                 // TODO: for now, just assume that left child is one simple object access
                 BSONObjBuilder* builder = new BSONObjBuilder();
                 Value v = this->getRightChild()->evaluate(nullptr, returnValueDummy);
-                v.addToBsonObj(builder, "constant");
-                BSONElement constant = builder->obj().getField("constant");  // TODO
+                std::string key = "constant";
+                StringData keyStringData = StringData(key);
+                v.addToBsonObj(builder, keyStringData);
+                BSONObj object = builder->obj();
+                BSONElement constant = object.getField(keyStringData);  // TODO
+                std::cout << constant.toString(true,true) << std::endl;
                 std::string fieldName = (checked_cast<ObjectAccessorOperator*>(this->getLeftChild()))->getFullField();
+                int rootObjIndex = fieldName.find_first_of('.');
+                std::string fieldPathString = fieldName.substr(rootObjIndex + 1);
                 std::unique_ptr<ComparisonMatchExpression> eq(new GTMatchExpression()); // TODO specify GT
-                Status s = eq->init(fieldName, constant);
+                Status s = eq->init(fieldPathString, constant);
                 if (!s.isOK())
                     return false;
 

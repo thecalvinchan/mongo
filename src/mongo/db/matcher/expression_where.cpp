@@ -149,6 +149,9 @@ Status WhereMatchExpression::init(StringData dbName, StringData theCode, const B
 
     try {
         _scope = globalScriptEngine->getPooledScope(_txn, _dbName, "where" + userToken);
+        if (root != nullptr) {
+            std::cout << "In WhereMatchExpression::init with root" << std::endl;
+        }
         _func = _scope->createFunction(_code.c_str(), root);
     } catch (...) {
         return exceptionToStatus();
@@ -221,7 +224,7 @@ StatusWithMatchExpression WhereCallbackReal::parseWhere(const BSONElement& where
 
     unique_ptr<WhereMatchExpression> exp(new WhereMatchExpression(_txn));
     if (where.type() == String || where.type() == Code) {
-        Status s = exp->init(_dbName, where.valuestr(), BSONObj(), std::move(root));
+        Status s = exp->init(_dbName, where.valuestr(), BSONObj(), root);
         if (!s.isOK())
             return StatusWithMatchExpression(s);
         return {std::move(exp)};

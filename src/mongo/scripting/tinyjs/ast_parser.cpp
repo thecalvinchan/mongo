@@ -74,7 +74,9 @@ Value ASTParser::evaluate(Scope* s) {
 
 
 void ASTParser::optimize(AndMatchExpression* root) {
-    _head->optimizable(false, root);
+    std::cout << "optimizing" << std::endl;
+    std::cout << this->_head->getName() << std::endl;
+    this->_head->optimizable(false, root);
 }
 
 

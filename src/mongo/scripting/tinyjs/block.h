@@ -42,7 +42,7 @@ public:
     std::vector<Node*> getChildren() const;
     void setChild(std::unique_ptr<Node> node);
     const Value evaluate(Scope* scope, Value& returnValue) const;
-
+    bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr) override;
 private:
     std::vector<std::unique_ptr<Node>> _children;
 };

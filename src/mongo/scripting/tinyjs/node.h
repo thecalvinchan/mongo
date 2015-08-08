@@ -35,6 +35,8 @@
 #include "mongo/scripting/tinyjs/lexer.h"
 #include "mongo/scripting/tinyjs/scope.h"
 
+#include <iostream>
+
 
 namespace mongo {
 namespace tinyjs {
@@ -50,7 +52,7 @@ public:
      * returns a bool that determines if the subtree contains at least 1 object access
      * input: if optimize is true, when it hits a comparison operator, it will attempt to optimize 
      */ 
-    virtual bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr) { return false; };
+    virtual bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr) { std::cout<<"noop"<<std::endl;return false; };
 protected:
      Node(TokenType t) : _type(t) {};
 private:

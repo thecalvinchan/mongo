@@ -59,5 +59,14 @@ const Value Block::evaluate(Scope* scope, Value& returnValue) const {
     return r; // TODO
 }
 
+bool Block::optimizable(bool optimize, AndMatchExpression* root) {
+    for (std::size_t i=0; i<_children.size(); i++) {
+        if (_children[i]->optimizable(optimize, root)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 }  // namespace tinyjs
 }  // namespace mongo
