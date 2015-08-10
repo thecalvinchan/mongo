@@ -55,9 +55,6 @@ bool Scope::getBoolean(const char* field) {
 }
 
 ScriptingFunction Scope::createFunction(const char* code, AndMatchExpression* root) {
-    if (root != nullptr) {
-        std::cout << "nullptr for root" << std::endl;
-    }
     ScriptingFunction func = _funcs.size();
     _createFunction(code, root, func);
     return func + 1;
@@ -65,14 +62,11 @@ ScriptingFunction Scope::createFunction(const char* code, AndMatchExpression* ro
 
 ScriptingFunction Scope::_createFunction(const char* code, AndMatchExpression* root, 
                                               ScriptingFunction functionNumber) {
-    std::cout << "in createFunction with root" << std::endl;
     std::string input(code);
     std::vector<Token> tokenData = lex(input).getValue();
     ASTParser* func = new ASTParser(tokenData);
     if (root != nullptr) {
-        std::cout << "about to optimize" << std::endl;
         func->optimize(root);
-        std::cout << "finished optimize" << std::endl;
     }
     _funcs.push_back(func);
     return functionNumber;

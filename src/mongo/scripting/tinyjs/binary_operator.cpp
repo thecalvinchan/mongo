@@ -300,7 +300,6 @@ bool looselyEqual(Value leftValue, Value rightValue) {
 }
 
 bool BinaryOperator::optimizable(bool optimize, AndMatchExpression* root) {
-    std::cout << "optimize in binary_operator" << std::endl;
     bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, std::move(root));
     bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, std::move(root));
     return leftChildOptimizable || rightChildOptimizable;

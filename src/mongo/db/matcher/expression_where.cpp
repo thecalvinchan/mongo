@@ -150,7 +150,6 @@ Status WhereMatchExpression::init(StringData dbName, StringData theCode, const B
     try {
         _scope = globalScriptEngine->getPooledScope(_txn, _dbName, "where" + userToken);
         if (root != nullptr) {
-            std::cout << "In WhereMatchExpression::init with root" << std::endl;
         }
         _func = _scope->createFunction(_code.c_str(), root);
     } catch (...) {
@@ -216,7 +215,6 @@ WhereCallbackReal::WhereCallbackReal(OperationContext* txn, StringData dbName)
     : _txn(txn), _dbName(dbName) {}
 
 StatusWithMatchExpression WhereCallbackReal::parseWhere(const BSONElement& where, AndMatchExpression* root) const {
-    std::cout << "in parseWhere with root" << std::endl;
 
     if (!globalScriptEngine)
         return StatusWithMatchExpression(ErrorCodes::BadValue,

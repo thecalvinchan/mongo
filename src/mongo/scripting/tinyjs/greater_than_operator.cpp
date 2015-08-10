@@ -61,11 +61,10 @@ const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) cons
 }
 
 bool GreaterThanOperator::optimizable(bool optimize, AndMatchExpression* root) {
+    std::cout << "optimizing in greater than" << std::endl;
     Value returnValueDummy = Value();
     bool leftChildOptimizable = this->getLeftChild()->optimizable(optimize, root);
     bool rightChildOptimizable = this->getRightChild()->optimizable(optimize, root);
-    std::cout << (leftChildOptimizable ? "trueLeft" : "falseLeft") << std::endl;
-    std::cout << (rightChildOptimizable ? "trueRight" : "falseRight") << std::endl;
     if (!(leftChildOptimizable && rightChildOptimizable)) {
         //only zero or one branch contains object accessor
         if (optimize) {
@@ -86,7 +85,6 @@ bool GreaterThanOperator::optimizable(bool optimize, AndMatchExpression* root) {
                 StringData keyStringData = StringData(key);
                 v.addToBsonObj(builder, keyStringData);
                 BSONObj* object = new BSONObj(builder->obj());
-                //std::cout << constant.toString(true,true) << std::endl;
                 std::string fieldName = (checked_cast<ObjectAccessorOperator*>(this->getLeftChild()))->getFullField();
                 int rootObjIndex = fieldName.find_first_of('.');
                 std::string* fieldPathString = new std::string(fieldName.substr(rootObjIndex + 1));
