@@ -21,6 +21,7 @@ env.Library(
         'division_operator.cpp',
         'addition_operator.cpp',
         'subtraction_operator.cpp',
+        'comparison_operator.cpp',
         'triple_equals_operator.cpp',
         'double_equals_operator.cpp',
         'greater_than_operator.cpp',

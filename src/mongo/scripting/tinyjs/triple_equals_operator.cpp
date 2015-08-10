@@ -37,9 +37,12 @@
 namespace mongo {
 namespace tinyjs {
 
-TripleEqualsOperator::TripleEqualsOperator() : BinaryOperator(TokenType::kTripleEquals) {}
+TripleEqualsOperator::TripleEqualsOperator() : ComparisonOperator(TokenType::kTripleEquals) {}
 
 const Value TripleEqualsOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (isOptimized()) {
+        return Value(true);
+    }
     if (!returnValue.nullish()) {
         return returnValue;
     }

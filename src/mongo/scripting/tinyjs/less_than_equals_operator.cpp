@@ -27,16 +27,18 @@
 
 #include "mongo/platform/basic.h"
 
-#include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/less_than_equals_operator.h"
 
 
 namespace mongo {
 namespace tinyjs {
 
-LessThanEqualsOperator::LessThanEqualsOperator() : BinaryOperator(TokenType::kLessThanEquals) {}
+LessThanEqualsOperator::LessThanEqualsOperator() : ComparisonOperator(TokenType::kLessThanEquals) {}
 
 const Value LessThanEqualsOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (isOptimized()) {
+        return Value(true);
+    }
     if (!returnValue.nullish()) {
         return returnValue;
     }

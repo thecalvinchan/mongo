@@ -27,7 +27,7 @@
 
 #include "mongo/platform/basic.h"
 
-#include "mongo/scripting/tinyjs/binary_operator.h"
+//#include "mongo/scripting/tinyjs/binary_operator.h"
 #include "mongo/scripting/tinyjs/greater_than_equals_operator.h"
 
 
@@ -35,9 +35,12 @@ namespace mongo {
 namespace tinyjs {
 
 GreaterThanEqualsOperator::GreaterThanEqualsOperator()
-    : BinaryOperator(TokenType::kGreaterThanEquals) {}
+    : ComparisonOperator(TokenType::kGreaterThanEquals) {}
 
 const Value GreaterThanEqualsOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (isOptimized()) {
+        return Value(true);
+    }
     if (!returnValue.nullish()) {
         return returnValue;
     }

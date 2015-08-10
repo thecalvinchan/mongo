@@ -28,12 +28,12 @@
 
 #pragma once
 
-#include "mongo/scripting/tinyjs/nonterminal_node.h"
+#include "mongo/scripting/tinyjs/comparison_operator.h"
 
 namespace mongo {
 namespace tinyjs {
 
-class GreaterThanEqualsOperator : public BinaryOperator {
+class GreaterThanEqualsOperator : public ComparisonOperator {
 public:
     GreaterThanEqualsOperator();
     const Value evaluate(Scope* scope, Value& returnValue) const;
