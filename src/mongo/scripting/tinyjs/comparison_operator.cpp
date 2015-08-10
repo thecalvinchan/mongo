@@ -62,7 +62,6 @@ bool ComparisonOperator::optimizable (bool optimize, AndMatchExpression* root) {
                 StringData keyStringData = StringData(key);
                 v.addToBsonObj(builder, keyStringData);
                 BSONObj* object = new BSONObj(builder->obj());
-                //std::cout << constant.toString(true,true) << std::endl;
                 std::string fieldName = (checked_cast<ObjectAccessorOperator*>(this->getLeftChild()))->getFullField();
                 int rootObjIndex = fieldName.find_first_of('.');
                 std::string* fieldPathString = new std::string(fieldName.substr(rootObjIndex + 1));
