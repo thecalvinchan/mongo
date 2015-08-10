@@ -37,9 +37,12 @@
 namespace mongo {
 namespace tinyjs {
 
-LessThanOperator::LessThanOperator() : BinaryOperator(TokenType::kLessThan) {}
+LessThanOperator::LessThanOperator() : ComparisonOperator(TokenType::kLessThan) {}
 
 const Value LessThanOperator::evaluate(Scope* scope, Value& returnValue) const {
+    if (isOptimized()) {
+        return Value(true);
+    }
     if (!returnValue.nullish()) {
         return returnValue;
     }

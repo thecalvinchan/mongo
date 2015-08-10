@@ -14,6 +14,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * As a special exception, the copyright holders give permission to link the
+ * code of portions of this program with the OpenSSL library under certain
  * conditions as described in each individual source file and distribute
  * linked combinations including the program with the OpenSSL library. You
  * must comply with the GNU Affero General Public License in all respects
@@ -25,39 +26,23 @@
  * then also delete it in the license file.
  */
 
-#include "mongo/platform/basic.h"
-
-#include <iostream>
-
-#include "mongo/base/checked_cast.h"
+#pragma once
 
 #include "mongo/scripting/tinyjs/binary_operator.h"
-#include "mongo/scripting/tinyjs/greater_than_operator.h"
-#include "mongo/scripting/tinyjs/object_accessor_operator.h"
-#include "mongo/db/matcher/expression_array.h"
-#include "mongo/db/matcher/expression_leaf.h"
-#include "mongo/db/matcher/expression_tree.h"
-
-
 
 namespace mongo {
 namespace tinyjs {
 
-using namespace std;
+class ComparisonOperator : public BinaryOperator {
+public:
+    ComparisonOperator(TokenType type) : BinaryOperator(type), _optimized(false) {};
+    bool optimizable(bool optimize=false, AndMatchExpression* root = nullptr) override;
+    const bool isOptimized() const;
+private:
+    bool _optimized;
+};
 
-GreaterThanOperator::GreaterThanOperator() : ComparisonOperator(TokenType::kGreaterThan) {}
 
-const Value GreaterThanOperator::evaluate(Scope* scope, Value& returnValue) const {
-    if (isOptimized()) {
-        return Value(true);
-    }
-    if (!returnValue.nullish()) {
-        return returnValue;
-    }
-    Value leftValue = this->getLeftChild()->evaluate(scope, returnValue);
-    Value rightValue = this->getRightChild()->evaluate(scope, returnValue);
-    return Value(Value::compare(leftValue, rightValue) > 0);
-}
 
 }  // namespace tinyjs
 }  // namespace mongo
