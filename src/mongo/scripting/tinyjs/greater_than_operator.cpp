@@ -85,14 +85,13 @@ bool GreaterThanOperator::optimizable(bool optimize, AndMatchExpression* root) {
                 std::string key = "constant";
                 StringData keyStringData = StringData(key);
                 v.addToBsonObj(builder, keyStringData);
-                BSONObj object = builder->obj();
-                BSONElement constant = object.getField(keyStringData);  // TODO
-                std::cout << constant.toString(true,true) << std::endl;
+                BSONObj* object = new BSONObj(builder->obj());
+                //std::cout << constant.toString(true,true) << std::endl;
                 std::string fieldName = (checked_cast<ObjectAccessorOperator*>(this->getLeftChild()))->getFullField();
                 int rootObjIndex = fieldName.find_first_of('.');
-                std::string fieldPathString = fieldName.substr(rootObjIndex + 1);
+                std::string* fieldPathString = new std::string(fieldName.substr(rootObjIndex + 1));
                 std::unique_ptr<ComparisonMatchExpression> eq(new GTMatchExpression()); // TODO specify GT
-                Status s = eq->init(fieldPathString, constant);
+                Status s = eq->init(*fieldPathString, object->getField(keyStringData));
                 if (!s.isOK())
                     return false;
 
