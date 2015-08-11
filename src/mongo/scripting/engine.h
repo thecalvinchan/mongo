@@ -220,7 +220,7 @@ protected:
 
     virtual ScriptingFunction _createFunction(const char* code,
                                               AndMatchExpression* root,
-                                              ScriptingFunction functionNumber = 0);
+                                              ScriptingFunction functionNumber = 0) {};
 
     std::string _localDBName;
     int64_t _loadedVersion;
