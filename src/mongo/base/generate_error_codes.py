@@ -36,25 +36,32 @@ error_code("symbol2", code2)
 error_class("class1", ["symbol1", "symbol2, ..."])
 
 Usage:
-    python generate_error_codes.py <path to error_codes.err>
+    python generate_error_codes.py <cpp|js> <path to error_codes.err>
 """
 
 from optparse import OptionParser
 import sys, yaml
 
-def main(options, args):
-    if (len(args) != 1):
+def main(argv):
+    usage_msg = "usage: %prog <cpp|js> /path/to/error_codes.err [options]"
+    parser = OptionParser(usage=usage_msg)
+    parser.add_option('--cpp-header', dest='cpp_header', nargs=1, metavar='DEST_CPP_HEADER', help='specify dest CPP header file to save to')
+    parser.add_option('--cpp-source', dest='cpp_source', nargs=1, metavar='DEST_CPP_SOURCE', help='specify dest CPP source file to save to')
+    parser.add_option('--js-source', dest='js_source', nargs=1, metavar='DEST_JS_SOURCE', help='specify dest CPP source file to save to')
+    (options, args) = parser.parse_args()
+
+    if (len(args) != 2):
         usage('Wrong number of arguments')
-    error_codes, error_classes = parse_error_definitions_from_file(args[0])
+    generator = args[0]
+    error_codes, error_classes = parse_error_definitions_from_file(args[1])
     check_for_conflicts(error_codes, error_classes)
-    generator_options = yaml.load(options.generator_options)
-    if (options.generator == 'cpp'):
-        if (generator_options['cpp_header'] and generator_options['cpp_source']):
-            cpp_generator = CPP_Generator(error_codes, error_classes, generator_options)
-            cpp_generator.generate()
+    if (generator == 'cpp'):
+        if (options.cpp_header and options.cpp_source):
+            cpp_gen = cpp_generator(error_codes, error_classes, options.cpp_header, options.cpp_source)
+            cpp_gen.generate()
         else:
             usage('Must specify CPP header and source files')
-    elif (options.generator == 'js'):
+    elif (generator == 'js'):
         print "Use JS generator"
     else:
         usage('Must specify which generator(s) to use.')
@@ -129,15 +136,17 @@ def has_missing_error_codes(error_codes, error_classes):
                 failed = True
     return failed
 
-class Base_Generator:
-    def __init__(self, error_codes, error_classes, options):
-        self.options = options
+class base_generator(object):
+    def __init__(self, error_codes, error_classes):
         self.error_codes = error_codes
         self.error_classes = error_classes
-    def generate():
-        return 0
 
-class CPP_Generator(Base_Generator):
+class cpp_generator(base_generator):
+    def __init__(self, error_codes, error_classes, cpp_header, cpp_source):
+        super(cpp_generator, self).__init__(error_codes, error_classes)
+        self.cpp_header = cpp_header
+        self.cpp_source = cpp_source
+
     def generate(self):
         self.generate_header()
         self.generate_source()
@@ -148,7 +157,7 @@ class CPP_Generator(Base_Generator):
         predicate_declarations = ';\n        '.join(
             'static bool is%s(Error err)' % ec[0] for ec in self.error_classes)
 
-        open(self.options['cpp_header'], 'wb').write(self.header_template % dict(
+        open(self.cpp_header, 'wb').write(self.header_template % dict(
                 error_code_enum_declarations=enum_declarations,
                 error_code_class_predicate_declarations=predicate_declarations))
 
@@ -162,7 +171,7 @@ class CPP_Generator(Base_Generator):
             'case %s: return %s' % (ec[0], ec[0]) for ec in self.error_codes)
         predicate_definitions = '\n    '.join(
             self.generate_error_class_predicate_definition(*ec) for ec in self.error_classes)
-        open(self.options['cpp_source'], 'wb').write(self.source_template % dict(
+        open(self.cpp_source, 'wb').write(self.source_template % dict(
                 symbol_to_string_cases=symbol_to_string_cases,
                 string_to_symbol_cases=string_to_symbol_cases,
                 int_to_symbol_cases=int_to_symbol_cases,
@@ -172,7 +181,7 @@ class CPP_Generator(Base_Generator):
         cases = '\n        '.join('case %s:' % c for c in code_names)
         return self.error_class_predicate_template % dict(class_name=class_name, cases=cases)
 
-    header_template = '''// AUTO-GENERATED FILE DO NOT EDIT
+    header_template = '''    // AUTO-GENERATED FILE DO NOT EDIT
     // See src/mongo/base/generate_error_codes.py
     /*    Copyright 2014 MongoDB, Inc.
      *
@@ -245,7 +254,7 @@ class CPP_Generator(Base_Generator):
     }  // namespace mongo
     '''
 
-    source_template = '''// AUTO-GENERATED FILE DO NOT EDIT
+    source_template = '''    // AUTO-GENERATED FILE DO NOT EDIT
     // See src/mongo/base/generate_error_codes.py
     /*    Copyright 2014 MongoDB, Inc.
      *
@@ -305,7 +314,7 @@ class CPP_Generator(Base_Generator):
     }  // namespace mongo
     '''
 
-    error_class_predicate_template = '''bool ErrorCodes::is%(class_name)s(Error err) {
+    error_class_predicate_template = '''        bool ErrorCodes::is%(class_name)s(Error err) {
             switch (err) {
             %(cases)s
                 return true;
@@ -316,9 +325,4 @@ class CPP_Generator(Base_Generator):
     '''
 
 if __name__ == '__main__':
-    usage_msg = "usage: %prog [options] /path/to/error_codes.err"
-    parser = OptionParser(usage=usage_msg)
-    parser.add_option('--generator', dest='generator', nargs=1, metavar='GENERATOR', type='choice', choices=['cpp','js'], help='specify generator to use')
-    parser.add_option('--generator_options', dest='generator_options', nargs=1, metavar='GENERATOR_OPTIONS', help='specify generator options')
-    (options, args) = parser.parse_args()
-    main(options, args)
+    main(sys.argv)
