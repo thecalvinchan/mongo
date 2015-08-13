@@ -36,40 +36,28 @@ error_code("symbol2", code2)
 error_class("class1", ["symbol1", "symbol2, ..."])
 
 Usage:
-    python generate_error_codes.py <cpp|js> <path to error_codes.err>
+    python generate_error_codes.py <cpp|js> <path to error_codes.err> [options]
 """
+
+usage_msg = "usage: %prog <cpp|js> /path/to/error_codes.err [options]"
 
 from optparse import OptionParser
 import sys, yaml
 
 def main(argv):
-    usage_msg = "usage: %prog <cpp|js> /path/to/error_codes.err [options]"
     generator = argv[1]
     error_codes, error_classes = parse_error_definitions_from_file(argv[2])
     check_for_conflicts(error_codes, error_classes)
     if (generator == 'cpp'):
         if (len(argv) != 5):
             usage('Wrong number of arguments')
-        parser = OptionParser(usage=usage_msg)
-        parser.add_option('--cpp-header', dest='cpp_header', nargs=1, metavar='DEST_CPP_HEADER', help='specify dest CPP header file to save to')
-        parser.add_option('--cpp-source', dest='cpp_source', nargs=1, metavar='DEST_CPP_SOURCE', help='specify dest CPP source file to save to')
-        (options, args) = parser.parse_args()
-        if (options.cpp_header and options.cpp_source):
-            cpp_gen = cpp_generator(error_codes, error_classes, options.cpp_header, options.cpp_source)
-            cpp_gen.generate()
-        else:
-            usage('Must specify CPP header and source files')
+        cpp_gen = cpp_generator(error_codes, error_classes)
+        cpp_gen.generate()
     elif (generator == 'js'):
         if (len(argv) != 4):
             usage('Wrong number of arguments')
-        parser = OptionParser(usage=usage_msg)
-        parser.add_option('--js-source', dest='js_source', nargs=1, metavar='DEST_JS_SOURCE', help='specify dest CPP source file to save to')
-        (options, args) = parser.parse_args()
-        if (options.js_source):
-            js_gen = js_generator(error_codes, error_classes, options.js_source)
-            js_gen.generate()
-        else:
-            usage('Must specify JS source files')
+        js_gen = js_generator(error_codes, error_classes)
+        js_gen.generate()
     else:
         usage('Must specify which generator(s) to use.')
 
@@ -148,10 +136,23 @@ class base_generator(object):
         self.error_codes = error_codes
         self.error_classes = error_classes
 
+    def parseOptions(self, options, usage_msg):
+        parser = OptionParser(usage=usage_msg)
+        for (f,d,n,m,h) in options:
+            parser.add_option(f,dest=d,nargs=n,metavar=m,help=h)
+        (options, args) = parser.parse_args()
+        return options
+            
+
 class js_generator(base_generator):
-    def __init__(self, error_codes, error_classes, js_source):
+    def __init__(self, error_codes, error_classes):
         super(js_generator, self).__init__(error_codes, error_classes)
-        self.js_source = js_source
+        options = [('--js-source','js_source',1,'DEST_JS_SOURCE','specify dest JS source file to save to')]
+        options = self.parseOptions(options, usage_msg)
+        if (options.js_source):
+            self.js_source = options.js_source
+        else:
+            usage('Must specify JS source files')
     
     def generate(self):
         self.generate_source()
@@ -229,10 +230,15 @@ var ErrorCodeStrings = {
 '''
 
 class cpp_generator(base_generator):
-    def __init__(self, error_codes, error_classes, cpp_header, cpp_source):
+    def __init__(self, error_codes, error_classes):
         super(cpp_generator, self).__init__(error_codes, error_classes)
-        self.cpp_header = cpp_header
-        self.cpp_source = cpp_source
+        options = [('--cpp-header','cpp_header',1,'DEST_CPP_HEADER','specify dest CPP header file to save to'), ('--cpp-source','cpp_source',1,'DEST_CPP_SOURCE','specify dest CPP source file to save to')]
+        options = self.parseOptions(options, usage_msg)
+        if (options.cpp_header and options.cpp_source):
+            self.cpp_header = options.cpp_header
+            self.cpp_source = options.cpp_source
+        else:
+            usage('Must specify CPP header and source files')
 
     def generate(self):
         self.generate_header()
