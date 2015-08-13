@@ -44,24 +44,27 @@ import sys, yaml
 
 def main(argv):
     usage_msg = "usage: %prog <cpp|js> /path/to/error_codes.err [options]"
-    parser = OptionParser(usage=usage_msg)
-    parser.add_option('--cpp-header', dest='cpp_header', nargs=1, metavar='DEST_CPP_HEADER', help='specify dest CPP header file to save to')
-    parser.add_option('--cpp-source', dest='cpp_source', nargs=1, metavar='DEST_CPP_SOURCE', help='specify dest CPP source file to save to')
-    parser.add_option('--js-source', dest='js_source', nargs=1, metavar='DEST_JS_SOURCE', help='specify dest CPP source file to save to')
-    (options, args) = parser.parse_args()
-
-    if (len(args) != 2):
-        usage('Wrong number of arguments')
-    generator = args[0]
-    error_codes, error_classes = parse_error_definitions_from_file(args[1])
+    generator = argv[1]
+    error_codes, error_classes = parse_error_definitions_from_file(argv[2])
     check_for_conflicts(error_codes, error_classes)
     if (generator == 'cpp'):
+        if (len(argv) != 5):
+            usage('Wrong number of arguments')
+        parser = OptionParser(usage=usage_msg)
+        parser.add_option('--cpp-header', dest='cpp_header', nargs=1, metavar='DEST_CPP_HEADER', help='specify dest CPP header file to save to')
+        parser.add_option('--cpp-source', dest='cpp_source', nargs=1, metavar='DEST_CPP_SOURCE', help='specify dest CPP source file to save to')
+        (options, args) = parser.parse_args()
         if (options.cpp_header and options.cpp_source):
             cpp_gen = cpp_generator(error_codes, error_classes, options.cpp_header, options.cpp_source)
             cpp_gen.generate()
         else:
             usage('Must specify CPP header and source files')
     elif (generator == 'js'):
+        if (len(argv) != 4):
+            usage('Wrong number of arguments')
+        parser = OptionParser(usage=usage_msg)
+        parser.add_option('--js-source', dest='js_source', nargs=1, metavar='DEST_JS_SOURCE', help='specify dest CPP source file to save to')
+        (options, args) = parser.parse_args()
         if (options.js_source):
             js_gen = js_generator(error_codes, error_classes, options.js_source)
             js_gen.generate()
