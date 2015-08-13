@@ -87,6 +87,9 @@ void Scope::append(BSONObjBuilder& builder, const char* fieldName, const char* s
         case NumberLong:
             builder.append(fieldName, getNumberLongLong(scopeName));
             break;
+        case NumberDecimal:
+            builder.append(fieldName, getNumberDecimal(scopeName));
+            break;
         case String:
             builder.append(fieldName, getString(scopeName));
             break;
@@ -283,6 +286,7 @@ extern const JSFile utils;
 extern const JSFile utils_sh;
 extern const JSFile utils_auth;
 extern const JSFile bulk_api;
+extern const JSFile error_codes;
 }
 
 void Scope::execCoreFiles() {
@@ -294,6 +298,7 @@ void Scope::execCoreFiles() {
     execSetup(JSFiles::mr);
     execSetup(JSFiles::query);
     execSetup(JSFiles::bulk_api);
+    execSetup(JSFiles::error_codes);
     execSetup(JSFiles::collection);
     execSetup(JSFiles::crud_api);
     execSetup(JSFiles::explain_query);
@@ -429,6 +434,9 @@ public:
     }
     double getNumber(const char* field) {
         return _real->getNumber(field);
+    }
+    Decimal128 getNumberDecimal(const char* field) {
+        return _real->getNumberDecimal(field);
     }
     string getString(const char* field) {
         return _real->getString(field);

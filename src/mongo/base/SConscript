@@ -3,9 +3,9 @@
 Import("env")
 
 generateErrorCodes = env.Command(
-    target=['error_codes.h', 'error_codes.cpp'],
+    target=['error_codes.h', 'error_codes.cpp', '../shell/error_codes.js'],
     source=['generate_error_codes.py', 'error_codes.err'],
-    action='$PYTHON $SOURCES $TARGETS')
+    action=['$PYTHON ${SOURCES[0]} cpp ${SOURCES[1]} --cpp-header=${TARGETS[0]} --cpp-source=${TARGETS[1]}'])
 env.Alias('generated-sources', generateErrorCodes)
 
 env.CppUnitTest('base_test',
@@ -25,5 +25,29 @@ env.CppUnitTest('base_test',
                  'parse_number_test.cpp',
                  'status_test.cpp',
                  'status_with_test.cpp',
-                 'string_data_test.cpp'
+                 'string_data_test.cpp',
                 ])
+
+env.Library(
+    target=[
+        'system_error'
+    ],
+    source=[
+        'system_error.cpp',
+    ],
+    LIBDEPS=[
+        '$BUILD_DIR/mongo/base',
+    ],
+)
+
+env.CppUnitTest(
+    target=[
+        'system_error_test',
+    ],
+    source=[
+        'system_error_test.cpp',
+    ],
+    LIBDEPS=[
+        'system_error',
+    ],
+)
