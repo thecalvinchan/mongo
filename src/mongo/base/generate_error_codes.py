@@ -62,7 +62,11 @@ def main(argv):
         else:
             usage('Must specify CPP header and source files')
     elif (generator == 'js'):
-        print "Use JS generator"
+        if (options.js_source):
+            js_gen = js_generator(error_codes, error_classes, options.js_source)
+            js_gen.generate()
+        else:
+            usage('Must specify JS source files')
     else:
         usage('Must specify which generator(s) to use.')
 
@@ -140,6 +144,86 @@ class base_generator(object):
     def __init__(self, error_codes, error_classes):
         self.error_codes = error_codes
         self.error_classes = error_classes
+
+class js_generator(base_generator):
+    def __init__(self, error_codes, error_classes, js_source):
+        super(js_generator, self).__init__(error_codes, error_classes)
+        self.js_source = js_source
+    
+    def generate(self):
+        self.generate_source()
+
+    def generate_source(self):
+        string_to_int_cases = ',\n    '.join(
+            '%s: %s' % (ec[0], ec[1]) for ec in self.error_codes)
+        int_to_string_cases = ',\n    '.join(
+            '%s: \'%s\'' % (ec[1], ec[0]) for ec in self.error_codes)
+        predicate_definitions = '\n\n'.join(
+            self.generate_error_class_predicate_definition(*ec) for ec in self.error_classes)
+        open(self.js_source, 'wb').write(self.source_template % dict(
+                string_to_int_cases=string_to_int_cases,
+                int_to_string_cases=int_to_string_cases,
+                error_code_class_predicate_definitions=predicate_definitions
+                ))
+
+    def generate_error_class_predicate_definition(self, class_name, code_names):
+        cases = '\n        '.join('case \'%s\':' % c for c in code_names)
+        return self.error_class_predicate_template % dict(class_name=class_name, cases=cases)
+
+    source_template = '''// AUTO-GENERATED FILE DO NOT EDIT
+// See src/mongo/base/generate_error_codes.py
+/*    Copyright 2015 MongoDB, Inc.
+*
+*    This program is free software: you can redistribute it and/or  modify
+*    it under the terms of the GNU Affero General Public License, version 3,
+*    as published by the Free Software Foundation.
+*
+*    This program is distributed in the hope that it will be useful,
+*    but WITHOUT ANY WARRANTY; without even the implied warranty of
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*    GNU Affero General Public License for more details.
+*
+*    You should have received a copy of the GNU Affero General Public License
+*    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*
+*    As a special exception, the copyright holders give permission to link the
+*    code of portions of this program with the OpenSSL library under certain
+*    conditions as described in each individual source file and distribute
+*    linked combinations including the program with the OpenSSL library. You
+*    must comply with the GNU Affero General Public License in all respects
+*    for all of the code used other than as permitted herein. If you modify
+*    file(s) with this exception, you may extend this exception to your
+*    version of the file(s), but you are not obligated to do so. If you do not
+*    wish to do so, delete this exception statement from your version. If you
+*    delete this exception statement from all source files in the program,
+*    then also delete it in the license file.
+*/
+
+var ErrorCodes = {
+    %(string_to_int_cases)s
+};
+
+var ErrorCodeStrings = {
+    %(int_to_string_cases)s
+};
+
+%(error_code_class_predicate_definitions)s
+'''
+
+    error_class_predicate_template = '''function is%(class_name)s(err) {
+    if (typeof err === 'string') {
+        error = err;
+    } else if (typeof err === 'number') {
+        error = ErrorCodeStrings[err];
+    }
+    switch (error) {
+        %(cases)s
+            return true;
+        default:
+            return false;
+    }
+}
+'''
 
 class cpp_generator(base_generator):
     def __init__(self, error_codes, error_classes, cpp_header, cpp_source):
