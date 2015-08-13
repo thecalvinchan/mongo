@@ -46,6 +46,7 @@
 #include "mongo/db/global_timestamp.h"
 #include "mongo/db/query/cursor_responses.h"
 #include "mongo/db/query/find.h"
+#include "mongo/db/query/find_common.h"
 #include "mongo/db/query/getmore_request.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
 #include "mongo/db/repl/oplog.h"
@@ -250,8 +251,7 @@ public:
             // applying it to this getMore.
             if (isCursorAwaitData(cursor)) {
                 Seconds awaitDataTimeout(1);
-                CurOp::get(txn)
-                    ->setMaxTimeMicros(duration_cast<Microseconds>(awaitDataTimeout).count());
+                CurOp::get(txn)->setMaxTimeMicros(durationCount<Microseconds>(awaitDataTimeout));
             } else {
                 CurOp::get(txn)->setMaxTimeMicros(cursor->getLeftoverMaxTimeMicros());
             }
@@ -385,7 +385,7 @@ public:
                 nextBatch->append(obj);
                 (*numResults)++;
 
-                if (enoughForGetMore(
+                if (FindCommon::enoughForGetMore(
                         request.batchSize.value_or(0), *numResults, nextBatch->len())) {
                     break;
                 }

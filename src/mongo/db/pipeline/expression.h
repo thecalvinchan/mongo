@@ -412,9 +412,76 @@ public:
     }
 };
 
+/**
+ * Used to make Accumulators available as Expressions, e.g., to make $sum available as an Expression
+ * use "REGISTER_EXPRESSION(sum, ExpressionAccumulator<AccumulatorSum>::parse);".
+ */
+template <typename Accumulator>
+class ExpressionFromAccumulator
+    : public ExpressionVariadic<ExpressionFromAccumulator<Accumulator>> {
+public:
+    Value evaluateInternal(Variables* vars) const final {
+        Accumulator accum;
+        const size_t n = this->vpOperand.size();
+        // If a single array arg is given, loop through it passing each member to the accumulator.
+        // If a single, non-array arg is given, pass it directly to the accumulator.
+        if (n == 1) {
+            Value singleVal = this->vpOperand[0]->evaluateInternal(vars);
+            if (singleVal.getType() == Array) {
+                for (const Value& val : singleVal.getArray()) {
+                    accum.process(val, false);
+                }
+            } else {
+                accum.process(singleVal, false);
+            }
+        } else {
+            // If multiple arguments are given, pass all arguments to the accumulator.
+            for (auto&& argument : this->vpOperand) {
+                accum.process(argument->evaluateInternal(vars), false);
+            }
+        }
+        return accum.getValue(false);
+    }
 
-class ExpressionAbs final : public ExpressionFixedArity<ExpressionAbs, 1> {
-    Value evaluateInternal(Variables* vars) const final;
+    bool isAssociativeAndCommutative() const final {
+        // Return false if a single argument is given to avoid a single array argument being treated
+        // as an array instead of as a list of arguments.
+        if (this->vpOperand.size() == 1) {
+            return false;
+        }
+        return Accumulator().isAssociativeAndCommutative();
+    }
+
+    const char* getOpName() const final {
+        return Accumulator().getOpName();
+    }
+};
+
+/**
+ * Inherit from this class if your expression takes exactly one numeric argument.
+ */
+template <typename SubClass>
+class ExpressionSingleNumericArg : public ExpressionFixedArity<SubClass, 1> {
+public:
+    Value evaluateInternal(Variables* vars) const final {
+        Value arg = this->vpOperand[0]->evaluateInternal(vars);
+        if (arg.nullish())
+            return Value(BSONNULL);
+
+        uassert(28765,
+                str::stream() << this->getOpName() << " only supports numeric types, not "
+                              << typeName(arg.getType()),
+                arg.numeric());
+
+        return evaluateNumericArg(arg);
+    }
+
+    virtual Value evaluateNumericArg(const Value& numericArg) const = 0;
+};
+
+
+class ExpressionAbs final : public ExpressionSingleNumericArg<ExpressionAbs> {
+    Value evaluateNumericArg(const Value& numericArg) const final;
     const char* getOpName() const final;
 };
 
@@ -466,6 +533,13 @@ public:
 class ExpressionArrayElemAt final : public ExpressionFixedArity<ExpressionArrayElemAt, 2> {
 public:
     Value evaluateInternal(Variables* vars) const final;
+    const char* getOpName() const final;
+};
+
+
+class ExpressionCeil final : public ExpressionSingleNumericArg<ExpressionCeil> {
+public:
+    Value evaluateNumericArg(const Value& numericArg) const final;
     const char* getOpName() const final;
 };
 
@@ -639,8 +713,8 @@ public:
 };
 
 
-class ExpressionExp final : public ExpressionFixedArity<ExpressionExp, 1> {
-    Value evaluateInternal(Variables* vars) const final;
+class ExpressionExp final : public ExpressionSingleNumericArg<ExpressionExp> {
+    Value evaluateNumericArg(const Value& numericArg) const final;
     const char* getOpName() const final;
 };
 
@@ -727,6 +801,13 @@ private:
 };
 
 
+class ExpressionFloor final : public ExpressionSingleNumericArg<ExpressionFloor> {
+public:
+    Value evaluateNumericArg(const Value& numericArg) const final;
+    const char* getOpName() const final;
+};
+
+
 class ExpressionHour final : public ExpressionFixedArity<ExpressionHour, 1> {
 public:
     Value evaluateInternal(Variables* vars) const final;
@@ -772,8 +853,8 @@ private:
     boost::intrusive_ptr<Expression> _subExpression;
 };
 
-class ExpressionLn final : public ExpressionFixedArity<ExpressionLn, 1> {
-    Value evaluateInternal(Variables* vars) const final;
+class ExpressionLn final : public ExpressionSingleNumericArg<ExpressionLn> {
+    Value evaluateNumericArg(const Value& numericArg) const final;
     const char* getOpName() const final;
 };
 
@@ -782,8 +863,8 @@ class ExpressionLog final : public ExpressionFixedArity<ExpressionLog, 2> {
     const char* getOpName() const final;
 };
 
-class ExpressionLog10 final : public ExpressionFixedArity<ExpressionLog10, 1> {
-    Value evaluateInternal(Variables* vars) const final;
+class ExpressionLog10 final : public ExpressionSingleNumericArg<ExpressionLog10> {
+    Value evaluateNumericArg(const Value& numericArg) const final;
     const char* getOpName() const final;
 };
 
@@ -1088,8 +1169,8 @@ public:
 };
 
 
-class ExpressionSqrt final : public ExpressionFixedArity<ExpressionSqrt, 1> {
-    Value evaluateInternal(Variables* vars) const final;
+class ExpressionSqrt final : public ExpressionSingleNumericArg<ExpressionSqrt> {
+    Value evaluateNumericArg(const Value& numericArg) const final;
     const char* getOpName() const final;
 };
 
@@ -1125,6 +1206,13 @@ public:
 class ExpressionToUpper final : public ExpressionFixedArity<ExpressionToUpper, 1> {
 public:
     Value evaluateInternal(Variables* vars) const final;
+    const char* getOpName() const final;
+};
+
+
+class ExpressionTrunc final : public ExpressionSingleNumericArg<ExpressionTrunc> {
+public:
+    Value evaluateNumericArg(const Value& numericArg) const final;
     const char* getOpName() const final;
 };
 

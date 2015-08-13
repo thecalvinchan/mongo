@@ -93,7 +93,7 @@ Status checkRemoteOplogStart(stdx::function<StatusWith<BSONObj>()> getNextOperat
                       "we are ahead of the sync source, will try to roll back");
     }
     BSONObj o = result.getValue();
-    OpTime opTime = extractOpTime(o);
+    OpTime opTime = fassertStatusOK(28778, OpTime::parseFromBSON(o));
     long long hash = o["h"].numberLong();
     if (opTime != lastOpTimeFetched || hash != lastHashFetched) {
         return Status(ErrorCodes::OplogStartMissing,
@@ -218,6 +218,7 @@ void BackgroundSync::producerThread(executor::TaskExecutor* taskExecutor) {
             fassertFailed(28546);
         }
     }
+    stop();
 }
 
 void BackgroundSync::_producerThread(executor::TaskExecutor* taskExecutor) {
@@ -330,7 +331,7 @@ void BackgroundSync::_produce(OperationContext* txn, executor::TaskExecutor* tas
     auto cmdObj = BSON("find" << nsToCollectionSubstring(rsOplogName) << "filter"
                               << BSON("ts" << BSON("$gte" << lastOpTimeFetched.getTimestamp()))
                               << "tailable" << true << "oplogReplay" << true << "awaitData" << true
-                              << "maxTimeMS" << int(fetcherMaxTimeMS.count()));
+                              << "maxTimeMS" << durationCount<Milliseconds>(fetcherMaxTimeMS));
     Fetcher fetcher(taskExecutor,
                     source,
                     nsToDatabase(rsOplogName),
@@ -460,13 +461,13 @@ void BackgroundSync::_fetcherCallback(const StatusWith<Fetcher::QueryResponse>& 
         {
             stdx::unique_lock<stdx::mutex> lock(_mutex);
             _lastFetchedHash = o["h"].numberLong();
-            _lastOpTimeFetched = extractOpTime(o);
+            _lastOpTimeFetched = fassertStatusOK(28770, OpTime::parseFromBSON(o));
             LOG(3) << "lastOpTimeFetched: " << _lastOpTimeFetched;
         }
     }
 
     // record time for each batch
-    getmoreReplStats.recordMillis(queryResponse.elapsedMillis.count());
+    getmoreReplStats.recordMillis(durationCount<Milliseconds>(queryResponse.elapsedMillis));
 
     networkByteStats.increment(currentBatchMessageSize);
 
@@ -505,7 +506,7 @@ void BackgroundSync::_fetcherCallback(const StatusWith<Fetcher::QueryResponse>& 
     invariant(bob);
     bob->append("getMore", queryResponse.cursorId);
     bob->append("collection", queryResponse.nss.coll());
-    bob->append("maxTimeMS", int(fetcherMaxTimeMS.count()));
+    bob->append("maxTimeMS", durationCount<Milliseconds>(fetcherMaxTimeMS));
 }
 
 bool BackgroundSync::_shouldChangeSyncSource(const HostAndPort& syncSource) {

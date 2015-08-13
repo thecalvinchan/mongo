@@ -44,6 +44,8 @@
 #include "mongo/db/commands.h"
 #include "mongo/db/operation_context.h"
 #include "mongo/db/server_options.h"
+#include "mongo/executor/network_interface.h"
+#include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/platform/atomic_word.h"
 #include "mongo/s/catalog/config_server_version.h"
 #include "mongo/s/catalog/legacy/cluster_client_internal.h"
@@ -68,6 +70,7 @@
 #include "mongo/s/catalog/legacy/legacy_dist_lock_manager.h"
 #include "mongo/s/catalog/type_config_version.h"
 #include "mongo/s/grid.h"
+#include "mongo/s/set_shard_version_request.h"
 #include "mongo/s/shard_key_pattern.h"
 #include "mongo/s/write_ops/batched_command_request.h"
 #include "mongo/s/write_ops/batched_command_response.h"
@@ -248,10 +251,6 @@ Status CatalogManagerLegacy::_startConfigServerChecker() {
     return Status::OK();
 }
 
-ConnectionString CatalogManagerLegacy::connectionString() const {
-    return _configServerConnectionString;
-}
-
 void CatalogManagerLegacy::shutDown() {
     LOG(1) << "CatalogManagerLegacy::shutDown() called.";
     {
@@ -332,13 +331,13 @@ Status CatalogManagerLegacy::shardCollection(OperationContext* txn,
         txn->getClient()->clientAddress(true), "shardCollection.start", ns, collectionDetail.obj());
 
     shared_ptr<ChunkManager> manager(new ChunkManager(ns, fieldsAndOrder, unique));
-    manager->createFirstChunks(dbPrimaryShardId, &initPoints, &initShardIds);
-    manager->loadExistingRanges(nullptr);
+    manager->createFirstChunks(txn, dbPrimaryShardId, &initPoints, &initShardIds);
+    manager->loadExistingRanges(txn, nullptr);
 
     CollectionInfo collInfo;
     collInfo.useChunkManager(manager);
-    collInfo.save(ns);
-    manager->reload(true);
+    collInfo.save(txn, ns);
+    manager->reload(txn, true);
 
     // Tell the primary mongod to refresh its data
     // TODO:  Think the real fix here is for mongos to just
@@ -520,6 +519,126 @@ Status CatalogManagerLegacy::getCollections(const std::string* dbName,
     }
 
     conn.done();
+    return Status::OK();
+}
+
+Status CatalogManagerLegacy::dropCollection(OperationContext* txn, const NamespaceString& ns) {
+    logChange(txn->getClient()->clientAddress(true), "dropCollection.start", ns.ns(), BSONObj());
+
+    vector<ShardType> allShards;
+    Status status = getAllShards(&allShards);
+    if (!status.isOK()) {
+        return status;
+    }
+
+    LOG(1) << "dropCollection " << ns << " started";
+
+    // Lock the collection globally so that split/migrate cannot run
+    auto scopedDistLock = getDistLockManager()->lock(ns.ns(), "drop");
+    if (!scopedDistLock.isOK()) {
+        return scopedDistLock.getStatus();
+    }
+
+    LOG(1) << "dropCollection " << ns << " locked";
+
+    std::map<string, BSONObj> errors;
+    auto* shardRegistry = grid.shardRegistry();
+
+    for (const auto& shardEntry : allShards) {
+        auto dropResult = shardRegistry->runCommandWithNotMasterRetries(
+            shardEntry.getName(), ns.db().toString(), BSON("drop" << ns.coll()));
+
+        if (!dropResult.isOK()) {
+            return dropResult.getStatus();
+        }
+
+        auto dropStatus = getStatusFromCommandResult(dropResult.getValue());
+        if (!dropStatus.isOK()) {
+            if (dropStatus.code() == ErrorCodes::NamespaceNotFound) {
+                continue;
+            }
+
+            errors.emplace(shardEntry.getHost(), dropResult.getValue());
+        }
+    }
+
+    if (!errors.empty()) {
+        StringBuilder sb;
+        sb << "Dropping collection failed on the following hosts: ";
+
+        for (auto it = errors.cbegin(); it != errors.cend(); ++it) {
+            if (it != errors.cbegin()) {
+                sb << ", ";
+            }
+
+            sb << it->first << ": " << it->second;
+        }
+
+        return {ErrorCodes::OperationFailed, sb.str()};
+    }
+
+    LOG(1) << "dropCollection " << ns << " shard data deleted";
+
+    // Remove chunk data
+    Status result = remove(ChunkType::ConfigNS, BSON(ChunkType::ns(ns.ns())), 0, nullptr);
+    if (!result.isOK()) {
+        return result;
+    }
+
+    LOG(1) << "dropCollection " << ns << " chunk data deleted";
+
+    // Mark the collection as dropped
+    CollectionType coll;
+    coll.setNs(ns);
+    coll.setDropped(true);
+    coll.setEpoch(ChunkVersion::DROPPED().epoch());
+    coll.setUpdatedAt(grid.shardRegistry()->getNetwork()->now());
+
+    result = updateCollection(ns.ns(), coll);
+    if (!result.isOK()) {
+        return result;
+    }
+
+    LOG(1) << "dropCollection " << ns << " collection marked as dropped";
+
+    for (const auto& shardEntry : allShards) {
+        SetShardVersionRequest ssv = SetShardVersionRequest::makeForVersioningNoPersist(
+            grid.shardRegistry()->getConfigServerConnectionString(),
+            shardEntry.getName(),
+            fassertStatusOK(28753, ConnectionString::parse(shardEntry.getHost())),
+            ns,
+            ChunkVersion::DROPPED(),
+            true);
+
+        auto ssvResult = shardRegistry->runCommandWithNotMasterRetries(
+            shardEntry.getName(), "admin", ssv.toBSON());
+
+        if (!ssvResult.isOK()) {
+            return ssvResult.getStatus();
+        }
+
+        auto ssvStatus = getStatusFromCommandResult(ssvResult.getValue());
+        if (!ssvStatus.isOK()) {
+            return ssvStatus;
+        }
+
+        auto unsetShardingStatus = shardRegistry->runCommandWithNotMasterRetries(
+            shardEntry.getName(), "admin", BSON("unsetSharding" << 1));
+
+        if (!unsetShardingStatus.isOK()) {
+            return unsetShardingStatus.getStatus();
+        }
+
+        auto unsetShardingResult = getStatusFromCommandResult(unsetShardingStatus.getValue());
+        if (!unsetShardingResult.isOK()) {
+            return unsetShardingResult;
+        }
+    }
+
+    LOG(1) << "dropCollection " << ns << " completed";
+
+    logChange(txn->getClient()->clientAddress(true), "dropCollection", ns.ns(), BSONObj());
+
     return Status::OK();
 }
 
@@ -879,7 +998,13 @@ bool CatalogManagerLegacy::runUserManagementWriteCommand(const string& commandNa
     return Command::appendCommandStatus(*result, status);
 }
 
-bool CatalogManagerLegacy::runReadCommand(const string& dbname,
+bool CatalogManagerLegacy::runUserManagementReadCommand(const string& dbname,
+                                                        const BSONObj& cmdObj,
+                                                        BSONObjBuilder* result) {
+    return runReadCommand(dbname, cmdObj, result);
+}
+
+bool CatalogManagerLegacy::runReadCommand(const std::string& dbname,
                                           const BSONObj& cmdObj,
                                           BSONObjBuilder* result) {
     try {
@@ -966,8 +1091,7 @@ void CatalogManagerLegacy::writeConfigServerDirect(const BatchedCommandRequest& 
     exec.executeBatch(request, response);
 }
 
-Status CatalogManagerLegacy::_checkDbDoesNotExist(const std::string& dbName,
-                                                  DatabaseType* db) const {
+Status CatalogManagerLegacy::_checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) {
     ScopedDbConnection conn(_configServerConnectionString, 30);
 
     BSONObjBuilder b;
@@ -1002,7 +1126,7 @@ Status CatalogManagerLegacy::_checkDbDoesNotExist(const std::string& dbName,
     return Status::OK();
 }
 
-StatusWith<string> CatalogManagerLegacy::_generateNewShardName() const {
+StatusWith<string> CatalogManagerLegacy::_generateNewShardName() {
     BSONObj o;
     {
         ScopedDbConnection conn(_configServerConnectionString, 30);
@@ -1038,7 +1162,7 @@ size_t CatalogManagerLegacy::_getShardCount(const BSONObj& query) const {
     return shardCount;
 }
 
-DistLockManager* CatalogManagerLegacy::getDistLockManager() const {
+DistLockManager* CatalogManagerLegacy::getDistLockManager() {
     invariant(_distLockManager);
     return _distLockManager.get();
 }

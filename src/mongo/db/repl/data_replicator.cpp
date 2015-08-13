@@ -44,6 +44,7 @@
 #include "mongo/db/repl/member_state.h"
 #include "mongo/db/repl/optime.h"
 #include "mongo/db/repl/sync_source_selector.h"
+#include "mongo/rpc/metadata/repl_set_metadata.h"
 #include "mongo/stdx/functional.h"
 #include "mongo/stdx/thread.h"
 #include "mongo/util/assert_util.h"
@@ -133,7 +134,7 @@ OplogFetcher::OplogFetcher(ReplicationExecutor* exec,
                    BSON("find" << oplogNSS.coll() << "filter"
                                << BSON("ts" << BSON("$gte" << startTS))),
                    work,
-                   BSON(rpc::kReplicationMetadataFieldName << 1)),
+                   BSON(rpc::kReplSetMetadataFieldName << 1)),
       _startTS(startTS) {}
 
 std::string OplogFetcher::toString() const {
@@ -788,7 +789,7 @@ TimestampStatus DataReplicator::initialSync() {
 
         // Sleep for retry time
         lk.unlock();
-        sleepmillis(_opts.initialSyncRetryWait.count());
+        sleepmillis(durationCount<Milliseconds>(_opts.initialSyncRetryWait));
         lk.lock();
 
         // No need to print a stack

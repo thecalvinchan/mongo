@@ -40,18 +40,10 @@ namespace mongo {
 using std::string;
 using std::vector;
 
-namespace {
-ConnectionString kConfigHost(HostAndPort("dummy:1234"));
-}  // unnamed namespace
-
 CatalogManagerMock::CatalogManagerMock() {
     _mockDistLockMgr = stdx::make_unique<DistLockManagerMock>();
 }
 CatalogManagerMock::~CatalogManagerMock() = default;
-
-ConnectionString CatalogManagerMock::connectionString() const {
-    return kConfigHost;
-}
 
 Status CatalogManagerMock::startup() {
     return Status::OK();
@@ -101,6 +93,10 @@ Status CatalogManagerMock::getCollections(const string* dbName,
     return Status::OK();
 }
 
+Status CatalogManagerMock::dropCollection(OperationContext* txn, const NamespaceString& ns) {
+    return {ErrorCodes::InternalError, "Method not implemented"};
+}
+
 Status CatalogManagerMock::getDatabasesForShard(const string& shardName, vector<string>* dbs) {
     return Status::OK();
 }
@@ -133,9 +129,15 @@ bool CatalogManagerMock::runUserManagementWriteCommand(const string& commandName
     return true;
 }
 
-bool CatalogManagerMock::runReadCommand(const string& dbname,
+bool CatalogManagerMock::runReadCommand(const std::string& dbname,
                                         const BSONObj& cmdObj,
                                         BSONObjBuilder* result) {
+    return true;
+}
+
+bool CatalogManagerMock::runUserManagementReadCommand(const string& dbname,
+                                                      const BSONObj& cmdObj,
+                                                      BSONObjBuilder* result) {
     return true;
 }
 
@@ -158,15 +160,15 @@ StatusWith<SettingsType> CatalogManagerMock::getGlobalSettings(const string& key
 void CatalogManagerMock::writeConfigServerDirect(const BatchedCommandRequest& request,
                                                  BatchedCommandResponse* response) {}
 
-DistLockManager* CatalogManagerMock::getDistLockManager() const {
+DistLockManager* CatalogManagerMock::getDistLockManager() {
     return _mockDistLockMgr.get();
 }
 
-Status CatalogManagerMock::_checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) const {
+Status CatalogManagerMock::_checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) {
     return Status::OK();
 }
 
-StatusWith<std::string> CatalogManagerMock::_generateNewShardName() const {
+StatusWith<std::string> CatalogManagerMock::_generateNewShardName() {
     return {ErrorCodes::InternalError, "Method not implemented"};
 }
 

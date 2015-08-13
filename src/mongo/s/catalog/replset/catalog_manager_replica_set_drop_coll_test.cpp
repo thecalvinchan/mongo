@@ -34,6 +34,7 @@
 #include "mongo/client/remote_command_targeter_mock.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/query/lite_parsed_query.h"
+#include "mongo/rpc/metadata/repl_set_metadata.h"
 #include "mongo/s/catalog/dist_lock_manager_mock.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set_test_fixture.h"
@@ -92,14 +93,19 @@ public:
             ASSERT_EQ(_dropNS.db(), request.dbname);
             ASSERT_EQ(BSON("drop" << _dropNS.coll()), request.cmdObj);
 
+            ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
             return BSON("ns" << _dropNS.ns() << "ok" << 1);
         });
     }
 
     void expectRemoveChunksAndMarkCollectionDropped() {
         onCommand([this](const RemoteCommandRequest& request) {
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
             ASSERT_EQ(_configHost, request.target);
             ASSERT_EQ("config", request.dbname);
+
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
             BSONObj expectedCmd(fromjson(R"({
                 delete: "chunks",
@@ -131,6 +137,8 @@ public:
             ASSERT_EQ(HostAndPort(shard.getHost()), request.target);
             ASSERT_EQ("admin", request.dbname);
             ASSERT_EQ(BSON("unsetSharding" << 1), request.cmdObj);
+
+            ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
             return BSON("n" << 1 << "ok" << 1);
         });
@@ -219,6 +227,8 @@ TEST_F(DropColl2ShardTest, NSNotFound) {
         ASSERT_EQ(dropNS().db(), request.dbname);
         ASSERT_EQ(BSON("drop" << dropNS().coll()), request.cmdObj);
 
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
         return BSON("ok" << 0 << "code" << ErrorCodes::NamespaceNotFound);
     });
 
@@ -226,6 +236,8 @@ TEST_F(DropColl2ShardTest, NSNotFound) {
         ASSERT_EQ(HostAndPort(shard2().getHost()), request.target);
         ASSERT_EQ(dropNS().db(), request.dbname);
         ASSERT_EQ(BSON("drop" << dropNS().coll()), request.cmdObj);
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return BSON("ok" << 0 << "code" << ErrorCodes::NamespaceNotFound);
     });

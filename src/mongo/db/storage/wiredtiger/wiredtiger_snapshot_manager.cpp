@@ -55,10 +55,18 @@ Status WiredTigerSnapshotManager::createSnapshot(OperationContext* txn, const Sn
 void WiredTigerSnapshotManager::setCommittedSnapshot(const SnapshotName& name) {
     stdx::lock_guard<stdx::mutex> lock(_mutex);
 
-    invariant(!_committedSnapshot || *_committedSnapshot < name);
+    invariant(!_committedSnapshot || *_committedSnapshot <= name);
     _committedSnapshot = name;
+}
 
-    const std::string config = str::stream() << "drop=(before=" << name.asU64() << ')';
+void WiredTigerSnapshotManager::cleanupUnneededSnapshots() {
+    stdx::lock_guard<stdx::mutex> lock(_mutex);
+
+    if (!_committedSnapshot)
+        return;
+
+    const std::string config = str::stream() << "drop=(before=" << _committedSnapshot->asU64()
+                                             << ')';
     invariantWTOK(_session->snapshot(_session, config.c_str()));
 }
 
@@ -76,13 +84,14 @@ void WiredTigerSnapshotManager::shutdown() {
     _session = nullptr;
 }
 
-bool WiredTigerSnapshotManager::haveCommittedSnapshot() const {
+boost::optional<SnapshotName> WiredTigerSnapshotManager::getMinSnapshotForNextCommittedRead()
+    const {
     stdx::lock_guard<stdx::mutex> lock(_mutex);
-    return bool(_committedSnapshot);
+    return _committedSnapshot;
 }
 
-void WiredTigerSnapshotManager::beginTransactionOnCommittedSnapshot(WT_SESSION* session,
-                                                                    bool sync) const {
+SnapshotName WiredTigerSnapshotManager::beginTransactionOnCommittedSnapshot(WT_SESSION* session,
+                                                                            bool sync) const {
     stdx::lock_guard<stdx::mutex> lock(_mutex);
 
     uassert(ErrorCodes::ReadConcernMajorityNotAvailableYet,
@@ -94,6 +103,8 @@ void WiredTigerSnapshotManager::beginTransactionOnCommittedSnapshot(WT_SESSION* 
     if (sync)
         config << ",sync=true";
     invariantWTOK(session->begin_transaction(session, config.str().c_str()));
+
+    return *_committedSnapshot;
 }
 
 }  // namespace mongo

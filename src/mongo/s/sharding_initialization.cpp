@@ -75,7 +75,8 @@ Status initializeGlobalShardingState(const ConnectionString& configCS) {
     auto shardRegistry(
         stdx::make_unique<ShardRegistry>(stdx::make_unique<RemoteCommandTargeterFactoryImpl>(),
                                          makeTaskExecutor(std::move(network)),
-                                         networkPtr));
+                                         networkPtr,
+                                         configCS));
 
     std::unique_ptr<CatalogManager> catalogManager;
     if (configCS.type() == ConnectionString::SET) {
@@ -91,11 +92,8 @@ Status initializeGlobalShardingState(const ConnectionString& configCS) {
             ReplSetDistLockManager::kDistLockPingInterval,
             ReplSetDistLockManager::kDistLockExpirationTime);
 
-        auto catalogManagerReplicaSet = stdx::make_unique<CatalogManagerReplicaSet>();
-        Status status = catalogManagerReplicaSet->init(configCS, std::move(distLockManager));
-        if (!status.isOK()) {
-            return status;
-        }
+        auto catalogManagerReplicaSet =
+            stdx::make_unique<CatalogManagerReplicaSet>(std::move(distLockManager));
 
         catalogManager = std::move(catalogManagerReplicaSet);
     } else {
@@ -110,7 +108,9 @@ Status initializeGlobalShardingState(const ConnectionString& configCS) {
 
     shardRegistry->init(catalogManager.get());
     shardRegistry->startup();
-    grid.init(std::move(catalogManager), std::move(shardRegistry));
+    grid.init(std::move(catalogManager),
+              std::move(shardRegistry),
+              stdx::make_unique<ClusterCursorManager>(getGlobalServiceContext()->getClockSource()));
 
     return Status::OK();
 }

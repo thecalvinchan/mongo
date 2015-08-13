@@ -87,8 +87,8 @@ void appendReplicationInfo(OperationContext* txn, BSONObjBuilder& result, int le
         {
             const char* localSources = "local.sources";
             AutoGetCollectionForRead ctx(txn, localSources);
-            unique_ptr<PlanExecutor> exec(
-                InternalPlanner::collectionScan(txn, localSources, ctx.getCollection()));
+            unique_ptr<PlanExecutor> exec(InternalPlanner::collectionScan(
+                txn, localSources, ctx.getCollection(), PlanExecutor::YIELD_MANUAL));
             BSONObj obj;
             PlanExecutor::ExecState state;
             while (PlanExecutor::ADVANCED == (state = exec->getNext(&obj, NULL))) {
@@ -229,6 +229,8 @@ public:
 
         if (serverGlobalParams.configsvrMode == ServerGlobalParams::ConfigServerMode::CSRS) {
             result.append("configsvr", 1);
+        } else if (serverGlobalParams.configsvrMode == ServerGlobalParams::ConfigServerMode::SCCC) {
+            result.append("configsvr", 0);
         }
 
         result.appendNumber("maxBsonObjectSize", BSONObjMaxUserSize);

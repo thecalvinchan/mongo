@@ -55,7 +55,8 @@ public:
     void startThreads(executor::TaskExecutor* taskExecutor) override;
     virtual void startMasterSlave(OperationContext*);
     virtual void shutdown();
-    virtual void initiateOplog(OperationContext* txn);
+    virtual void initiateOplog(OperationContext* txn, bool updateReplOpTime);
+    virtual void logTransitionToPrimaryToOplog(OperationContext* txn);
     virtual void forwardSlaveProgress();
     virtual OID ensureMe(OperationContext*);
     virtual bool isSelf(const HostAndPort& host);
@@ -73,7 +74,7 @@ public:
     virtual OperationContext* createOperationContext(const std::string& threadName);
     virtual void dropAllTempCollections(OperationContext* txn);
     virtual void dropAllSnapshots();
-    virtual void updateCommittedSnapshot(OpTime newCommitPoint);
+    virtual void updateCommittedSnapshot(SnapshotName newCommitPoint);
     virtual void forceSnapshotCreation();
     virtual bool snapshotsEnabled() const;
 

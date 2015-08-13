@@ -31,6 +31,7 @@
 #include "mongo/db/db_raii.h"
 
 #include "mongo/db/catalog/database_holder.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/db/client.h"
 #include "mongo/db/curop.h"
 #include "mongo/db/stats/top.h"
@@ -81,7 +82,7 @@ void AutoGetCollectionForRead::_init(const std::string& ns, StringData coll) {
 
     // We have both the DB and collection locked, which the prerequisite to do a stable shard
     // version check.
-    ensureShardVersionOKOrThrow(_txn->getClient(), ns);
+    ensureShardVersionOKOrThrow(_txn, ns);
 
     auto curOp = CurOp::get(_txn);
     stdx::lock_guard<Client> lk(*_txn->getClient());
@@ -96,6 +97,18 @@ void AutoGetCollectionForRead::_init(const std::string& ns, StringData coll) {
         curOp->enter_inlock(ns.c_str(), _db.getDb()->getProfilingLevel());
 
         _coll = _db.getDb()->getCollection(ns);
+    }
+
+    if (_coll) {
+        if (auto minSnapshot = _coll->getMinimumVisibleSnapshot()) {
+            if (auto mySnapshot = _txn->recoveryUnit()->getMajorityCommittedSnapshot()) {
+                uassert(ErrorCodes::ReadConcernMajorityNotAvailableYet,
+                        str::stream()
+                            << "Majority read concern is not currently available for collection "
+                            << ns,
+                        mySnapshot >= minSnapshot);
+            }
+        }
     }
 }
 
@@ -158,7 +171,7 @@ void OldClientContext::_checkNotStale() const {
         case dbDelete:   // here as well.
             break;
         default:
-            ensureShardVersionOKOrThrow(_txn->getClient(), _ns);
+            ensureShardVersionOKOrThrow(_txn, _ns);
     }
 }
 

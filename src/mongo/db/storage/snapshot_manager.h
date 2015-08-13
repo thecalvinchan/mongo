@@ -28,56 +28,18 @@
 
 #pragma once
 
+#include <limits>
 #include <string>
 
 #include "mongo/base/status.h"
 #include "mongo/bson/timestamp.h"
 #include "mongo/db/operation_context.h"
+#include "mongo/db/storage/snapshot_name.h"
 #include "mongo/util/assert_util.h"
 
 namespace mongo {
 
 class RecoveryUnit;
-
-class SnapshotName {
-public:
-    explicit SnapshotName(Timestamp ts) : _ts(ts) {
-        invariant(!_ts.isNull());
-    }
-
-    /**
-     * Returns an unsigned number that compares with the same ordering as the SnapshotName.
-     */
-    uint64_t asU64() const {
-        return _ts.asULL();
-    }
-
-    Timestamp timestamp() const {
-        return _ts;
-    }
-
-    bool operator==(const SnapshotName& rhs) const {
-        return _ts == rhs._ts;
-    }
-    bool operator!=(const SnapshotName& rhs) const {
-        return _ts != rhs._ts;
-    }
-    bool operator<(const SnapshotName& rhs) const {
-        return _ts < rhs._ts;
-    }
-    bool operator<=(const SnapshotName& rhs) const {
-        return _ts <= rhs._ts;
-    }
-    bool operator>(const SnapshotName& rhs) const {
-        return _ts > rhs._ts;
-    }
-    bool operator>=(const SnapshotName& rhs) const {
-        return _ts >= rhs._ts;
-    }
-
-private:
-    Timestamp _ts;
-};
 
 /**
  * Manages snapshots that can be read from at a later time.
@@ -109,13 +71,25 @@ public:
     virtual Status createSnapshot(OperationContext* txn, const SnapshotName& name) = 0;
 
     /**
-     * Sets the snapshot to be used for committed reads. Once set, all older snapshots that are
-     * not currently in use by any RecoveryUnit can be deleted.
+     * Sets the snapshot to be used for committed reads.
      *
      * Implementations are allowed to assume that all older snapshots have names that compare
      * less than the passed in name, and newer ones compare greater.
+     *
+     * This is called while holding a very hot mutex. Therefore it should avoid doing any work that
+     * can be done later. In particular, cleaning up of old snapshots should be deferred until
+     * cleanupUnneededSnapshots is called.
      */
     virtual void setCommittedSnapshot(const SnapshotName& name) = 0;
+
+    /**
+     * Cleans up all snapshots older than the current committed snapshot.
+     *
+     * Operations that have already begun using an older snapshot must continue to work using that
+     * snapshot until they would normally start using a newer one. Any implementation that allows
+     * that without an unbounded growth of snapshots is permitted.
+     */
+    virtual void cleanupUnneededSnapshots() = 0;
 
     /**
      * Drops all snapshots and clears the "committed" snapshot.

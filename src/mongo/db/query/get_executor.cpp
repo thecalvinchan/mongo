@@ -197,6 +197,13 @@ void fillOutPlannerParams(OperationContext* txn,
     } else {
         plannerParams->options |= QueryPlannerParams::KEEP_MUTATIONS;
     }
+
+    // MMAPv1 storage engine should have snapshot() perform an index scan on _id rather than a
+    // collection scan since a collection scan on the MMAP storage engine can return duplicates
+    // or miss documents.
+    if (isMMAPV1()) {
+        plannerParams->options |= QueryPlannerParams::SNAPSHOT_USE_ID;
+    }
 }
 
 namespace {
@@ -228,7 +235,7 @@ Status prepareExecution(OperationContext* opCtx,
         const string& ns = canonicalQuery->ns();
         LOG(2) << "Collection " << ns << " does not exist."
                << " Using EOF plan: " << canonicalQuery->toStringShort();
-        *rootOut = new EOFStage();
+        *rootOut = new EOFStage(opCtx);
         return Status::OK();
     }
 
@@ -246,7 +253,8 @@ Status prepareExecution(OperationContext* opCtx,
 
         // Might have to filter out orphaned docs.
         if (plannerParams.options & QueryPlannerParams::INCLUDE_SHARD_FILTER) {
-            *rootOut = new ShardFilterStage(ShardingState::get(getGlobalServiceContext())
+            *rootOut = new ShardFilterStage(opCtx,
+                                            ShardingState::get(getGlobalServiceContext())
                                                 ->getCollectionMetadata(collection->ns().ns()),
                                             ws,
                                             *rootOut);
@@ -268,7 +276,7 @@ Status prepareExecution(OperationContext* opCtx,
                 params.projImpl = ProjectionStageParams::SIMPLE_DOC;
             }
 
-            *rootOut = new ProjectionStage(params, ws, *rootOut);
+            *rootOut = new ProjectionStage(opCtx, params, ws, *rootOut);
         }
 
         return Status::OK();
@@ -446,8 +454,8 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutor(OperationContext* txn,
     if (!collection) {
         LOG(2) << "Collection " << ns << " does not exist."
                << " Using EOF stage: " << unparsedQuery.toString();
-        unique_ptr<EOFStage> eofStage = make_unique<EOFStage>();
-        unique_ptr<WorkingSet> ws = make_unique<WorkingSet>();
+        auto eofStage = make_unique<EOFStage>(txn);
+        auto ws = make_unique<WorkingSet>();
         return PlanExecutor::make(txn, std::move(ws), std::move(eofStage), ns, yieldPolicy);
     }
 
@@ -473,7 +481,8 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutor(OperationContext* txn,
 
     // Might have to filter out orphaned docs.
     if (plannerOptions & QueryPlannerParams::INCLUDE_SHARD_FILTER) {
-        root = make_unique<ShardFilterStage>(ShardingState::get(getGlobalServiceContext())
+        root = make_unique<ShardFilterStage>(txn,
+                                             ShardingState::get(getGlobalServiceContext())
                                                  ->getCollectionMetadata(collection->ns().ns()),
                                              ws.get(),
                                              root.release());
@@ -648,7 +657,7 @@ StatusWith<unique_ptr<PlanStage>> applyProjection(OperationContext* txn,
     ProjectionStageParams params(WhereCallbackReal(txn, nsString.db()));
     params.projObj = proj;
     params.fullExpression = cq->root();
-    return {make_unique<ProjectionStage>(params, ws, root.release())};
+    return {make_unique<ProjectionStage>(txn, params, ws, root.release())};
 }
 
 }  // namespace
@@ -708,8 +717,8 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorDelete(OperationContext* txn,
             // a DeleteStage, so in this case we put a DeleteStage on top of an EOFStage.
             LOG(2) << "Collection " << nss.ns() << " does not exist."
                    << " Using EOF stage: " << unparsedQuery.toString();
-            unique_ptr<DeleteStage> deleteStage =
-                make_unique<DeleteStage>(txn, deleteStageParams, ws.get(), nullptr, new EOFStage());
+            auto deleteStage = make_unique<DeleteStage>(
+                txn, deleteStageParams, ws.get(), nullptr, new EOFStage(txn));
             return PlanExecutor::make(txn, std::move(ws), std::move(deleteStage), nss.ns(), policy);
         }
 
@@ -818,8 +827,7 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorUpdate(OperationContext* txn,
 
     // If this is a user-issued update, then we want to return an error: you cannot perform
     // writes on a secondary. If this is an update to a secondary from the replication system,
-    // however, then we make an exception and let the write proceed. In this case,
-    // shouldCallLogOp() will be false.
+    // however, then we make an exception and let the write proceed.
     bool userInitiatedWritesAndNotPrimary = txn->writesAreReplicated() &&
         !repl::getGlobalReplicationCoordinator()->canAcceptWritesFor(nsString);
 
@@ -850,8 +858,8 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorUpdate(OperationContext* txn,
             // an UpdateStage, so in this case we put an UpdateStage on top of an EOFStage.
             LOG(2) << "Collection " << nsString.ns() << " does not exist."
                    << " Using EOF stage: " << unparsedQuery.toString();
-            unique_ptr<UpdateStage> updateStage = make_unique<UpdateStage>(
-                txn, updateStageParams, ws.get(), collection, new EOFStage());
+            auto updateStage = make_unique<UpdateStage>(
+                txn, updateStageParams, ws.get(), collection, new EOFStage(txn));
             return PlanExecutor::make(
                 txn, std::move(ws), std::move(updateStage), nsString.ns(), policy);
         }
@@ -943,7 +951,7 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorGroup(OperationContext* txn,
         // reporting machinery always assumes that the root stage for a group operation is a
         // GroupStage, so in this case we put a GroupStage on top of an EOFStage.
         unique_ptr<PlanStage> root =
-            make_unique<GroupStage>(txn, request, ws.get(), new EOFStage());
+            make_unique<GroupStage>(txn, request, ws.get(), new EOFStage(txn));
 
         return PlanExecutor::make(txn, std::move(ws), std::move(root), request.ns, yieldPolicy);
     }
@@ -1049,21 +1057,19 @@ bool turnIxscanIntoCount(QuerySolution* soln) {
 }
 
 /**
- * Returns true if indices contains an index that can be
- * used with DistinctNode. Sets indexOut to the array index
- * of PlannerParams::indices.
- * Look for the index for the fewest fields.
- * Criteria for suitable index is that the index cannot be special
- * (geo, hashed, text, ...).
+ * Returns true if indices contains an index that can be used with DistinctNode (the "fast distinct
+ * hack" node, which can be used only if there is an empty query predicate).  Sets indexOut to the
+ * array index of PlannerParams::indices.  Look for the index for the fewest fields.  Criteria for
+ * suitable index is that the index cannot be special (geo, hashed, text, ...), and the index cannot
+ * be a partial index.
  *
- * Multikey indices are not suitable for DistinctNode when the projection
- * is on an array element. Arrays are flattened in a multikey index which
- * makes it impossible for the distinct scan stage (plan stage generated from
- * DistinctNode) to select the requested element by array index.
+ * Multikey indices are not suitable for DistinctNode when the projection is on an array element.
+ * Arrays are flattened in a multikey index which makes it impossible for the distinct scan stage
+ * (plan stage generated from DistinctNode) to select the requested element by array index.
  *
- * Multikey indices cannot be used for the fast distinct hack if the field is dotted.
- * Currently the solution generated for the distinct hack includes a projection stage and
- * the projection stage cannot be covered with a dotted field.
+ * Multikey indices cannot be used for the fast distinct hack if the field is dotted.  Currently the
+ * solution generated for the distinct hack includes a projection stage and the projection stage
+ * cannot be covered with a dotted field.
  */
 bool getDistinctNodeIndex(const std::vector<IndexEntry>& indices,
                           const std::string& field,
@@ -1074,6 +1080,10 @@ bool getDistinctNodeIndex(const std::vector<IndexEntry>& indices,
     for (size_t i = 0; i < indices.size(); ++i) {
         // Skip special indices.
         if (!IndexNames::findPluginName(indices[i].keyPattern).empty()) {
+            continue;
+        }
+        // Skip partial indices.
+        if (indices[i].filterExpr) {
             continue;
         }
         // Skip multikey indices if we are projecting on a dotted field.
@@ -1210,7 +1220,7 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorCount(OperationContext* txn,
         // reporting machinery always assumes that the root stage for a count operation is
         // a CountStage, so in this case we put a CountStage on top of an EOFStage.
         unique_ptr<PlanStage> root =
-            make_unique<CountStage>(txn, collection, request, ws.get(), new EOFStage());
+            make_unique<CountStage>(txn, collection, request, ws.get(), new EOFStage(txn));
         return PlanExecutor::make(
             txn, std::move(ws), std::move(root), request.getNs().ns(), yieldPolicy);
     }
@@ -1304,7 +1314,7 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorDistinct(OperationContext* txn,
     if (!collection) {
         // Treat collections that do not exist as empty collections.
         return PlanExecutor::make(
-            txn, make_unique<WorkingSet>(), make_unique<EOFStage>(), ns, yieldPolicy);
+            txn, make_unique<WorkingSet>(), make_unique<EOFStage>(txn), ns, yieldPolicy);
     }
 
     // TODO: check for idhack here?
@@ -1321,10 +1331,10 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorDistinct(OperationContext* txn,
     QueryPlannerParams plannerParams;
     plannerParams.options = QueryPlannerParams::NO_TABLE_SCAN;
 
-    // TODO Need to check if query is compatible with any partial indexes.  SERVER-17854.
     IndexCatalog::IndexIterator ii = collection->getIndexCatalog()->getIndexIterator(txn, false);
     while (ii.more()) {
         const IndexDescriptor* desc = ii.next();
+        IndexCatalogEntry* ice = ii.catalogEntry(desc);
         // The distinct hack can work if any field is in the index but it's not always clear
         // if it's a win unless it's the first field.
         if (desc->keyPattern().firstElement().fieldName() == field) {
@@ -1334,7 +1344,7 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorDistinct(OperationContext* txn,
                                                        desc->isSparse(),
                                                        desc->unique(),
                                                        desc->indexName(),
-                                                       NULL,
+                                                       ice->getFilterExpression(),
                                                        desc->infoObj()));
         }
     }
@@ -1372,8 +1382,8 @@ StatusWith<unique_ptr<PlanExecutor>> getExecutorDistinct(OperationContext* txn,
                                                      BSONObj(),  // hint
                                                      BSONObj(),  // min
                                                      BSONObj(),  // max
+                                                     false,      // snapshot
                                                      isExplain,
-                                                     false,  // snapshot
                                                      whereCallback);
     if (!statusWithCQ.isOK()) {
         return statusWithCQ.getStatus();

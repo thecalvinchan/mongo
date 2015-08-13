@@ -327,11 +327,6 @@ public:
     virtual bool voteForMyself(Date_t now) = 0;
 
     /**
-     * Increase the term.
-     */
-    virtual void incrementTerm() = 0;
-
-    /**
      * Set lastVote to be for ourself in this term.
      */
     virtual void voteForMyselfV1() = 0;
@@ -390,7 +385,7 @@ public:
     /**
      * Prepares a BSONObj describing the current term, primary, and lastOp information.
      */
-    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder,
+    virtual void prepareReplResponseMetadata(rpc::ReplSetMetadata* metadata,
                                              const OpTime& lastCommittedOpTime) const = 0;
 
     /**

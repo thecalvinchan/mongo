@@ -66,6 +66,7 @@ env.Library(
         "shard_filter.cpp",
         "skip.cpp",
         "sort.cpp",
+        "sort_key_generator.cpp",
         "stagedebug_cmd.cpp",
         "subplan.cpp",
         "text.cpp",
@@ -78,6 +79,7 @@ env.Library(
         "scoped_timer",
         "working_set",
         "$BUILD_DIR/mongo/base",
+        '$BUILD_DIR/third_party/s2/s2',
     ],
 )
 

@@ -38,6 +38,7 @@
 #include "mongo/db/commands.h"
 #include "mongo/executor/network_interface_mock.h"
 #include "mongo/executor/task_executor.h"
+#include "mongo/rpc/metadata/repl_set_metadata.h"
 #include "mongo/s/catalog/dist_lock_manager_mock.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set_test_fixture.h"
@@ -80,6 +81,8 @@ public:
     void expectGetDatabase(const DatabaseType& expectedDb) {
         onFindCommand([&](const RemoteCommandRequest& request) {
             ASSERT_EQUALS(configHost, request.target);
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
             const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
             ASSERT_EQ(DatabaseType::ConfigNS, nss.ns());
 
@@ -90,6 +93,8 @@ public:
             ASSERT_EQ(BSON(DatabaseType::name(expectedDb.getName())), query->getFilter());
             ASSERT_EQ(BSONObj(), query->getSort());
             ASSERT_EQ(1, query->getLimit().get());
+
+            checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
             return vector<BSONObj>{expectedDb.toBSON()};
         });
@@ -104,6 +109,8 @@ public:
         onCommand([&](const RemoteCommandRequest& request) {
             ASSERT_EQUALS(configHost, request.target);
             ASSERT_EQUALS("config", request.dbname);
+
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
             BatchedUpdateRequest actualBatchedUpdate;
             std::string errmsg;
@@ -144,6 +151,8 @@ public:
     void expectReloadChunks(const std::string& ns, const vector<ChunkType>& chunks) {
         onFindCommand([&](const RemoteCommandRequest& request) {
             ASSERT_EQUALS(configHost, request.target);
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
             const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
             ASSERT_EQ(nss.ns(), ChunkType::ConfigNS);
 
@@ -157,6 +166,8 @@ public:
             ASSERT_EQ(expectedQuery, query->getFilter());
             ASSERT_EQ(expectedSort, query->getSort());
             ASSERT_FALSE(query->getLimit().is_initialized());
+
+            checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
             vector<BSONObj> chunksToReturn;
 
@@ -172,6 +183,8 @@ public:
         onCommand([&](const RemoteCommandRequest& request) {
             ASSERT_EQUALS(configHost, request.target);
             ASSERT_EQUALS("config", request.dbname);
+
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
             BatchedUpdateRequest actualBatchedUpdate;
             std::string errmsg;
@@ -198,6 +211,8 @@ public:
     void expectReloadCollection(const CollectionType& collection) {
         onFindCommand([&](const RemoteCommandRequest& request) {
             ASSERT_EQUALS(configHost, request.target);
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
             const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
             ASSERT_EQ(nss.ns(), CollectionType::ConfigNS);
 
@@ -213,6 +228,8 @@ public:
             }
             ASSERT_EQ(BSONObj(), query->getSort());
 
+            checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
+
             return vector<BSONObj>{collection.toBSON()};
         });
     }
@@ -220,6 +237,8 @@ public:
     void expectLoadNewestChunk(const string& ns, const ChunkType& chunk) {
         onFindCommand([&](const RemoteCommandRequest& request) {
             ASSERT_EQUALS(configHost, request.target);
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
             const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
             ASSERT_EQ(nss.ns(), ChunkType::ConfigNS);
 
@@ -232,6 +251,8 @@ public:
             ASSERT_EQ(expectedQuery, query->getFilter());
             ASSERT_EQ(expectedSort, query->getSort());
             ASSERT_EQ(1, query->getLimit().get());
+
+            checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
             return vector<BSONObj>{chunk.toBSON()};
         });
@@ -728,6 +749,8 @@ TEST_F(ShardCollectionTest, withInitialData) {
         ASSERT_EQUALS(Chunk::MaxChunkSize, request.cmdObj["maxChunkSizeBytes"].numberLong());
         ASSERT_EQUALS(0, request.cmdObj["maxSplitPoints"].numberLong());
         ASSERT_EQUALS(0, request.cmdObj["maxChunkObjects"].numberLong());
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return BSON("ok" << 1 << "splitKeys"
                          << BSON_ARRAY(splitPoint0 << splitPoint1 << splitPoint2 << splitPoint3));

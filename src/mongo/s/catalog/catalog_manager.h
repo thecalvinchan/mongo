@@ -85,11 +85,6 @@ public:
     virtual ~CatalogManager() = default;
 
     /**
-     * Retrieves the connection string for the catalog manager's backing server.
-     */
-    virtual ConnectionString connectionString() const = 0;
-
-    /**
      * Performs implementation-specific startup tasks. Must be run after the catalog manager
      * has been installed into the global 'grid' object.
      */
@@ -214,7 +209,7 @@ public:
      * some of the known failures:
      *  - NamespaceNotFound - collection does not exist
      */
-    Status dropCollection(OperationContext* txn, const NamespaceString& ns);
+    virtual Status dropCollection(OperationContext* txn, const NamespaceString& ns) = 0;
 
     /**
      * Retrieves all databases for a shard.
@@ -274,11 +269,18 @@ public:
                                                BSONObjBuilder* result) = 0;
 
     /**
-     * Runs a read-only command on a single config server.
+     * Runs a read-only command on a config server.
      */
     virtual bool runReadCommand(const std::string& dbname,
                                 const BSONObj& cmdObj,
                                 BSONObjBuilder* result) = 0;
+
+    /**
+     * Runs a user management related read-only command on a config server.
+     */
+    virtual bool runUserManagementReadCommand(const std::string& dbname,
+                                              const BSONObj& cmdObj,
+                                              BSONObjBuilder* result) = 0;
 
     /**
      * Applies oplog entries to the config servers.
@@ -344,7 +346,7 @@ public:
      * The returned reference is valid only as long as the catalog manager is valid and should not
      * be cached.
      */
-    virtual DistLockManager* getDistLockManager() const = 0;
+    virtual DistLockManager* getDistLockManager() = 0;
 
     /**
      * Creates a new database entry for the specified database name in the configuration
@@ -423,12 +425,12 @@ private:
      *  NamespaceExists if it exists with the same casing
      *  DatabaseDifferCase if it exists under different casing.
      */
-    virtual Status _checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) const = 0;
+    virtual Status _checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) = 0;
 
     /**
      * Generates a unique name to be given to a newly added shard.
      */
-    virtual StatusWith<std::string> _generateNewShardName() const = 0;
+    virtual StatusWith<std::string> _generateNewShardName() = 0;
 };
 
 }  // namespace mongo

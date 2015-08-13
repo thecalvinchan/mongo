@@ -45,10 +45,12 @@ const size_t ReplicaSetConfig::kMaxMembers;
 const size_t ReplicaSetConfig::kMaxVotingMembers;
 #endif
 
-const std::string ReplicaSetConfig::kConfigServerFieldName = "configServer";
+const std::string ReplicaSetConfig::kConfigServerFieldName = "configsvr";
 const std::string ReplicaSetConfig::kVersionFieldName = "version";
 const std::string ReplicaSetConfig::kMajorityWriteConcernModeName = "$majority";
+const Milliseconds ReplicaSetConfig::kDefaultHeartbeatInterval(2000);
 const Seconds ReplicaSetConfig::kDefaultHeartbeatTimeoutPeriod(10);
+const Milliseconds ReplicaSetConfig::kDefaultElectionTimeoutPeriod(2000);
 
 namespace {
 
@@ -65,18 +67,14 @@ const std::string kLegalConfigTopFieldNames[] = {kIdFieldName,
                                                  kProtocolVersionFieldName,
                                                  ReplicaSetConfig::kConfigServerFieldName};
 
+const std::string kElectionTimeoutFieldName = "electionTimeoutMillis";
+const std::string kHeartbeatIntervalFieldName = "heartbeatIntervalMillis";
 const std::string kHeartbeatTimeoutFieldName = "heartbeatTimeoutSecs";
 const std::string kChainingAllowedFieldName = "chainingAllowed";
 const std::string kGetLastErrorDefaultsFieldName = "getLastErrorDefaults";
 const std::string kGetLastErrorModesFieldName = "getLastErrorModes";
 
 }  // namespace
-
-ReplicaSetConfig::ReplicaSetConfig()
-    : _isInitialized(false),
-      _heartbeatTimeoutPeriod(0),
-      _protocolVersion(0),
-      _configServer(false) {}
 
 Status ReplicaSetConfig::initialize(const BSONObj& cfg) {
     _isInitialized = false;
@@ -117,9 +115,11 @@ Status ReplicaSetConfig::initialize(const BSONObj& cfg) {
                                         << typeName(memberElement.type()));
         }
         _members.resize(_members.size() + 1);
-        status = _members.back().initialize(memberElement.Obj(), &_tagConfig);
+        const auto& memberBSON = memberElement.Obj();
+        status = _members.back().initialize(memberBSON, &_tagConfig);
         if (!status.isOK())
-            return status;
+            return Status(ErrorCodes::InvalidReplicaSetConfig,
+                          str::stream() << status.toString() << " for member:" << memberBSON);
     }
 
     //
@@ -152,6 +152,35 @@ Status ReplicaSetConfig::initialize(const BSONObj& cfg) {
 }
 
 Status ReplicaSetConfig::_parseSettingsSubdocument(const BSONObj& settings) {
+    //
+    // Parse heartbeatIntervalMillis
+    //
+    long long heartbeatIntervalMillis;
+    Status hbIntervalStatus =
+        bsonExtractIntegerFieldWithDefault(settings,
+                                           kHeartbeatIntervalFieldName,
+                                           durationCount<Milliseconds>(kDefaultHeartbeatInterval),
+                                           &heartbeatIntervalMillis);
+    if (!hbIntervalStatus.isOK()) {
+        return hbIntervalStatus;
+    }
+    _heartbeatInterval = Milliseconds(heartbeatIntervalMillis);
+
+    // Parse electionTimeoutMillis
+    //
+    BSONElement electionTimeoutMillisElement = settings[kElectionTimeoutFieldName];
+    if (electionTimeoutMillisElement.eoo()) {
+        _electionTimeoutPeriod = Milliseconds(kDefaultElectionTimeoutPeriod);
+    } else if (electionTimeoutMillisElement.isNumber()) {
+        _electionTimeoutPeriod = Milliseconds(electionTimeoutMillisElement.numberInt());
+    } else {
+        return Status(ErrorCodes::TypeMismatch,
+                      str::stream() << "Expected type of " << kSettingsFieldName << "."
+                                    << kElectionTimeoutFieldName
+                                    << " to be a number, but found a value of type "
+                                    << typeName(electionTimeoutMillisElement.type()));
+    }
+
     //
     // Parse heartbeatTimeoutSecs
     //
@@ -273,11 +302,26 @@ Status ReplicaSetConfig::validate() const {
                       str::stream() << "Replica set configuration must have non-empty "
                                     << kIdFieldName << " field");
     }
+    if (_heartbeatInterval < Milliseconds(0)) {
+        return Status(ErrorCodes::BadValue,
+                      str::stream() << kSettingsFieldName << '.' << kHeartbeatIntervalFieldName
+                                    << " field value must be non-negative, "
+                                       "but found "
+                                    << durationCount<Milliseconds>(_heartbeatInterval));
+    }
     if (_heartbeatTimeoutPeriod < Seconds(0)) {
         return Status(ErrorCodes::BadValue,
                       str::stream() << kSettingsFieldName << '.' << kHeartbeatTimeoutFieldName
                                     << " field value must be non-negative, "
-                                       "but found " << _heartbeatTimeoutPeriod.count());
+                                       "but found "
+                                    << durationCount<Seconds>(_heartbeatTimeoutPeriod));
+    }
+    if (_electionTimeoutPeriod < Milliseconds(0)) {
+        return Status(ErrorCodes::BadValue,
+                      str::stream() << kSettingsFieldName << '.' << kElectionTimeoutFieldName
+                                    << " field value must be non-negative, "
+                                       "but found "
+                                    << durationCount<Milliseconds>(_electionTimeoutPeriod));
     }
     if (_members.size() > kMaxMembers || _members.empty()) {
         return Status(ErrorCodes::BadValue,
@@ -383,11 +427,6 @@ Status ReplicaSetConfig::validate() const {
                           "Arbiters are not allowed in replica set configurations being used for "
                           "config servers");
         }
-        if (_protocolVersion < 1) {
-            return Status(ErrorCodes::BadValue,
-                          "Replica sets must have protocol version of at least 1 in order to be "
-                          "used as sharding config servers");
-        }
     }
 
     return Status::OK();
@@ -474,6 +513,10 @@ const MemberConfig* ReplicaSetConfig::findMemberByHostAndPort(const HostAndPort&
     return idx != -1 ? &getMemberAt(idx) : NULL;
 }
 
+Milliseconds ReplicaSetConfig::getHeartbeatInterval() const {
+    return _heartbeatInterval;
+}
+
 ReplicaSetTag ReplicaSetConfig::findTag(StringData key, StringData value) const {
     return _tagConfig.findTag(key, value);
 }
@@ -537,9 +580,8 @@ BSONObj ReplicaSetConfig::toBSON() const {
     BSONObjBuilder configBuilder;
     configBuilder.append(kIdFieldName, _replSetName);
     configBuilder.appendIntOrLL(kVersionFieldName, _version);
-    if (_protocolVersion > 0) {
-        // Don't include "configServer" field if protocol version is less than 1 to preserve
-        // backwards compatibility
+    if (_configServer) {
+        // Only include "configsvr" field if true
         configBuilder.append(kConfigServerFieldName, _configServer);
     }
 
@@ -551,7 +593,13 @@ BSONObj ReplicaSetConfig::toBSON() const {
 
     BSONObjBuilder settingsBuilder(configBuilder.subobjStart(kSettingsFieldName));
     settingsBuilder.append(kChainingAllowedFieldName, _chainingAllowed);
-    settingsBuilder.appendIntOrLL(kHeartbeatTimeoutFieldName, _heartbeatTimeoutPeriod.count());
+    settingsBuilder.appendIntOrLL(kHeartbeatIntervalFieldName,
+                                  durationCount<Milliseconds>(_heartbeatInterval));
+    settingsBuilder.appendIntOrLL(kHeartbeatTimeoutFieldName,
+                                  durationCount<Seconds>(_heartbeatTimeoutPeriod));
+    settingsBuilder.appendIntOrLL(kElectionTimeoutFieldName,
+                                  durationCount<Milliseconds>(_electionTimeoutPeriod));
+
 
     BSONObjBuilder gleModes(settingsBuilder.subobjStart(kGetLastErrorModesFieldName));
     for (StringMap<ReplicaSetTagPattern>::const_iterator mode = _customWriteConcernModes.begin();

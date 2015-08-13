@@ -48,6 +48,7 @@ class StatusWith;
 class LiteParsedQuery {
 public:
     static const char kFindCommandName[];
+    static const char kShardVersionField[];
 
     /**
      * Parses a find command object, 'cmdObj'. Caller must indicate whether or not this lite
@@ -91,6 +92,7 @@ public:
         boost::optional<long long> skip = boost::none,
         boost::optional<long long> limit = boost::none,
         boost::optional<long long> batchSize = boost::none,
+        boost::optional<long long> ntoreturn = boost::none,
         bool wantMore = true,
         bool isExplain = false,
         const std::string& comment = "",
@@ -113,6 +115,7 @@ public:
      * Converts this LPQ into a find command.
      */
     BSONObj asFindCommand() const;
+    void asFindCommand(BSONObjBuilder* cmdBuilder) const;
 
     /**
      * Helper functions to parse maxTimeMS from a command object.  Returns the contained value,
@@ -131,13 +134,6 @@ public:
      * Example: {a: {$meta: "textScore"}}
      */
     static bool isTextScoreMeta(BSONElement elt);
-
-    /**
-     * Helper function to identify recordId projection.
-     *
-     * Example: {a: {$meta: "recordId"}}.
-     */
-    static bool isRecordIdMeta(BSONElement elt);
 
     /**
      * Helper function to validate a sort object.
@@ -199,13 +195,20 @@ public:
     boost::optional<long long> getBatchSize() const {
         return _batchSize;
     }
+    boost::optional<long long> getNToReturn() const {
+        return _ntoreturn;
+    }
+
+    /**
+     * Returns batchSize or ntoreturn value if either is set. If neither is set,
+     * returns boost::none.
+     */
+    boost::optional<long long> getEffectiveBatchSize() const;
+
     bool wantMore() const {
         return _wantMore;
     }
 
-    bool isFromFindCommand() const {
-        return _fromCommand;
-    }
     bool isExplain() const {
         return _explain;
     }
@@ -354,7 +357,11 @@ private:
     // allowed.
     boost::optional<long long> _batchSize;
 
-    bool _fromCommand = false;
+    // Set only when parsed from an OP_QUERY find message. The value is computed by driver or shell
+    // and is set to be a min of batchSize and limit provided by user. LPQ can have set either
+    // ntoreturn or batchSize / limit.
+    boost::optional<long long> _ntoreturn;
+
     bool _explain = false;
 
     std::string _comment;

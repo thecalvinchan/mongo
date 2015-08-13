@@ -44,29 +44,33 @@ namespace mongo {
 // Global grid instance
 Grid grid;
 
-Grid::Grid() : _allowLocalShard(true) {}
+Grid::Grid() : _allowLocalShard(true), _catalogManagerLock("CatalogManagerLock") {}
 
 void Grid::init(std::unique_ptr<CatalogManager> catalogManager,
-                std::unique_ptr<ShardRegistry> shardRegistry) {
+                std::unique_ptr<ShardRegistry> shardRegistry,
+                std::unique_ptr<ClusterCursorManager> cursorManager) {
     invariant(!_catalogManager);
     invariant(!_catalogCache);
     invariant(!_shardRegistry);
+    invariant(!_cursorManager);
 
     _catalogManager = std::move(catalogManager);
-    _catalogCache = stdx::make_unique<CatalogCache>(_catalogManager.get());
+    _catalogCache = stdx::make_unique<CatalogCache>();
     _shardRegistry = std::move(shardRegistry);
+    _cursorManager = std::move(cursorManager);
 }
 
-StatusWith<std::shared_ptr<DBConfig>> Grid::implicitCreateDb(const std::string& dbName) {
-    auto status = catalogCache()->getDatabase(dbName);
+StatusWith<std::shared_ptr<DBConfig>> Grid::implicitCreateDb(OperationContext* txn,
+                                                             const std::string& dbName) {
+    auto status = catalogCache()->getDatabase(txn, dbName);
     if (status.isOK()) {
         return status;
     }
 
     if (status == ErrorCodes::DatabaseNotFound) {
-        auto statusCreateDb = catalogManager()->createDatabase(dbName);
+        auto statusCreateDb = catalogManager(txn)->createDatabase(dbName);
         if (statusCreateDb.isOK() || statusCreateDb == ErrorCodes::NamespaceExists) {
-            return catalogCache()->getDatabase(dbName);
+            return catalogCache()->getDatabase(txn, dbName);
         }
 
         return statusCreateDb;
@@ -100,8 +104,9 @@ bool Grid::shouldBalance(const SettingsType& balancerSettings) const {
     return true;
 }
 
-bool Grid::getConfigShouldBalance() const {
-    auto balSettingsResult = grid.catalogManager()->getGlobalSettings(SettingsType::BalancerDocKey);
+bool Grid::getConfigShouldBalance(OperationContext* txn) const {
+    auto balSettingsResult =
+        grid.catalogManager(txn)->getGlobalSettings(SettingsType::BalancerDocKey);
     if (!balSettingsResult.isOK()) {
         warning() << balSettingsResult.getStatus();
         return false;
@@ -122,6 +127,32 @@ void Grid::clearForUnitTests() {
 
     _shardRegistry->shutdown();
     _shardRegistry.reset();
+
+    _cursorManager.reset();
+}
+
+Grid::CatalogManagerGuard Grid::catalogManager(OperationContext* txn) {
+    return Grid::CatalogManagerGuard(txn, this);
+}
+
+Grid::CatalogManagerGuard::CatalogManagerGuard(OperationContext* txn, Grid* grid) : _grid(grid) {
+    _grid->_catalogManagerLock.lock_shared();
+}
+
+Grid::CatalogManagerGuard::~CatalogManagerGuard() {
+    _grid->_catalogManagerLock.unlock_shared();
+}
+
+CatalogManager* Grid::CatalogManagerGuard::operator->() const {
+    return get();
+}
+
+Grid::CatalogManagerGuard::operator bool() const {
+    return get();
+}
+
+CatalogManager* Grid::CatalogManagerGuard::get() const {
+    return _grid->_catalogManager.get();
 }
 
 }  // namespace mongo

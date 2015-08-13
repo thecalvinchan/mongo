@@ -43,7 +43,6 @@ usage_msg = "usage: %prog <cpp|js> /path/to/error_codes.err [options]"
 
 from optparse import OptionParser
 import sys
-
 def main(argv):
     generator = argv[1]
     error_codes, error_classes = parse_error_definitions_from_file(argv[2])

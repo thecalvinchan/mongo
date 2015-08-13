@@ -94,7 +94,10 @@ protected:
      * single request + response or find tests.
      */
     void onCommand(executor::NetworkTestEnv::OnCommandFunction func);
+    void onCommandWithMetadata(executor::NetworkTestEnv::OnCommandWithMetadataFunction func);
     void onFindCommand(executor::NetworkTestEnv::OnFindCommandFunction func);
+    void onFindWithMetadataCommand(
+        executor::NetworkTestEnv::OnFindCommandWithMetadataFunction func);
 
     /**
      * Setup the shard registry to contain the given shards until the next reload.
@@ -156,6 +159,13 @@ protected:
     void tearDown() override;
 
     void shutdownExecutor();
+
+    /**
+     * Checks that the given command has the expected settings for read after opTime.
+     */
+    void checkReadConcern(const BSONObj& cmdObj,
+                          const Timestamp& expectedTS,
+                          long long expectedTerm) const;
 
 private:
     std::unique_ptr<ServiceContext> _service;

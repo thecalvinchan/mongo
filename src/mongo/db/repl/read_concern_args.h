@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
 #include <string>
 
 #include "mongo/base/status.h"
@@ -40,6 +41,8 @@ class BSONObj;
 
 namespace repl {
 
+enum class ReadConcernLevel { kLocalReadConcern, kMajorityReadConcern, kLinearizableReadConcern };
+
 class ReadConcernArgs {
 public:
     static const std::string kReadConcernFieldName;
@@ -48,14 +51,8 @@ public:
     static const std::string kOpTimestampFieldName;
     static const std::string kLevelFieldName;
 
-    enum class ReadConcernLevel {
-        kLocalReadConcern,
-        kMajorityReadConcern,
-        kLinearizableReadConcern
-    };
-
     ReadConcernArgs();
-    ReadConcernArgs(OpTime opTime, ReadConcernLevel level);
+    ReadConcernArgs(boost::optional<OpTime> opTime, boost::optional<ReadConcernLevel> level);
 
     /**
      * Format:
@@ -70,12 +67,17 @@ public:
      */
     Status initialize(const BSONObj& cmdObj);
 
+    /**
+     * Appends level and afterOpTime.
+     */
+    void appendInfo(BSONObjBuilder* builder);
+
     ReadConcernLevel getLevel() const;
-    const OpTime& getOpTime() const;
+    OpTime getOpTime() const;
 
 private:
-    OpTime _opTime;
-    ReadConcernLevel _level;
+    boost::optional<OpTime> _opTime;
+    boost::optional<ReadConcernLevel> _level;
 };
 
 }  // namespace repl

@@ -101,6 +101,13 @@ elif usemozjs:
         'STATIC_JS_API=1',
     ])
 
+    scriptingEnv.JSHeader(
+        target='mozjs/mongohelpers_js.cpp',
+        source=[
+            'mozjs/mongohelpers.js'
+        ]
+    )
+
     scriptingEnv.Library(
         target='scripting',
         source=[
@@ -109,6 +116,7 @@ elif usemozjs:
             'mozjs/bson.cpp',
             'mozjs/countdownlatch.cpp',
             'mozjs/cursor.cpp',
+            'mozjs/cursor_handle.cpp',
             'mozjs/dbcollection.cpp',
             'mozjs/db.cpp',
             'mozjs/dbpointer.cpp',
@@ -125,9 +133,12 @@ elif usemozjs:
             'mozjs/maxkey.cpp',
             'mozjs/minkey.cpp',
             'mozjs/mongo.cpp',
+            'mozjs/mongohelpers.cpp',
+            'mozjs/mongohelpers_js.cpp',
             'mozjs/nativefunction.cpp',
             'mozjs/numberint.cpp',
             'mozjs/numberlong.cpp',
+            'mozjs/numberdecimal.cpp',
             'mozjs/object.cpp',
             'mozjs/objectwrapper.cpp',
             'mozjs/oid.cpp',

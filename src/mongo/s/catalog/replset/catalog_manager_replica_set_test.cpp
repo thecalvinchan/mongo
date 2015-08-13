@@ -38,6 +38,7 @@
 #include "mongo/db/query/lite_parsed_query.h"
 #include "mongo/executor/network_interface_mock.h"
 #include "mongo/executor/task_executor.h"
+#include "mongo/rpc/metadata/repl_set_metadata.h"
 #include "mongo/s/catalog/dist_lock_manager_mock.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set_test_fixture.h"
@@ -64,6 +65,7 @@ using executor::NetworkInterfaceMock;
 using executor::RemoteCommandRequest;
 using executor::RemoteCommandResponse;
 using executor::TaskExecutor;
+using rpc::ReplSetMetadata;
 using std::string;
 using std::vector;
 using stdx::chrono::milliseconds;
@@ -84,7 +86,9 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionExisting) {
         return assertGet(catalogManager()->getCollection(expectedColl.getNs().ns()));
     });
 
-    onFindCommand([&expectedColl](const RemoteCommandRequest& request) {
+    onFindCommand([this, &expectedColl](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), CollectionType::ConfigNS);
 
@@ -95,6 +99,8 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionExisting) {
         ASSERT_EQ(query->getFilter(), BSON(CollectionType::fullNs(expectedColl.getNs().ns())));
         ASSERT_EQ(query->getSort(), BSONObj());
         ASSERT_EQ(query->getLimit().get(), 1);
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{expectedColl.toBSON()};
     });
@@ -130,9 +136,11 @@ TEST_F(CatalogManagerReplSetTest, GetDatabaseExisting) {
         return assertGet(catalogManager()->getDatabase(expectedDb.getName()));
     });
 
-    onFindCommand([&expectedDb](const RemoteCommandRequest& request) {
+    onFindCommand([this, &expectedDb](const RemoteCommandRequest& request) {
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), DatabaseType::ConfigNS);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
@@ -140,6 +148,8 @@ TEST_F(CatalogManagerReplSetTest, GetDatabaseExisting) {
         ASSERT_EQ(query->getFilter(), BSON(DatabaseType::name(expectedDb.getName())));
         ASSERT_EQ(query->getSort(), BSONObj());
         ASSERT_EQ(query->getLimit().get(), 1);
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{expectedDb.toBSON()};
     });
@@ -295,7 +305,9 @@ TEST_F(CatalogManagerReplSetTest, GetAllShardsValid) {
         return shards;
     });
 
-    onFindCommand([&s1, &s2, &s3](const RemoteCommandRequest& request) {
+    onFindCommand([this, &s1, &s2, &s3](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), ShardType::ConfigNS);
 
@@ -305,6 +317,8 @@ TEST_F(CatalogManagerReplSetTest, GetAllShardsValid) {
         ASSERT_EQ(query->getFilter(), BSONObj());
         ASSERT_EQ(query->getSort(), BSONObj());
         ASSERT_FALSE(query->getLimit().is_initialized());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{s1.toBSON(), s2.toBSON(), s3.toBSON()};
     });
@@ -381,7 +395,9 @@ TEST_F(CatalogManagerReplSetTest, GetChunksForNSWithSortAndLimit) {
         return chunks;
     });
 
-    onFindCommand([&chunksQuery, chunkA, chunkB](const RemoteCommandRequest& request) {
+    onFindCommand([this, &chunksQuery, chunkA, chunkB](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), ChunkType::ConfigNS);
 
@@ -391,6 +407,8 @@ TEST_F(CatalogManagerReplSetTest, GetChunksForNSWithSortAndLimit) {
         ASSERT_EQ(query->getFilter(), chunksQuery);
         ASSERT_EQ(query->getSort(), BSON(ChunkType::version() << -1));
         ASSERT_EQ(query->getLimit().get(), 1);
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{chunkA.toBSON(), chunkB.toBSON()};
     });
@@ -419,7 +437,9 @@ TEST_F(CatalogManagerReplSetTest, GetChunksForNSNoSortNoLimit) {
         return chunks;
     });
 
-    onFindCommand([&chunksQuery](const RemoteCommandRequest& request) {
+    onFindCommand([this, &chunksQuery](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), ChunkType::ConfigNS);
 
@@ -429,6 +449,8 @@ TEST_F(CatalogManagerReplSetTest, GetChunksForNSNoSortNoLimit) {
         ASSERT_EQ(query->getFilter(), chunksQuery);
         ASSERT_EQ(query->getSort(), BSONObj());
         ASSERT_FALSE(query->getLimit().is_initialized());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{};
     });
@@ -482,8 +504,8 @@ TEST_F(CatalogManagerReplSetTest, RunUserManagementReadCommand) {
 
     auto future = launchAsync([this] {
         BSONObjBuilder responseBuilder;
-        bool ok =
-            catalogManager()->runReadCommand("test", BSON("usersInfo" << 1), &responseBuilder);
+        bool ok = catalogManager()->runUserManagementReadCommand(
+            "test", BSON("usersInfo" << 1), &responseBuilder);
         ASSERT_TRUE(ok);
 
         BSONObj response = responseBuilder.obj();
@@ -493,6 +515,8 @@ TEST_F(CatalogManagerReplSetTest, RunUserManagementReadCommand) {
     });
 
     onCommand([](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         ASSERT_EQUALS("test", request.dbname);
         ASSERT_EQUALS(BSON("usersInfo" << 1), request.cmdObj);
 
@@ -508,7 +532,8 @@ TEST_F(CatalogManagerReplSetTest, RunUserManagementReadCommandUnsatisfiedReadPre
         Status(ErrorCodes::FailedToSatisfyReadPreference, "no nodes up"));
 
     BSONObjBuilder responseBuilder;
-    bool ok = catalogManager()->runReadCommand("test", BSON("usersInfo" << 1), &responseBuilder);
+    bool ok = catalogManager()->runUserManagementReadCommand(
+        "test", BSON("usersInfo" << 1), &responseBuilder);
     ASSERT_FALSE(ok);
 
     Status commandStatus = Command::getStatusFromCommandResult(responseBuilder.obj());
@@ -570,6 +595,8 @@ TEST_F(CatalogManagerReplSetTest, RunUserManagementWriteCommandSuccess) {
         ASSERT_EQUALS(BSON("dropUser"
                            << "test"),
                       request.cmdObj);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         BSONObjBuilder responseBuilder;
         Command::appendCommandStatus(responseBuilder,
@@ -669,6 +696,8 @@ TEST_F(CatalogManagerReplSetTest, RunUserManagementWriteCommandNotMasterRetrySuc
                            << "test"),
                       request.cmdObj);
 
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         return BSON("ok" << 1);
     });
 
@@ -688,7 +717,9 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsBalancerDoc) {
         return assertGet(catalogManager()->getGlobalSettings(SettingsType::BalancerDocKey));
     });
 
-    onFindCommand([st1](const RemoteCommandRequest& request) {
+    onFindCommand([this, st1](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), SettingsType::ConfigNS);
 
@@ -696,6 +727,8 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsBalancerDoc) {
 
         ASSERT_EQ(query->ns(), SettingsType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(SettingsType::key(SettingsType::BalancerDocKey)));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{st1.toBSON()};
     });
@@ -716,7 +749,9 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsChunkSizeDoc) {
         return assertGet(catalogManager()->getGlobalSettings(SettingsType::ChunkSizeDocKey));
     });
 
-    onFindCommand([st1](const RemoteCommandRequest& request) {
+    onFindCommand([this, st1](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), SettingsType::ConfigNS);
 
@@ -724,6 +759,8 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsChunkSizeDoc) {
 
         ASSERT_EQ(query->ns(), SettingsType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(SettingsType::key(SettingsType::ChunkSizeDocKey)));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{st1.toBSON()};
     });
@@ -741,7 +778,9 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsInvalidDoc) {
         ASSERT_EQ(balSettings.getStatus(), ErrorCodes::FailedToParse);
     });
 
-    onFindCommand([](const RemoteCommandRequest& request) {
+    onFindCommand([this](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), SettingsType::ConfigNS);
 
@@ -749,6 +788,8 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsInvalidDoc) {
 
         ASSERT_EQ(query->ns(), SettingsType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(SettingsType::key("invalidKey")));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{
             BSON("invalidKey"
@@ -769,7 +810,9 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsNonExistent) {
         ASSERT_EQ(chunkSizeSettings.getStatus(), ErrorCodes::NoMatchingDocument);
     });
 
-    onFindCommand([](const RemoteCommandRequest& request) {
+    onFindCommand([this](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), SettingsType::ConfigNS);
 
@@ -777,6 +820,8 @@ TEST_F(CatalogManagerReplSetTest, GetGlobalSettingsNonExistent) {
 
         ASSERT_EQ(query->ns(), SettingsType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(SettingsType::key(SettingsType::ChunkSizeDocKey)));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{};
     });
@@ -820,7 +865,9 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionsValidResultsNoDb) {
         return collections;
     });
 
-    onFindCommand([coll1, coll2, coll3](const RemoteCommandRequest& request) {
+    onFindCommand([this, coll1, coll2, coll3](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), CollectionType::ConfigNS);
 
@@ -829,6 +876,8 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionsValidResultsNoDb) {
         ASSERT_EQ(query->ns(), CollectionType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSONObj());
         ASSERT_EQ(query->getSort(), BSONObj());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{coll1.toBSON(), coll2.toBSON(), coll3.toBSON()};
     });
@@ -867,7 +916,9 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionsValidResultsWithDb) {
         return collections;
     });
 
-    onFindCommand([coll1, coll2](const RemoteCommandRequest& request) {
+    onFindCommand([this, coll1, coll2](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), CollectionType::ConfigNS);
 
@@ -879,6 +930,8 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionsValidResultsWithDb) {
             b.appendRegex(CollectionType::fullNs(), "^test\\.");
             ASSERT_EQ(query->getFilter(), b.obj());
         }
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{coll1.toBSON(), coll2.toBSON()};
     });
@@ -910,9 +963,11 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionsInvalidCollectionType) {
     validColl.setKeyPattern(KeyPattern{BSON("_id" << 1)});
     ASSERT_OK(validColl.validate());
 
-    onFindCommand([validColl](const RemoteCommandRequest& request) {
+    onFindCommand([this, validColl](const RemoteCommandRequest& request) {
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), CollectionType::ConfigNS);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
@@ -922,6 +977,8 @@ TEST_F(CatalogManagerReplSetTest, GetCollectionsInvalidCollectionType) {
             b.appendRegex(CollectionType::fullNs(), "^test\\.");
             ASSERT_EQ(query->getFilter(), b.obj());
         }
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{
             validColl.toBSON(),
@@ -951,7 +1008,9 @@ TEST_F(CatalogManagerReplSetTest, GetDatabasesForShardValid) {
         return dbs;
     });
 
-    onFindCommand([dbt1, dbt2](const RemoteCommandRequest& request) {
+    onFindCommand([this, dbt1, dbt2](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), DatabaseType::ConfigNS);
 
@@ -960,6 +1019,8 @@ TEST_F(CatalogManagerReplSetTest, GetDatabasesForShardValid) {
         ASSERT_EQ(query->ns(), DatabaseType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(DatabaseType::primary(dbt1.getPrimary())));
         ASSERT_EQ(query->getSort(), BSONObj());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{dbt1.toBSON(), dbt2.toBSON()};
     });
@@ -1019,7 +1080,9 @@ TEST_F(CatalogManagerReplSetTest, GetTagsForCollection) {
         return tags;
     });
 
-    onFindCommand([tagA, tagB](const RemoteCommandRequest& request) {
+    onFindCommand([this, tagA, tagB](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), TagsType::ConfigNS);
 
@@ -1028,6 +1091,8 @@ TEST_F(CatalogManagerReplSetTest, GetTagsForCollection) {
         ASSERT_EQ(query->ns(), TagsType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(TagsType::ns("TestDB.TestColl")));
         ASSERT_EQ(query->getSort(), BSON(TagsType::min() << 1));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{tagA.toBSON(), tagB.toBSON()};
     });
@@ -1099,7 +1164,9 @@ TEST_F(CatalogManagerReplSetTest, GetTagForChunkOneTagFound) {
     auto future = launchAsync(
         [this, chunk] { return assertGet(catalogManager()->getTagForChunk("test.coll", chunk)); });
 
-    onFindCommand([chunk](const RemoteCommandRequest& request) {
+    onFindCommand([this, chunk](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), TagsType::ConfigNS);
 
@@ -1110,6 +1177,8 @@ TEST_F(CatalogManagerReplSetTest, GetTagForChunkOneTagFound) {
                   BSON(TagsType::ns(chunk.getNS())
                        << TagsType::min() << BSON("$lte" << chunk.getMin()) << TagsType::max()
                        << BSON("$gte" << chunk.getMax())));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         TagsType tt;
         tt.setNS("test.coll");
@@ -1139,7 +1208,9 @@ TEST_F(CatalogManagerReplSetTest, GetTagForChunkNoTagFound) {
     auto future = launchAsync(
         [this, chunk] { return assertGet(catalogManager()->getTagForChunk("test.coll", chunk)); });
 
-    onFindCommand([chunk](const RemoteCommandRequest& request) {
+    onFindCommand([this, chunk](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), TagsType::ConfigNS);
 
@@ -1150,6 +1221,8 @@ TEST_F(CatalogManagerReplSetTest, GetTagForChunkNoTagFound) {
                   BSON(TagsType::ns(chunk.getNS())
                        << TagsType::min() << BSON("$lte" << chunk.getMin()) << TagsType::max()
                        << BSON("$gte" << chunk.getMax())));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{};
     });
@@ -1176,7 +1249,9 @@ TEST_F(CatalogManagerReplSetTest, GetTagForChunkInvalidTagDoc) {
         ASSERT_EQ(ErrorCodes::FailedToParse, tagResult.getStatus());
     });
 
-    onFindCommand([chunk](const RemoteCommandRequest& request) {
+    onFindCommand([this, chunk](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.ns(), TagsType::ConfigNS);
 
@@ -1187,6 +1262,8 @@ TEST_F(CatalogManagerReplSetTest, GetTagForChunkInvalidTagDoc) {
                   BSON(TagsType::ns(chunk.getNS())
                        << TagsType::min() << BSON("$lte" << chunk.getMin()) << TagsType::max()
                        << BSON("$gte" << chunk.getMax())));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         // Return a tag document missing the min key
         return vector<BSONObj>{BSON(TagsType::ns("test.mycol") << TagsType::tag("tag")
@@ -1211,6 +1288,8 @@ TEST_F(CatalogManagerReplSetTest, UpdateDatabase) {
 
     onCommand([dbt](const RemoteCommandRequest& request) {
         ASSERT_EQUALS("config", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         BatchedUpdateRequest actualBatchedUpdate;
         std::string errmsg;
@@ -1284,6 +1363,9 @@ TEST_F(CatalogManagerReplSetTest, ApplyChunkOpsDeprecated) {
 
     onCommand([updateOps, preCondition](const RemoteCommandRequest& request) {
         ASSERT_EQUALS("config", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         ASSERT_EQUALS(updateOps, request.cmdObj["applyOps"].Obj());
         ASSERT_EQUALS(preCondition, request.cmdObj["preCondition"].Obj());
 
@@ -1315,6 +1397,8 @@ TEST_F(CatalogManagerReplSetTest, ApplyChunkOpsDeprecatedCommandFailed) {
         ASSERT_EQUALS("config", request.dbname);
         ASSERT_EQUALS(updateOps, request.cmdObj["applyOps"].Obj());
         ASSERT_EQUALS(preCondition, request.cmdObj["preCondition"].Obj());
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         BSONObjBuilder responseBuilder;
         Command::appendCommandStatus(responseBuilder,
@@ -1348,6 +1432,8 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseSuccess) {
 
     onFindCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQUALS(configHost, request.target);
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
@@ -1355,6 +1441,8 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseSuccess) {
         ASSERT_EQ(BSONObj(), query->getFilter());
         ASSERT_EQ(BSONObj(), query->getSort());
         ASSERT_FALSE(query->getLimit().is_initialized());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{s0.toBSON(), s1.toBSON(), s2.toBSON()};
     });
@@ -1388,7 +1476,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseSuccess) {
     onFindCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQUALS(configHost, request.target);
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
         ASSERT_EQ(DatabaseType::ConfigNS, nss.ns());
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
         return vector<BSONObj>{};
     });
 
@@ -1398,6 +1488,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseSuccess) {
         ASSERT_EQUALS("admin", request.dbname);
         string cmdName = request.cmdObj.firstElement().fieldName();
         ASSERT_EQUALS("listDatabases", cmdName);
+        ASSERT_FALSE(request.cmdObj.hasField(repl::ReadConcernArgs::kReadConcernFieldName));
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return BSON("ok" << 1 << "totalSize" << 10);
     });
@@ -1408,6 +1501,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseSuccess) {
         ASSERT_EQUALS("admin", request.dbname);
         string cmdName = request.cmdObj.firstElement().fieldName();
         ASSERT_EQUALS("listDatabases", cmdName);
+        ASSERT_FALSE(request.cmdObj.hasField(repl::ReadConcernArgs::kReadConcernFieldName));
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return BSON("ok" << 1 << "totalSize" << 1);
     });
@@ -1419,6 +1515,8 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseSuccess) {
         string cmdName = request.cmdObj.firstElement().fieldName();
         ASSERT_EQUALS("listDatabases", cmdName);
 
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
         return BSON("ok" << 1 << "totalSize" << 100);
     });
 
@@ -1426,6 +1524,8 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseSuccess) {
     onCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQUALS(configHost, request.target);
         ASSERT_EQUALS("config", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         BatchedInsertRequest actualBatchedInsert;
         std::string errmsg;
@@ -1490,7 +1590,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDBExists) {
         ASSERT_EQUALS(ErrorCodes::NamespaceExists, status);
     });
 
-    onFindCommand([dbname](const RemoteCommandRequest& request) {
+    onFindCommand([this, dbname](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
@@ -1500,6 +1602,7 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDBExists) {
 
         ASSERT_EQ(DatabaseType::ConfigNS, query->ns());
         ASSERT_EQ(queryBuilder.obj(), query->getFilter());
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{BSON("_id" << dbname)};
     });
@@ -1526,7 +1629,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDBExistsDifferentCase) {
         ASSERT_EQUALS(ErrorCodes::DatabaseDifferCase, status);
     });
 
-    onFindCommand([dbname, dbnameDiffCase](const RemoteCommandRequest& request) {
+    onFindCommand([this, dbname, dbnameDiffCase](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
@@ -1536,6 +1641,7 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDBExistsDifferentCase) {
 
         ASSERT_EQ(DatabaseType::ConfigNS, query->ns());
         ASSERT_EQ(queryBuilder.obj(), query->getFilter());
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{BSON("_id" << dbnameDiffCase)};
     });
@@ -1562,14 +1668,17 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseNoShards) {
     });
 
     // Report no databases with the same name already exist
-    onFindCommand([dbname](const RemoteCommandRequest& request) {
+    onFindCommand([this, dbname](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(DatabaseType::ConfigNS, nss.ns());
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
         return vector<BSONObj>{};
     });
 
     // Report no shards exist
-    onFindCommand([](const RemoteCommandRequest& request) {
+    onFindCommand([this](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
@@ -1577,6 +1686,8 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseNoShards) {
         ASSERT_EQ(BSONObj(), query->getFilter());
         ASSERT_EQ(BSONObj(), query->getSort());
         ASSERT_FALSE(query->getLimit().is_initialized());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{};
     });
@@ -1606,6 +1717,7 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDuplicateKeyOnInsert) {
 
     onFindCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQUALS(configHost, request.target);
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
@@ -1613,6 +1725,8 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDuplicateKeyOnInsert) {
         ASSERT_EQ(BSONObj(), query->getFilter());
         ASSERT_EQ(BSONObj(), query->getSort());
         ASSERT_FALSE(query->getLimit().is_initialized());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{s0.toBSON(), s1.toBSON(), s2.toBSON()};
     });
@@ -1645,8 +1759,10 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDuplicateKeyOnInsert) {
     // Report no databases with the same name already exist
     onFindCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQUALS(configHost, request.target);
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(DatabaseType::ConfigNS, nss.ns());
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
         return vector<BSONObj>{};
     });
 
@@ -1656,6 +1772,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDuplicateKeyOnInsert) {
         ASSERT_EQUALS("admin", request.dbname);
         string cmdName = request.cmdObj.firstElement().fieldName();
         ASSERT_EQUALS("listDatabases", cmdName);
+        ASSERT_FALSE(request.cmdObj.hasField(repl::ReadConcernArgs::kReadConcernFieldName));
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return BSON("ok" << 1 << "totalSize" << 10);
     });
@@ -1666,6 +1785,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDuplicateKeyOnInsert) {
         ASSERT_EQUALS("admin", request.dbname);
         string cmdName = request.cmdObj.firstElement().fieldName();
         ASSERT_EQUALS("listDatabases", cmdName);
+        ASSERT_FALSE(request.cmdObj.hasField(repl::ReadConcernArgs::kReadConcernFieldName));
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return BSON("ok" << 1 << "totalSize" << 1);
     });
@@ -1676,6 +1798,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDuplicateKeyOnInsert) {
         ASSERT_EQUALS("admin", request.dbname);
         string cmdName = request.cmdObj.firstElement().fieldName();
         ASSERT_EQUALS("listDatabases", cmdName);
+        ASSERT_FALSE(request.cmdObj.hasField(repl::ReadConcernArgs::kReadConcernFieldName));
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return BSON("ok" << 1 << "totalSize" << 100);
     });
@@ -1684,6 +1809,9 @@ TEST_F(CatalogManagerReplSetTest, createDatabaseDuplicateKeyOnInsert) {
     onCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQUALS(configHost, request.target);
         ASSERT_EQUALS("config", request.dbname);
+        ASSERT_FALSE(request.cmdObj.hasField(repl::ReadConcernArgs::kReadConcernFieldName));
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         BatchedInsertRequest actualBatchedInsert;
         std::string errmsg;
@@ -1741,7 +1869,8 @@ TEST_F(CatalogManagerReplSetTest, EnableShardingNoDBExists) {
     });
 
     // Query to find if db already exists in config.
-    onFindCommand([](const RemoteCommandRequest& request) {
+    onFindCommand([this](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(DatabaseType::ConfigNS, nss.toString());
 
@@ -1756,6 +1885,8 @@ TEST_F(CatalogManagerReplSetTest, EnableShardingNoDBExists) {
         ASSERT_EQ(BSONObj(), query->getSort());
         ASSERT_EQ(1, query->getLimit().get());
 
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
+
         return vector<BSONObj>{};
     });
 
@@ -1764,6 +1895,8 @@ TEST_F(CatalogManagerReplSetTest, EnableShardingNoDBExists) {
         ASSERT_EQ(HostAndPort("shard0:12"), request.target);
         ASSERT_EQ("admin", request.dbname);
         ASSERT_EQ(BSON("listDatabases" << 1), request.cmdObj);
+
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
         return fromjson(R"({
                 databases: [],
@@ -1775,6 +1908,8 @@ TEST_F(CatalogManagerReplSetTest, EnableShardingNoDBExists) {
     onCommand([](const RemoteCommandRequest& request) {
         ASSERT_EQ(HostAndPort("config:123"), request.target);
         ASSERT_EQ("config", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         BSONObj expectedCmd(fromjson(R"({
             update: "databases",
@@ -1871,6 +2006,8 @@ TEST_F(CatalogManagerReplSetTest, EnableShardingDBExists) {
         ASSERT_EQ(HostAndPort("config:123"), request.target);
         ASSERT_EQ("config", request.dbname);
 
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         BSONObj expectedCmd(fromjson(R"({
             update: "databases",
             updates: [{
@@ -1946,6 +2083,225 @@ TEST_F(CatalogManagerReplSetTest, EnableShardingNoDBExistsNoShards) {
     onFindCommand([](const RemoteCommandRequest& request) { return vector<BSONObj>{}; });
 
     future.timed_get(kFutureTimeout);
+}
+
+TEST_F(CatalogManagerReplSetTest, BasicReadAfterOpTime) {
+    configTargeter()->setFindHostReturnValue(HostAndPort("TestHost1"));
+
+    repl::OpTime lastOpTime;
+    for (int x = 0; x < 3; x++) {
+        auto future = launchAsync([this] {
+            BSONObjBuilder responseBuilder;
+            ASSERT_TRUE(
+                catalogManager()->runReadCommand("test", BSON("dummy" << 1), &responseBuilder));
+        });
+
+        const repl::OpTime newOpTime(Timestamp(x + 2, x + 6), x + 5);
+
+        onCommandWithMetadata([this, &newOpTime, &lastOpTime](const RemoteCommandRequest& request) {
+            ASSERT_EQUALS("test", request.dbname);
+
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
+            ASSERT_EQ(string("dummy"), request.cmdObj.firstElementFieldName());
+            checkReadConcern(request.cmdObj, lastOpTime.getTimestamp(), lastOpTime.getTerm());
+
+            ReplSetMetadata metadata(12, newOpTime, repl::OpTime(), 100, 3);
+            BSONObjBuilder builder;
+            metadata.writeToMetadata(&builder);
+
+            return RemoteCommandResponse(BSON("ok" << 1), builder.obj(), Milliseconds(1));
+        });
+
+        // Now wait for the runReadCommand call to return
+        future.timed_get(kFutureTimeout);
+
+        lastOpTime = newOpTime;
+    }
+}
+
+TEST_F(CatalogManagerReplSetTest, ReadAfterOpTimeShouldNotGoBack) {
+    configTargeter()->setFindHostReturnValue(HostAndPort("TestHost1"));
+
+    // Initialize the internal config OpTime
+    auto future1 = launchAsync([this] {
+        BSONObjBuilder responseBuilder;
+        ASSERT_TRUE(catalogManager()->runReadCommand("test", BSON("dummy" << 1), &responseBuilder));
+    });
+
+    repl::OpTime highestOpTime;
+    const repl::OpTime newOpTime(Timestamp(7, 6), 5);
+
+    onCommandWithMetadata([this, &newOpTime, &highestOpTime](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS("test", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
+        ASSERT_EQ(string("dummy"), request.cmdObj.firstElementFieldName());
+        checkReadConcern(request.cmdObj, highestOpTime.getTimestamp(), highestOpTime.getTerm());
+
+        ReplSetMetadata metadata(12, newOpTime, repl::OpTime(), 100, 3);
+        BSONObjBuilder builder;
+        metadata.writeToMetadata(&builder);
+
+        return RemoteCommandResponse(BSON("ok" << 1), builder.obj(), Milliseconds(1));
+    });
+
+    future1.timed_get(kFutureTimeout);
+
+    highestOpTime = newOpTime;
+
+    // Return an older OpTime
+    auto future2 = launchAsync([this] {
+        BSONObjBuilder responseBuilder;
+        ASSERT_TRUE(catalogManager()->runReadCommand("test", BSON("dummy" << 1), &responseBuilder));
+    });
+
+    const repl::OpTime oldOpTime(Timestamp(3, 10), 5);
+
+    onCommandWithMetadata([this, &oldOpTime, &highestOpTime](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS("test", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
+        ASSERT_EQ(string("dummy"), request.cmdObj.firstElementFieldName());
+        checkReadConcern(request.cmdObj, highestOpTime.getTimestamp(), highestOpTime.getTerm());
+
+        ReplSetMetadata metadata(12, oldOpTime, repl::OpTime(), 100, 3);
+        BSONObjBuilder builder;
+        metadata.writeToMetadata(&builder);
+
+        return RemoteCommandResponse(BSON("ok" << 1), builder.obj(), Milliseconds(1));
+    });
+
+    future2.timed_get(kFutureTimeout);
+
+    // Check that older OpTime does not override highest OpTime
+    auto future3 = launchAsync([this] {
+        BSONObjBuilder responseBuilder;
+        ASSERT_TRUE(catalogManager()->runReadCommand("test", BSON("dummy" << 1), &responseBuilder));
+    });
+
+    onCommandWithMetadata([this, &oldOpTime, &highestOpTime](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS("test", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
+        ASSERT_EQ(string("dummy"), request.cmdObj.firstElementFieldName());
+        checkReadConcern(request.cmdObj, highestOpTime.getTimestamp(), highestOpTime.getTerm());
+
+        ReplSetMetadata metadata(12, oldOpTime, repl::OpTime(), 100, 3);
+        BSONObjBuilder builder;
+        metadata.writeToMetadata(&builder);
+
+        return RemoteCommandResponse(BSON("ok" << 1), builder.obj(), Milliseconds(1));
+    });
+
+    future3.timed_get(kFutureTimeout);
+}
+
+TEST_F(CatalogManagerReplSetTest, ReadAfterOpTimeFindThenCmd) {
+    configTargeter()->setFindHostReturnValue(HostAndPort("TestHost1"));
+
+    auto future1 = launchAsync(
+        [this] { ASSERT_OK(catalogManager()->getGlobalSettings("chunksize").getStatus()); });
+
+    repl::OpTime highestOpTime;
+    const repl::OpTime newOpTime(Timestamp(7, 6), 5);
+
+    onFindWithMetadataCommand(
+        [this, &newOpTime, &highestOpTime](const RemoteCommandRequest& request) {
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+            checkReadConcern(request.cmdObj, highestOpTime.getTimestamp(), highestOpTime.getTerm());
+
+            ReplSetMetadata metadata(12, newOpTime, repl::OpTime(), 100, 3);
+            BSONObjBuilder builder;
+            metadata.writeToMetadata(&builder);
+
+            SettingsType settings;
+            settings.setKey("chunksize");
+            settings.setChunkSizeMB(2);
+
+            return std::make_tuple(vector<BSONObj>{settings.toBSON()}, builder.obj());
+        });
+
+    future1.timed_get(kFutureTimeout);
+
+    highestOpTime = newOpTime;
+
+    // Return an older OpTime
+    auto future2 = launchAsync([this] {
+        BSONObjBuilder responseBuilder;
+        ASSERT_TRUE(catalogManager()->runReadCommand("test", BSON("dummy" << 1), &responseBuilder));
+    });
+
+    const repl::OpTime oldOpTime(Timestamp(3, 10), 5);
+
+    onCommand([this, &oldOpTime, &highestOpTime](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS("test", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
+        ASSERT_EQ(string("dummy"), request.cmdObj.firstElementFieldName());
+        checkReadConcern(request.cmdObj, highestOpTime.getTimestamp(), highestOpTime.getTerm());
+
+        return BSON("ok" << 1);
+    });
+
+    future2.timed_get(kFutureTimeout);
+}
+
+TEST_F(CatalogManagerReplSetTest, ReadAfterOpTimeCmdThenFind) {
+    configTargeter()->setFindHostReturnValue(HostAndPort("TestHost1"));
+
+    // Initialize the internal config OpTime
+    auto future1 = launchAsync([this] {
+        BSONObjBuilder responseBuilder;
+        ASSERT_TRUE(catalogManager()->runReadCommand("test", BSON("dummy" << 1), &responseBuilder));
+    });
+
+    repl::OpTime highestOpTime;
+    const repl::OpTime newOpTime(Timestamp(7, 6), 5);
+
+    onCommandWithMetadata([this, &newOpTime, &highestOpTime](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS("test", request.dbname);
+
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
+        ASSERT_EQ(string("dummy"), request.cmdObj.firstElementFieldName());
+        checkReadConcern(request.cmdObj, highestOpTime.getTimestamp(), highestOpTime.getTerm());
+
+        ReplSetMetadata metadata(12, newOpTime, repl::OpTime(), 100, 3);
+        BSONObjBuilder builder;
+        metadata.writeToMetadata(&builder);
+
+        return RemoteCommandResponse(BSON("ok" << 1), builder.obj(), Milliseconds(1));
+    });
+
+    future1.timed_get(kFutureTimeout);
+
+    highestOpTime = newOpTime;
+
+    // Return an older OpTime
+    auto future2 = launchAsync(
+        [this] { ASSERT_OK(catalogManager()->getGlobalSettings("chunksize").getStatus()); });
+
+    const repl::OpTime oldOpTime(Timestamp(3, 10), 5);
+
+    onFindCommand([this, &oldOpTime, &highestOpTime](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
+        ASSERT_EQ(string("find"), request.cmdObj.firstElementFieldName());
+        checkReadConcern(request.cmdObj, highestOpTime.getTimestamp(), highestOpTime.getTerm());
+
+        SettingsType settings;
+        settings.setKey("chunksize");
+        settings.setChunkSizeMB(2);
+
+        return vector<BSONObj>{settings.toBSON()};
+    });
+
+    future2.timed_get(kFutureTimeout);
 }
 
 }  // namespace

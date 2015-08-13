@@ -58,12 +58,12 @@ public:
 
     static const size_t kMaxMembers = 50;
     static const size_t kMaxVotingMembers = 7;
+
+    // TODO: Consider returning different default heartbeat interval based on protocol version.
+    static const Milliseconds kDefaultElectionTimeoutPeriod;
+    static const Milliseconds kDefaultHeartbeatInterval;
     static const Seconds kDefaultHeartbeatTimeoutPeriod;
 
-    ReplicaSetConfig();
-    std::string asBson() {
-        return "";
-    }
     /**
      * Initializes this ReplicaSetConfig from the contents of "cfg".
      */
@@ -164,6 +164,21 @@ public:
      */
     const WriteConcernOptions& getDefaultWriteConcern() const {
         return _defaultWriteConcern;
+    }
+
+    /**
+     * Interval between the time the last heartbeat from a node was received successfully, or
+     * the time when we gave up retrying, and when the next heartbeat should be sent to a target.
+     * Returns default heartbeat interval if this configuration is not initialized.
+     */
+    Milliseconds getHeartbeatInterval() const;
+
+    /**
+     * Gets the timeout for determining when the current PRIMARY is dead, which triggers a node to
+     * run for election.
+     */
+    Milliseconds getElectionTimeoutPeriod() const {
+        return _electionTimeoutPeriod;
     }
 
     /**
@@ -278,20 +293,22 @@ private:
      */
     void _addInternalWriteConcernModes();
 
-    bool _isInitialized;
+    bool _isInitialized = false;
     long long _version;
     std::string _replSetName;
     std::vector<MemberConfig> _members;
     WriteConcernOptions _defaultWriteConcern;
-    Seconds _heartbeatTimeoutPeriod;
+    Milliseconds _electionTimeoutPeriod = Milliseconds(2000);
+    Milliseconds _heartbeatInterval = kDefaultHeartbeatInterval;
+    Seconds _heartbeatTimeoutPeriod = Seconds(0);
     bool _chainingAllowed;
     int _majorityVoteCount;
     int _writeMajority;
     int _totalVotingMembers;
     ReplicaSetTagConfig _tagConfig;
     StringMap<ReplicaSetTagPattern> _customWriteConcernModes;
-    long long _protocolVersion;
-    bool _configServer;
+    long long _protocolVersion = 0;
+    bool _configServer = false;
 };
 
 

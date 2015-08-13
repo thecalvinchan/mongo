@@ -53,8 +53,6 @@ public:
 
     Status startup() override;
 
-    ConnectionString connectionString() const override;
-
     void shutDown() override;
 
     Status shardCollection(OperationContext* txn,
@@ -72,6 +70,8 @@ public:
     StatusWith<CollectionType> getCollection(const std::string& collNs) override;
 
     Status getCollections(const std::string* dbName, std::vector<CollectionType>* collections);
+
+    Status dropCollection(OperationContext* txn, const NamespaceString& ns) override;
 
     Status getDatabasesForShard(const std::string& shardName,
                                 std::vector<std::string>* dbs) override;
@@ -101,6 +101,10 @@ public:
                         const BSONObj& cmdObj,
                         BSONObjBuilder* result) override;
 
+    bool runUserManagementReadCommand(const std::string& dbname,
+                                      const BSONObj& cmdObj,
+                                      BSONObjBuilder* result) override;
+
     Status applyChunkOpsDeprecated(const BSONArray& updateOps,
                                    const BSONArray& preCondition) override;
 
@@ -116,14 +120,14 @@ public:
     void writeConfigServerDirect(const BatchedCommandRequest& request,
                                  BatchedCommandResponse* response) override;
 
-    DistLockManager* getDistLockManager() const override;
+    DistLockManager* getDistLockManager() override;
 
     Status checkAndUpgrade(bool checkOnly) override;
 
 private:
-    Status _checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) const override;
+    Status _checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) override;
 
-    StatusWith<std::string> _generateNewShardName() const override;
+    StatusWith<std::string> _generateNewShardName() override;
 
     /**
      * Starts the thread that periodically checks data consistency amongst the config servers.

@@ -43,6 +43,7 @@
 #include "mongo/db/repl/storage_interface.h"
 #include "mongo/db/repl/update_position_args.h"
 #include "mongo/db/service_context.h"
+#include "mongo/db/storage/snapshot_name.h"
 #include "mongo/platform/atomic_word.h"
 #include "mongo/platform/unordered_map.h"
 #include "mongo/platform/unordered_set.h"
@@ -55,6 +56,10 @@ namespace mongo {
 class Timer;
 template <typename T>
 class StatusWith;
+
+namespace rpc {
+class ReplSetMetadata;
+}  // namespace rpc
 
 namespace repl {
 
@@ -187,7 +192,7 @@ public:
 
     virtual void processReplSetGetConfig(BSONObjBuilder* result) override;
 
-    virtual void processReplicationMetadata(const ReplicationMetadata& replMetadata) override;
+    virtual void processReplSetMetadata(const rpc::ReplSetMetadata& replMetadata) override;
 
     virtual Status setMaintenanceMode(bool activate) override;
 
@@ -253,7 +258,8 @@ public:
     virtual Status processReplSetDeclareElectionWinner(const ReplSetDeclareElectionWinnerArgs& args,
                                                        long long* responseTerm) override;
 
-    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder);
+    void prepareReplResponseMetadata(const rpc::RequestInterface&,
+                                     BSONObjBuilder* builder) override;
 
     virtual Status processHeartbeatV1(const ReplSetHeartbeatArgsV1& args,
                                       ReplSetHeartbeatResponse* response) override;
@@ -270,7 +276,11 @@ public:
 
     virtual Status updateTerm(long long term) override;
 
-    virtual void onSnapshotCreate(OpTime timeOfSnapshot) override;
+    virtual SnapshotName reserveSnapshotName(OperationContext* txn) override;
+
+    virtual void forceSnapshotCreation() override;
+
+    virtual void onSnapshotCreate(OpTime timeOfSnapshot, SnapshotName name) override;
 
     // ================== Test support API ===================
 
@@ -297,7 +307,47 @@ public:
 
     bool updateTerm_forTest(long long term);
 
+    /**
+     * If called after _startElectSelfV1(), blocks until all asynchronous
+     * activities associated with election complete.
+     */
+    void waitForElectionFinish_forTest();
+
+    /**
+     * If called after _startElectSelfV1(), blocks until all asynchronous
+     * activities associated with election dry run complete, including writing
+     * last vote and scheduling the real election.
+     */
+    void waitForElectionDryRunFinish_forTest();
+
 private:
+    struct SnapshotInfo {
+        OpTime opTime;
+        SnapshotName name;
+
+        bool operator==(const SnapshotInfo& other) const {
+            return std::tie(opTime, name) == std::tie(other.opTime, other.name);
+        }
+        bool operator!=(const SnapshotInfo& other) const {
+            return std::tie(opTime, name) != std::tie(other.opTime, other.name);
+        }
+        bool operator<(const SnapshotInfo& other) const {
+            return std::tie(opTime, name) < std::tie(other.opTime, other.name);
+        }
+        bool operator<=(const SnapshotInfo& other) const {
+            return std::tie(opTime, name) <= std::tie(other.opTime, other.name);
+        }
+        bool operator>(const SnapshotInfo& other) const {
+            return std::tie(opTime, name) > std::tie(other.opTime, other.name);
+        }
+        bool operator>=(const SnapshotInfo& other) const {
+            return std::tie(opTime, name) >= std::tie(other.opTime, other.name);
+        }
+    };
+
+    class LoseElectionGuardV1;
+    class LoseElectionDryRunGuardV1;
+
     ReplicationCoordinatorImpl(const ReplSettings& settings,
                                ReplicationCoordinatorExternalState* externalState,
                                TopologyCoordinator* topCoord,
@@ -497,7 +547,7 @@ private:
      * Bottom half of prepareReplResponseMetadata.
      */
     void _prepareReplResponseMetadata_finish(const ReplicationExecutor::CallbackArgs& cbData,
-                                             BSONObjBuilder* objBuilder);
+                                             rpc::ReplSetMetadata* metadata);
     /**
      * Scheduled to cause the ReplicationCoordinator to reconsider any state that might
      * need to change as a result of time passing - for instance becoming PRIMARY when a single
@@ -515,12 +565,17 @@ private:
         stdx::unique_lock<stdx::mutex>* lock,
         OperationContext* txn,
         const OpTime& opTime,
+        SnapshotName minSnapshot,
         const WriteConcernOptions& writeConcern);
 
-    /*
+    /**
      * Returns true if the given writeConcern is satisfied up to "optime" or is unsatisfiable.
+     *
+     * If the writeConcern is 'majority', also waits for _currentCommittedSnapshot to be newer than
+     * minSnapshot.
      */
     bool _doneWaitingForReplication_inlock(const OpTime& opTime,
+                                           SnapshotName minSnapshot,
                                            const WriteConcernOptions& writeConcern);
 
     /**
@@ -678,7 +733,8 @@ private:
      */
     void _finishLoadLocalConfig(const ReplicationExecutor::CallbackArgs& cbData,
                                 const ReplicaSetConfig& localConfig,
-                                const StatusWith<OpTime>& lastOpTimeStatus);
+                                const StatusWith<OpTime>& lastOpTimeStatus,
+                                const StatusWith<LastVote>& lastVoteStatus);
 
     /**
      * Callback that finishes the work of processReplSetInitiate() inside the replication
@@ -729,6 +785,8 @@ private:
      * For V1 (raft) style elections the election path is:
      *      _startElectSelfV1()
      *      _onDryRunComplete()
+     *      _writeLastVoteForMyElection()
+     *      _startVoteRequester()
      *      _onVoteRequestComplete()
      *      _onElectionWinnerDeclarerComplete()
      */
@@ -754,6 +812,18 @@ private:
      * changed, do not run for election.
      */
     void _onDryRunComplete(long long originalTerm);
+
+    /**
+     * Writes the last vote in persistent storage after completing dry run successfully.
+     * This job will be scheduled to run in DB worker threads.
+     */
+    void _writeLastVoteForMyElection(LastVote lastVote,
+                                     const ReplicationExecutor::CallbackArgs& cbData);
+
+    /**
+     * Starts VoteRequester to run the real election when last vote write has completed.
+     */
+    void _startVoteRequester(long long newTerm);
 
     /**
      * Callback called when the VoteRequester has completed; checks the results and
@@ -888,6 +958,12 @@ private:
      */
     void _getTerm_helper(const ReplicationExecutor::CallbackArgs& cbData, long long* term);
 
+    /**
+     * This is used to set a floor of "newOpTime" on the OpTimes we will consider committed.
+     * This prevents entries from before our election from counting as committed in our view,
+     * until our election (the "newOpTime" op) has been committed.
+     */
+    void _setFirstOpTimeOfMyTerm(const OpTime& newOpTime);
 
     /**
      * Callback that attempts to set the current term in topology coordinator and
@@ -903,18 +979,18 @@ private:
     bool _updateTerm_incallback(long long term, Handle* cbHandle);
 
     /**
-     * Callback that processes the ReplicationMetadata returned from a command run against another
+     * Callback that processes the ReplSetMetadata returned from a command run against another
      * replica set member and updates protocol version 1 information (most recent optime that is
      * committed, member id of the current PRIMARY, the current config version and the current term)
      */
-    void _processReplicationMetadata_helper(const ReplicationExecutor::CallbackArgs& cbData,
-                                            const ReplicationMetadata& replMetadata);
-    void _processReplicationMetadata_incallback(const ReplicationMetadata& replMetadata);
+    void _processReplSetMetadata_helper(const ReplicationExecutor::CallbackArgs& cbData,
+                                        const rpc::ReplSetMetadata& replMetadata);
+    void _processReplSetMetadata_incallback(const rpc::ReplSetMetadata& replMetadata);
 
     /**
      * Blesses a snapshot to be used for new committed reads.
      */
-    void _updateCommittedSnapshot_inlock(OpTime newCommittedSnapshot);
+    void _updateCommittedSnapshot_inlock(SnapshotInfo newCommittedSnapshot);
 
     /**
      * Drops all snapshots and clears the "committed" snapshot.
@@ -1041,6 +1117,10 @@ private:
     // Unspecified value when _freshnessChecker is NULL.
     ReplicationExecutor::EventHandle _electionFinishedEvent;  // (X)
 
+    // Event that the election code will signal when the in-progress election dry run completes,
+    // which includes writing the last vote and scheduling the real election.
+    ReplicationExecutor::EventHandle _electionDryRunFinishedEvent;  // (X)
+
     // Whether we slept last time we attempted an election but possibly tied with other nodes.
     bool _sleptLastElection;  // (X)
 
@@ -1059,15 +1139,27 @@ private:
     // OpTime of the latest committed operation. Matches the concurrency level of _slaveInfo.
     OpTime _lastCommittedOpTime;  // (M)
 
+    // OpTime representing our transition to PRIMARY and the start of our term.
+    // _lastCommittedOpTime cannot be set to an earlier OpTime.
+    OpTime _firstOpTimeOfMyTerm;  // (M)
+
     // Data Replicator used to replicate data
     DataReplicator _dr;  // (S)
 
-    // The OpTimes for all snapshots newer than the current commit point, kept in sorted order.
-    std::deque<OpTime> _uncommittedSnapshots;  // (M)
+    // Hands out the next snapshot name.
+    AtomicUInt64 _snapshotNameGenerator;  // (S)
 
-    // The non-null OpTime of the current snapshot used for committed reads, if there is one. When
-    // engaged, this must be <= _lastCommittedOpTime and < _uncommittedSnapshots.front().
-    boost::optional<OpTime> _currentCommittedSnapshot;  // (M)
+    // The OpTimes and SnapshotNames for all snapshots newer than the current commit point, kept in
+    // sorted order.
+    std::deque<SnapshotInfo> _uncommittedSnapshots;  // (M)
+
+    // The non-null OpTime and SnapshotName of the current snapshot used for committed reads, if
+    // there is one.
+    // When engaged, this must be <= _lastCommittedOpTime and < _uncommittedSnapshots.front().
+    boost::optional<SnapshotInfo> _currentCommittedSnapshot;  // (M)
+
+    // The cached current term. It's in sync with the term in topology coordinator.
+    long long _cachedTerm = OpTime::kProtocolVersionV0Term;  // (M)
 };
 
 }  // namespace repl

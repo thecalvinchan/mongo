@@ -31,6 +31,7 @@
 #include "mongo/base/status.h"
 #include "mongo/db/repl/optime.h"
 #include "mongo/db/repl/replication_coordinator.h"
+#include "mongo/platform/atomic_word.h"
 
 namespace mongo {
 namespace repl {
@@ -130,7 +131,7 @@ public:
 
     virtual void processReplSetGetConfig(BSONObjBuilder* result);
 
-    virtual void processReplicationMetadata(const ReplicationMetadata& replMetadata);
+    virtual void processReplSetMetadata(const rpc::ReplSetMetadata& replMetadata);
 
     virtual Status setMaintenanceMode(bool activate);
 
@@ -191,7 +192,8 @@ public:
     virtual Status processReplSetDeclareElectionWinner(const ReplSetDeclareElectionWinnerArgs& args,
                                                        long long* responseTerm);
 
-    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder);
+    void prepareReplResponseMetadata(const rpc::RequestInterface& request,
+                                     BSONObjBuilder* builder) override;
 
     virtual Status processHeartbeatV1(const ReplSetHeartbeatArgsV1& args,
                                       ReplSetHeartbeatResponse* response);
@@ -204,11 +206,16 @@ public:
 
     virtual Status updateTerm(long long term);
 
-    virtual void onSnapshotCreate(OpTime timeOfSnapshot);
+    virtual SnapshotName reserveSnapshotName(OperationContext* txn);
+
+    virtual void forceSnapshotCreation() override;
+
+    virtual void onSnapshotCreate(OpTime timeOfSnapshot, SnapshotName name);
 
     virtual void dropAllSnapshots() override;
 
 private:
+    AtomicUInt64 _snapshotNameGenerator;
     const ReplSettings _settings;
     MemberState _memberState;
     OpTime _myLastOpTime;

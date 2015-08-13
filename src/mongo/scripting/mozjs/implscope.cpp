@@ -37,6 +37,7 @@
 
 #include "mongo/base/error_codes.h"
 #include "mongo/db/operation_context.h"
+#include "mongo/platform/decimal128.h"
 #include "mongo/scripting/mozjs/objectwrapper.h"
 #include "mongo/scripting/mozjs/valuereader.h"
 #include "mongo/scripting/mozjs/valuewriter.h"
@@ -114,10 +115,9 @@ void MozJSImplScope::_reportError(JSContext* cx, const char* message, JSErrorRep
             ss << " :\n" << ValueWriter(cx, stack).toString();
         }
 
-        scope->_status =
-            Status(report->errorNumber ? static_cast<ErrorCodes::Error>(report->errorNumber)
-                                       : ErrorCodes::JSInterpreterFailure,
-                   ss);
+        scope->_status = Status(
+            JSErrorReportToStatus(cx, report, ErrorCodes::JSInterpreterFailure, message).code(),
+            ss);
     }
 }
 
@@ -232,6 +232,7 @@ MozJSImplScope::MozJSImplScope(MozJSScriptEngine* engine)
       _bsonProto(_context),
       _countDownLatchProto(_context),
       _cursorProto(_context),
+      _cursorHandleProto(_context),
       _dbCollectionProto(_context),
       _dbPointerProto(_context),
       _dbQueryProto(_context),
@@ -241,10 +242,12 @@ MozJSImplScope::MozJSImplScope(MozJSScriptEngine* engine)
       _maxKeyProto(_context),
       _minKeyProto(_context),
       _mongoExternalProto(_context),
+      _mongoHelpersProto(_context),
       _mongoLocalProto(_context),
       _nativeFunctionProto(_context),
       _numberIntProto(_context),
       _numberLongProto(_context),
+      _numberDecimalProto(_context),
       _objectProto(_context),
       _oidProto(_context),
       _regExpProto(_context),
@@ -277,6 +280,7 @@ MozJSImplScope::MozJSImplScope(MozJSScriptEngine* engine)
 
     // install global utility functions
     installGlobalUtils(*this);
+    _mongoHelpersProto.install(_global);
 }
 
 MozJSImplScope::~MozJSImplScope() {
@@ -356,6 +360,12 @@ long long MozJSImplScope::getNumberLongLong(const char* field) {
     return ObjectWrapper(_context, _global).getNumberLongLong(field);
 }
 
+Decimal128 MozJSImplScope::getNumberDecimal(const char* field) {
+    MozJSEntry entry(this);
+
+    return ObjectWrapper(_context, _global).getNumberDecimal(field);
+}
+
 std::string MozJSImplScope::getString(const char* field) {
     MozJSEntry entry(this);
 
@@ -421,22 +431,11 @@ bool hasFunctionIdentifier(StringData code) {
     return code[8] == ' ' || code[8] == '(';
 }
 
-// TODO: This function identification code is broken.  Fix it up to be more robust
-//
-// See: SERVER-16703 for more info
 void MozJSImplScope::_MozJSCreateFunction(const char* raw,
                                           ScriptingFunction functionNumber,
                                           JS::MutableHandleValue fun) {
-    std::string code = jsSkipWhiteSpace(raw);
-    if (!hasFunctionIdentifier(code)) {
-        if (code.find('\n') == std::string::npos && !hasJSReturn(code) &&
-            (code.find(';') == std::string::npos || code.find(';') == code.size() - 1)) {
-            code = "return " + code;
-        }
-        code = "function(){ " + code + "}";
-    }
-
-    code = str::stream() << "_funcs" << functionNumber << " = " << code;
+    std::string code = str::stream() << "_funcs" << functionNumber << " = "
+                                     << parseJSFunctionOrExpression(_context, StringData(raw));
 
     JS::CompileOptions co(_context);
     setCompileOptions(&co);
@@ -670,6 +669,9 @@ void MozJSImplScope::installBSONTypes() {
     _nativeFunctionProto.install(_global);
     _numberIntProto.install(_global);
     _numberLongProto.install(_global);
+    if (Decimal128::enabled) {
+        _numberDecimalProto.install(_global);
+    }
     _objectProto.install(_global);
     _oidProto.install(_global);
     _regExpProto.install(_global);
@@ -682,6 +684,7 @@ void MozJSImplScope::installBSONTypes() {
 
 void MozJSImplScope::installDBAccess() {
     _cursorProto.install(_global);
+    _cursorHandleProto.install(_global);
     _dbProto.install(_global);
     _dbQueryProto.install(_global);
     _dbCollectionProto.install(_global);

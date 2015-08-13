@@ -48,8 +48,7 @@ const char* DistinctScan::kStageType = "DISTINCT_SCAN";
 DistinctScan::DistinctScan(OperationContext* txn,
                            const DistinctParams& params,
                            WorkingSet* workingSet)
-    : PlanStage(kStageType),
-      _txn(txn),
+    : PlanStage(kStageType, txn),
       _workingSet(workingSet),
       _descriptor(params.descriptor),
       _iam(params.descriptor->getIndexCatalog()->getIndex(params.descriptor)),
@@ -58,6 +57,12 @@ DistinctScan::DistinctScan(OperationContext* txn,
     _specificStats.keyPattern = _params.descriptor->keyPattern();
     _specificStats.indexName = _params.descriptor->indexName();
     _specificStats.indexVersion = _params.descriptor->version();
+    _specificStats.isMultiKey = _params.descriptor->isMultikey(getOpCtx());
+    _specificStats.isUnique = _params.descriptor->unique();
+    _specificStats.isSparse = _params.descriptor->isSparse();
+    _specificStats.isPartial = _params.descriptor->isPartial();
+    _specificStats.indexBounds = _params.bounds.toBSON();
+    _specificStats.direction = _params.direction;
 
     // Set up our initial seek. If there is no valid data, just mark as EOF.
     _commonStats.isEOF = !_checker.getStartSeekPoint(&_seekPoint);
@@ -74,7 +79,7 @@ PlanStage::StageState DistinctScan::work(WorkingSetID* out) {
     boost::optional<IndexKeyEntry> kv;
     try {
         if (!_cursor)
-            _cursor = _iam->newCursor(_txn, _params.direction == 1);
+            _cursor = _iam->newCursor(getOpCtx(), _params.direction == 1);
         kv = _cursor->seek(_seekPoint);
     } catch (const WriteConflictException& wce) {
         *out = WorkingSet::INVALID_ID;
@@ -140,16 +145,13 @@ void DistinctScan::doRestoreState() {
 }
 
 void DistinctScan::doDetachFromOperationContext() {
-    _txn = NULL;
     if (_cursor)
         _cursor->detachFromOperationContext();
 }
 
-void DistinctScan::doReattachToOperationContext(OperationContext* opCtx) {
-    invariant(_txn == NULL);
-    _txn = opCtx;
+void DistinctScan::doReattachToOperationContext() {
     if (_cursor)
-        _cursor->reattachToOperationContext(opCtx);
+        _cursor->reattachToOperationContext(getOpCtx());
 }
 
 unique_ptr<PlanStageStats> DistinctScan::getStats() {

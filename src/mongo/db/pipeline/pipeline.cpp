@@ -33,6 +33,7 @@
 #include "mongo/db/pipeline/pipeline_optimizations.h"
 
 #include "mongo/db/auth/action_set.h"
+#include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/auth/privilege.h"
 #include "mongo/db/catalog/document_validation.h"
 #include "mongo/db/commands.h"
@@ -304,22 +305,24 @@ void Pipeline::Optimizations::Local::duplicateMatchBeforeInitalRedact(Pipeline* 
     }
 }
 
-void Pipeline::addRequiredPrivileges(Command* commandTemplate,
-                                     const string& db,
-                                     BSONObj cmdObj,
-                                     vector<Privilege>* out) {
+Status Pipeline::checkAuthForCommand(ClientBasic* client,
+                                     const std::string& db,
+                                     const BSONObj& cmdObj) {
     NamespaceString inputNs(db, cmdObj.firstElement().str());
     auto inputResource = ResourcePattern::forExactNamespace(inputNs);
     uassert(17138,
             mongoutils::str::stream() << "Invalid input namespace, " << inputNs.ns(),
             inputNs.isValid());
 
-    out->push_back(Privilege(inputResource, ActionType::find));
+    std::vector<Privilege> privileges;
+    Privilege::addPrivilegeToPrivilegeVector(&privileges,
+                                             Privilege(inputResource, ActionType::find));
 
     BSONObj pipeline = cmdObj.getObjectField("pipeline");
     BSONForEach(stageElem, pipeline) {
         BSONObj stage = stageElem.embeddedObjectUserCheck();
-        if (str::equals(stage.firstElementFieldName(), "$out")) {
+        StringData stageName = stage.firstElementFieldName();
+        if (stageName == "$out" && stage.firstElementType() == String) {
             NamespaceString outputNs(db, stage.firstElement().str());
             uassert(17139,
                     mongoutils::str::stream() << "Invalid $out target namespace, " << outputNs.ns(),
@@ -331,10 +334,19 @@ void Pipeline::addRequiredPrivileges(Command* commandTemplate,
             if (shouldBypassDocumentValidationForCommand(cmdObj)) {
                 actions.addAction(ActionType::bypassDocumentValidation);
             }
-
-            out->push_back(Privilege(ResourcePattern::forExactNamespace(outputNs), actions));
+            Privilege::addPrivilegeToPrivilegeVector(
+                &privileges, Privilege(ResourcePattern::forExactNamespace(outputNs), actions));
+        } else if (stageName == "$lookUp" && stage.firstElementType() == Object) {
+            NamespaceString fromNs(db, stage.firstElement()["from"].str());
+            Privilege::addPrivilegeToPrivilegeVector(
+                &privileges,
+                Privilege(ResourcePattern::forExactNamespace(fromNs), ActionType::find));
         }
     }
+
+    if (AuthorizationSession::get(client)->isAuthorizedForPrivileges(privileges))
+        return Status::OK();
+    return Status(ErrorCodes::Unauthorized, "unauthorized");
 }
 
 intrusive_ptr<Pipeline> Pipeline::splitForSharded() {
@@ -434,13 +446,21 @@ BSONObj Pipeline::getInitialQuery() const {
     return match->getQuery();
 }
 
-bool Pipeline::hasOutStage() const {
-    if (sources.empty()) {
-        return false;
+bool Pipeline::needsPrimaryShardMerger() const {
+    for (auto&& source : sources) {
+        if (source->needsPrimaryShard()) {
+            return true;
+        }
     }
+    return false;
+}
 
-    // The $out stage must be the last one in the pipeline, so check if the last stage is $out.
-    return dynamic_cast<DocumentSourceOut*>(sources.back().get());
+std::vector<NamespaceString> Pipeline::getInvolvedCollections() const {
+    std::vector<NamespaceString> collections;
+    for (auto&& source : sources) {
+        source->addInvolvedCollections(&collections);
+    }
+    return collections;
 }
 
 Document Pipeline::serialize() const {

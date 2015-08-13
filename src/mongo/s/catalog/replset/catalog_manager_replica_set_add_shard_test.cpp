@@ -36,6 +36,7 @@
 #include "mongo/client/remote_command_targeter_factory_mock.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/query/lite_parsed_query.h"
+#include "mongo/rpc/metadata/repl_set_metadata.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set_test_fixture.h"
 #include "mongo/s/catalog/type_changelog.h"
@@ -78,6 +79,8 @@ protected:
             ASSERT_EQ(request.dbname, "admin");
             ASSERT_EQ(request.cmdObj, BSON("isdbgrid" << 1));
 
+            ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
             BSONObjBuilder responseBuilder;
             Command::appendCommandStatus(
                 responseBuilder, Status(ErrorCodes::CommandNotFound, "isdbgrid command not found"));
@@ -90,6 +93,8 @@ protected:
             ASSERT_EQ(request.dbname, "admin");
             ASSERT_EQ(request.cmdObj, BSON("isMaster" << 1));
 
+            ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
             return BSON("ismaster" << true);
         });
 
@@ -97,6 +102,8 @@ protected:
             ASSERT_EQ(request.target, HostAndPort("StandaloneHost:12345"));
             ASSERT_EQ(request.dbname, "admin");
             ASSERT_EQ(request.cmdObj, BSON("replSetGetStatus" << 1));
+
+            ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
 
             BSONObjBuilder responseBuilder;
             Command::appendCommandStatus(
@@ -115,6 +122,8 @@ protected:
         onCommand([&dbtExpected](const RemoteCommandRequest& request) {
             const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
             ASSERT_EQ(nss.ns(), DatabaseType::ConfigNS);
+
+            ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
             BatchedUpdateRequest actualBatchedUpdate;
             std::string errmsg;
@@ -185,6 +194,8 @@ TEST_F(AddShardTest, AddShardStandalone) {
             ASSERT_EQ(request.dbname, "admin");
             ASSERT_EQ(request.cmdObj, BSON("listDatabases" << 1));
 
+            ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
             BSONArrayBuilder arr;
 
             arr.append(BSON("name"
@@ -204,6 +215,7 @@ TEST_F(AddShardTest, AddShardStandalone) {
     // in the previous call, in the config server metadata
     onFindCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQ(request.target, configHost);
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.toString(), DatabaseType::ConfigNS);
@@ -213,16 +225,22 @@ TEST_F(AddShardTest, AddShardStandalone) {
         ASSERT_EQ(query->ns(), DatabaseType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(DatabaseType::name("TestDB1")));
 
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
+
         return vector<BSONObj>{};
     });
 
-    onFindCommand([](const RemoteCommandRequest& request) {
+    onFindCommand([this](const RemoteCommandRequest& request) {
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.toString(), DatabaseType::ConfigNS);
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
         ASSERT_EQ(query->ns(), DatabaseType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(DatabaseType::name("TestDB2")));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{};
     });
@@ -290,6 +308,8 @@ TEST_F(AddShardTest, AddShardStandaloneGenerateName) {
             ASSERT_EQ(request.dbname, "admin");
             ASSERT_EQ(request.cmdObj, BSON("listDatabases" << 1));
 
+            ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
             BSONArrayBuilder arr;
 
             arr.append(BSON("name"
@@ -309,6 +329,7 @@ TEST_F(AddShardTest, AddShardStandaloneGenerateName) {
     // in the previous call, in the config server metadata
     onFindCommand([&](const RemoteCommandRequest& request) {
         ASSERT_EQ(request.target, configHost);
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
 
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.toString(), DatabaseType::ConfigNS);
@@ -318,16 +339,22 @@ TEST_F(AddShardTest, AddShardStandaloneGenerateName) {
         ASSERT_EQ(query->ns(), DatabaseType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(DatabaseType::name("TestDB1")));
 
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
+
         return vector<BSONObj>{};
     });
 
-    onFindCommand([](const RemoteCommandRequest& request) {
+    onFindCommand([this](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.toString(), DatabaseType::ConfigNS);
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
         ASSERT_EQ(query->ns(), DatabaseType::ConfigNS);
         ASSERT_EQ(query->getFilter(), BSON(DatabaseType::name("TestDB2")));
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{};
     });
@@ -338,12 +365,15 @@ TEST_F(AddShardTest, AddShardStandaloneGenerateName) {
     existingShard.setMaxSizeMB(100);
 
     // New name is being generated for the new shard
-    onFindCommand([&existingShard](const RemoteCommandRequest& request) {
+    onFindCommand([this, &existingShard](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.toString(), ShardType::ConfigNS);
         auto query = assertGet(LiteParsedQuery::makeFromFindCommand(nss, request.cmdObj, false));
 
         ASSERT_EQ(query->ns(), ShardType::ConfigNS);
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         return vector<BSONObj>{existingShard.toBSON()};
     });

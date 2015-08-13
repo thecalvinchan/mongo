@@ -26,6 +26,7 @@
  *    it in the license file.
  */
 
+#include "mongo/bson/json.h"
 #include "mongo/bson/mutable/document.h"
 #include "mongo/bson/mutable/element.h"
 #include "mongo/db/jsobj.h"
@@ -35,6 +36,23 @@
 namespace mongo {
 namespace repl {
 namespace {
+
+// Creates a bson document reprsenting a replica set config doc with the given members, and votes
+BSONObj createConfigDoc(int members, int voters = ReplicaSetConfig::kMaxVotingMembers) {
+    str::stream configJson;
+    configJson << "{_id:'rs0', version:1, members:[";
+    for (int i = 0; i < members; ++i) {
+        configJson << "{_id:" << i << ", host:'node" << i << "'";
+        if (i >= voters) {
+            configJson << ", votes:0, priority:0";
+        }
+        configJson << "}";
+        if (i != (members - 1))
+            configJson << ",";
+    }
+    configJson << "]}";
+    return fromjson(configJson);
+}
 
 TEST(ReplicaSetConfig, ParseMinimalConfigAndCheckDefaults) {
     ReplicaSetConfig config;
@@ -50,7 +68,9 @@ TEST(ReplicaSetConfig, ParseMinimalConfigAndCheckDefaults) {
     ASSERT_EQUALS(0, config.membersBegin()->getId());
     ASSERT_EQUALS(1, config.getDefaultWriteConcern().wNumNodes);
     ASSERT_EQUALS("", config.getDefaultWriteConcern().wMode);
+    ASSERT_EQUALS(ReplicaSetConfig::kDefaultHeartbeatInterval, config.getHeartbeatInterval());
     ASSERT_EQUALS(Seconds(10), config.getHeartbeatTimeoutPeriod());
+    ASSERT_EQUALS(Seconds(2), config.getElectionTimeoutPeriod());
     ASSERT_TRUE(config.isChainingAllowed());
     ASSERT_FALSE(config.isConfigServer());
     ASSERT_EQUALS(0, config.getProtocolVersion());
@@ -69,7 +89,8 @@ TEST(ReplicaSetConfig, ParseLargeConfigAndCheckAccessors) {
                               << BSON("w"
                                       << "majority") << "getLastErrorModes"
                               << BSON("eastCoast" << BSON("NYC" << 1)) << "chainingAllowed" << false
-                              << "heartbeatTimeoutSecs" << 120 << "protocolVersion" << 2))));
+                              << "heartbeatIntervalMillis" << 5000 << "heartbeatTimeoutSecs" << 120
+                              << "electionTimeoutMillis" << 10 << "protocolVersion" << 2))));
     ASSERT_OK(config.validate());
     ASSERT_EQUALS("rs0", config.getReplSetName());
     ASSERT_EQUALS(1234, config.getConfigVersion());
@@ -79,7 +100,9 @@ TEST(ReplicaSetConfig, ParseLargeConfigAndCheckAccessors) {
     ASSERT_EQUALS("majority", config.getDefaultWriteConcern().wMode);
     ASSERT_FALSE(config.isChainingAllowed());
     ASSERT_FALSE(config.isConfigServer());
+    ASSERT_EQUALS(Seconds(5), config.getHeartbeatInterval());
     ASSERT_EQUALS(Seconds(120), config.getHeartbeatTimeoutPeriod());
+    ASSERT_EQUALS(Milliseconds(10), config.getElectionTimeoutPeriod());
     ASSERT_EQUALS(2, config.getProtocolVersion());
 }
 
@@ -96,10 +119,10 @@ TEST(ReplicaSetConfig, MajorityCalculationThreeVotersNoArbiters) {
                                                                                     << "h3:1")
                                              << BSON("_id" << 4 << "host"
                                                            << "h4:1"
-                                                           << "votes" << 0)
+                                                           << "votes" << 0 << "priority" << 0)
                                              << BSON("_id" << 5 << "host"
                                                            << "h5:1"
-                                                           << "votes" << 0)))));
+                                                           << "votes" << 0 << "priority" << 0)))));
     ASSERT_OK(config.validate());
 
     ASSERT_EQUALS(2, config.getWriteMajority());
@@ -129,31 +152,6 @@ TEST(ReplicaSetConfig, MajorityCalculationNearlyHalfArbiters) {
     ASSERT_EQUALS(3, config.getWriteMajority());
 }
 
-TEST(ReplicaSetConfig, MajorityCalculationNearlyHalfArbitersOthersNoVote) {
-    ReplicaSetConfig config;
-    ASSERT_OK(
-        config.initialize(BSON("_id"
-                               << "mySet"
-                               << "version" << 2 << "members"
-                               << BSON_ARRAY(BSON("host"
-                                                  << "node1:12345"
-                                                  << "_id" << 0 << "votes" << 0)
-                                             << BSON("host"
-                                                     << "node2:12345"
-                                                     << "_id" << 1 << "votes" << 0)
-                                             << BSON("host"
-                                                     << "node3:12345"
-                                                     << "_id" << 2 << "votes" << 0)
-                                             << BSON("host"
-                                                     << "node4:12345"
-                                                     << "_id" << 3 << "arbiterOnly" << true)
-                                             << BSON("host"
-                                                     << "node5:12345"
-                                                     << "_id" << 4 << "arbiterOnly" << true)))));
-    ASSERT_OK(config.validate());
-    ASSERT_EQUALS(0, config.getWriteMajority());
-}
-
 TEST(ReplicaSetConfig, MajorityCalculationEvenNumberOfMembers) {
     ReplicaSetConfig config;
     ASSERT_OK(config.initialize(BSON("_id"
@@ -180,20 +178,21 @@ TEST(ReplicaSetConfig, MajorityCalculationNearlyHalfSecondariesNoVotes) {
         config.initialize(BSON("_id"
                                << "mySet"
                                << "version" << 2 << "members"
-                               << BSON_ARRAY(BSON("host"
-                                                  << "node1:12345"
-                                                  << "_id" << 0)
-                                             << BSON("host"
-                                                     << "node2:12345"
-                                                     << "_id" << 1 << "votes" << 0)
-                                             << BSON("host"
-                                                     << "node3:12345"
-                                                     << "_id" << 2 << "votes" << 0)
-                                             << BSON("host"
-                                                     << "node4:12345"
-                                                     << "_id" << 3) << BSON("host"
-                                                                            << "node5:12345"
-                                                                            << "_id" << 4)))));
+                               << BSON_ARRAY(
+                                      BSON("host"
+                                           << "node1:12345"
+                                           << "_id" << 0)
+                                      << BSON("host"
+                                              << "node2:12345"
+                                              << "_id" << 1 << "votes" << 0 << "priority" << 0)
+                                      << BSON("host"
+                                              << "node3:12345"
+                                              << "_id" << 2 << "votes" << 0 << "priority" << 0)
+                                      << BSON("host"
+                                              << "node4:12345"
+                                              << "_id" << 3) << BSON("host"
+                                                                     << "node5:12345"
+                                                                     << "_id" << 4)))));
     ASSERT_OK(config.validate());
     ASSERT_EQUALS(2, config.getWriteMajority());
 }
@@ -272,8 +271,7 @@ TEST(ReplicaSetConfig, ParseFailsWithBadMembers) {
                                          << BSON_ARRAY(BSON("_id" << 0 << "host"
                                                                   << "localhost:12345")
                                                        << "localhost:23456"))));
-    ASSERT_EQUALS(ErrorCodes::NoSuchKey,
-                  config.initialize(BSON("_id"
+    ASSERT_NOT_OK(config.initialize(BSON("_id"
                                          << "rs0"
                                          << "version" << 1 << "members"
                                          << BSON_ARRAY(BSON("host"
@@ -350,15 +348,16 @@ TEST(ReplicaSetConfig, ParseFailsWithNoElectableNodes) {
 
 TEST(ReplicaSetConfig, ParseFailsWithTooFewVoters) {
     ReplicaSetConfig config;
-    const BSONObj configBsonNoVoters = BSON("_id"
-                                            << "rs0"
-                                            << "version" << 1 << "members"
-                                            << BSON_ARRAY(BSON("_id" << 0 << "host"
-                                                                     << "localhost:1"
-                                                                     << "votes" << 0)
-                                                          << BSON("_id" << 1 << "host"
-                                                                        << "localhost:2"
-                                                                        << "votes" << 0)));
+    const BSONObj configBsonNoVoters =
+        BSON("_id"
+             << "rs0"
+             << "version" << 1 << "members"
+             << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                      << "localhost:1"
+                                      << "votes" << 0 << "priority" << 0)
+                           << BSON("_id" << 1 << "host"
+                                         << "localhost:2"
+                                         << "votes" << 0 << "priority" << 0)));
 
     ASSERT_OK(config.initialize(configBsonNoVoters));
     ASSERT_EQUALS(ErrorCodes::BadValue, config.validate());
@@ -368,7 +367,8 @@ TEST(ReplicaSetConfig, ParseFailsWithTooFewVoters) {
                                             << "version" << 1 << "members"
                                             << BSON_ARRAY(BSON("_id" << 0 << "host"
                                                                      << "localhost:1"
-                                                                     << "votes" << 0)
+                                                                     << "votes" << 0 << "priority"
+                                                                     << 0)
                                                           << BSON("_id" << 1 << "host"
                                                                         << "localhost:2"
                                                                         << "votes" << 1)));
@@ -378,32 +378,10 @@ TEST(ReplicaSetConfig, ParseFailsWithTooFewVoters) {
 
 TEST(ReplicaSetConfig, ParseFailsWithTooManyVoters) {
     ReplicaSetConfig config;
-    namespace mmb = mutablebson;
-    mmb::Document configDoc;
-    mmb::Element configDocRoot = configDoc.root();
-    ASSERT_OK(configDocRoot.appendString("_id", "rs0"));
-    ASSERT_OK(configDocRoot.appendInt("version", 1));
-    mmb::Element membersArray = configDoc.makeElementArray("members");
-    ASSERT_OK(configDocRoot.pushBack(membersArray));
-    for (size_t i = 0; i < ReplicaSetConfig::kMaxVotingMembers + 1; ++i) {
-        mmb::Element memberElement = configDoc.makeElementObject("");
-        ASSERT_OK(membersArray.pushBack(memberElement));
-        ASSERT_OK(memberElement.appendInt("_id", i));
-        ASSERT_OK(
-            memberElement.appendString("host", std::string(str::stream() << "localhost" << i + 1)));
-        ASSERT_OK(memberElement.appendInt("votes", 1));
-    }
-
-    const BSONObj configBsonTooManyVoters = configDoc.getObject();
-
-    membersArray.leftChild().findFirstChildNamed("votes").setValueInt(0);
-    const BSONObj configBsonMaxVoters = configDoc.getObject();
-
-
-    ASSERT_OK(config.initialize(configBsonMaxVoters));
+    ASSERT_OK(config.initialize(createConfigDoc(8, ReplicaSetConfig::kMaxVotingMembers)));
     ASSERT_OK(config.validate());
-    ASSERT_OK(config.initialize(configBsonTooManyVoters));
-    ASSERT_EQUALS(ErrorCodes::BadValue, config.validate());
+    ASSERT_OK(config.initialize(createConfigDoc(8, ReplicaSetConfig::kMaxVotingMembers + 1)));
+    ASSERT_NOT_OK(config.validate());
 }
 
 TEST(ReplicaSetConfig, ParseFailsWithDuplicateHost) {
@@ -436,6 +414,7 @@ TEST(ReplicaSetConfig, ParseFailsWithTooManyNodes) {
             memberElement.appendString("host", std::string(str::stream() << "localhost" << i + 1)));
         if (i >= ReplicaSetConfig::kMaxVotingMembers) {
             ASSERT_OK(memberElement.appendInt("votes", 0));
+            ASSERT_OK(memberElement.appendInt("priority", 0));
         }
     }
     const BSONObj configBsonMaxNodes = configDoc.getObject();
@@ -446,6 +425,7 @@ TEST(ReplicaSetConfig, ParseFailsWithTooManyNodes) {
     ASSERT_OK(memberElement.appendString(
         "host", std::string(str::stream() << "localhost" << ReplicaSetConfig::kMaxMembers + 1)));
     ASSERT_OK(memberElement.appendInt("votes", 0));
+    ASSERT_OK(memberElement.appendInt("priority", 0));
     const BSONObj configBsonTooManyNodes = configDoc.getObject();
 
 
@@ -470,6 +450,35 @@ TEST(ReplicaSetConfig, ParseFailsWithNonArrayMembersField) {
                                            << "rs0"
                                            << "version" << 1 << "members"
                                            << "value"));
+    ASSERT_EQUALS(ErrorCodes::TypeMismatch, status);
+}
+
+TEST(ReplicaSetConfig, ParseFailsWithNonNumericHeartbeatIntervalMillisField) {
+    ReplicaSetConfig config;
+    Status status = config.initialize(BSON("_id"
+                                           << "rs0"
+                                           << "version" << 1 << "members"
+                                           << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                                                    << "localhost:12345"))
+                                           << "settings" << BSON("heartbeatIntervalMillis"
+                                                                 << "no")));
+    ASSERT_EQUALS(ErrorCodes::TypeMismatch, status);
+
+    ASSERT_FALSE(config.isInitialized());
+
+    // Uninitialized configuration should return default heartbeat interval.
+    ASSERT_EQUALS(ReplicaSetConfig::kDefaultHeartbeatInterval, config.getHeartbeatInterval());
+}
+
+TEST(ReplicaSetConfig, ParseFailsWithNonNumericElectionTimeoutMillisField) {
+    ReplicaSetConfig config;
+    Status status = config.initialize(BSON("_id"
+                                           << "rs0"
+                                           << "version" << 1 << "members"
+                                           << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                                                    << "localhost:12345"))
+                                           << "settings" << BSON("electionTimeoutMillis"
+                                                                 << "no")));
     ASSERT_EQUALS(ErrorCodes::TypeMismatch, status);
 }
 
@@ -504,7 +513,7 @@ TEST(ReplicaSetConfig, ParseFailsWithNonBoolConfigServerField) {
                                << "rs0"
                                << "version" << 1 << "members"
                                << BSON_ARRAY(BSON("_id" << 0 << "host"
-                                                        << "localhost:12345")) << "configServer"
+                                                        << "localhost:12345")) << "configsvr"
                                << "no"));
     ASSERT_EQUALS(ErrorCodes::TypeMismatch, status);
 }
@@ -681,22 +690,11 @@ TEST(ReplicaSetConfig, ChainingAllowedField) {
     ASSERT_FALSE(config.isChainingAllowed());
 }
 
-TEST(ReplicaSetConfig, ConfigServerFieldDoesntWorkWithOldProtocol) {
-    ReplicaSetConfig config;
-    ASSERT_OK(config.initialize(BSON("_id"
-                                     << "rs0"
-                                     << "version" << 1 << "configServer" << true << "members"
-                                     << BSON_ARRAY(BSON("_id" << 0 << "host"
-                                                              << "localhost:12345")))));
-    ASSERT_NOT_OK(config.validate());
-}
-
 TEST(ReplicaSetConfig, ConfigServerField) {
     ReplicaSetConfig config;
     ASSERT_OK(config.initialize(BSON("_id"
                                      << "rs0"
-                                     << "version" << 1 << "configServer" << true << "settings"
-                                     << BSON("protocolVersion" << 1) << "members"
+                                     << "version" << 1 << "configsvr" << true << "members"
                                      << BSON_ARRAY(BSON("_id" << 0 << "host"
                                                               << "localhost:12345")))));
     ASSERT_OK(config.validate());
@@ -704,11 +702,51 @@ TEST(ReplicaSetConfig, ConfigServerField) {
 
     ASSERT_OK(config.initialize(BSON("_id"
                                      << "rs0"
-                                     << "version" << 1 << "configServer" << false << "members"
+                                     << "version" << 1 << "configsvr" << false << "members"
                                      << BSON_ARRAY(BSON("_id" << 0 << "host"
                                                               << "localhost:12345")))));
     ASSERT_OK(config.validate());
     ASSERT_FALSE(config.isConfigServer());
+}
+
+TEST(ReplicaSetConfig, HeartbeatIntervalField) {
+    ReplicaSetConfig config;
+    ASSERT_OK(config.initialize(BSON("_id"
+                                     << "rs0"
+                                     << "version" << 1 << "members"
+                                     << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                                              << "localhost:12345")) << "settings"
+                                     << BSON("heartbeatIntervalMillis" << 5000))));
+    ASSERT_OK(config.validate());
+    ASSERT_EQUALS(Seconds(5), config.getHeartbeatInterval());
+
+    ASSERT_OK(config.initialize(BSON("_id"
+                                     << "rs0"
+                                     << "version" << 1 << "members"
+                                     << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                                              << "localhost:12345")) << "settings"
+                                     << BSON("heartbeatIntervalMillis" << -5000))));
+    ASSERT_EQUALS(ErrorCodes::BadValue, config.validate());
+}
+
+TEST(ReplicaSetConfig, ElectionTimeoutField) {
+    ReplicaSetConfig config;
+    ASSERT_OK(config.initialize(BSON("_id"
+                                     << "rs0"
+                                     << "version" << 1 << "members"
+                                     << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                                              << "localhost:12345")) << "settings"
+                                     << BSON("electionTimeoutMillis" << 20))));
+    ASSERT_OK(config.validate());
+    ASSERT_EQUALS(Milliseconds(20), config.getElectionTimeoutPeriod());
+
+    ASSERT_OK(config.initialize(BSON("_id"
+                                     << "rs0"
+                                     << "version" << 1 << "members"
+                                     << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                                              << "localhost:12345")) << "settings"
+                                     << BSON("electionTimeoutMillis" << -20))));
+    ASSERT_EQUALS(ErrorCodes::BadValue, config.validate());
 }
 
 TEST(ReplicaSetConfig, HeartbeatTimeoutField) {
@@ -833,7 +871,9 @@ bool operator==(const ReplicaSetConfig& a, const ReplicaSetConfig& b) {
     // simple comparisons
     return a.getReplSetName() == b.getReplSetName() &&
         a.getConfigVersion() == b.getConfigVersion() && a.getNumMembers() == b.getNumMembers() &&
+        a.getHeartbeatInterval() == b.getHeartbeatInterval() &&
         a.getHeartbeatTimeoutPeriod() == b.getHeartbeatTimeoutPeriod() &&
+        a.getElectionTimeoutPeriod() == b.getElectionTimeoutPeriod() &&
         a.isChainingAllowed() == b.isChainingAllowed() &&
         a.isConfigServer() == b.isConfigServer() &&
         a.getDefaultWriteConcern().wNumNodes == b.getDefaultWriteConcern().wNumNodes &&
@@ -849,7 +889,8 @@ TEST(ReplicaSetConfig, toBSONRoundTripAbility) {
                                       << "version" << 1 << "members"
                                       << BSON_ARRAY(BSON("_id" << 0 << "host"
                                                                << "localhost:12345")) << "settings"
-                                      << BSON("heartbeatTimeoutSecs" << 20))));
+                                      << BSON("heartbeatIntervalMillis"
+                                              << 5000 << "heartbeatTimeoutSecs" << 20))));
     ASSERT_OK(configB.initialize(configA.toBSON()));
     ASSERT_TRUE(configA == configB);
 }
@@ -874,16 +915,18 @@ TEST(ReplicaSetConfig, toBSONRoundTripAbilityLarge) {
                                                            << "true"))
                       << BSON("_id" << 2 << "host"
                                     << "foo.com:3828"
-                                    << "priority" << 9 << "votes" << 0 << "tags"
+                                    << "votes" << 0 << "priority" << 0 << "tags"
                                     << BSON("coast"
                                             << "west"
                                             << "hdd"
-                                            << "true"))) << "settings"
-        << BSON("heartbeatTimeoutSecs" << 20 << "chainingAllowd" << true << "getLastErrorDefaults"
-                                       << BSON("w"
-                                               << "majority") << "getLastErrorModes"
-                                       << BSON("disks" << BSON("ssd" << 1 << "hdd" << 1) << "coasts"
-                                                       << BSON("coast" << 2))))));
+                                            << "true")))
+        << "settings" << BSON("heartbeatIntervalMillis"
+                              << 5000 << "heartbeatTimeoutSecs" << 20 << "electionTimeoutMillis"
+                              << 4 << "chainingAllowd" << true << "getLastErrorDefaults"
+                              << BSON("w"
+                                      << "majority") << "getLastErrorModes"
+                              << BSON("disks" << BSON("ssd" << 1 << "hdd" << 1) << "coasts"
+                                              << BSON("coast" << 2))))));
     ASSERT_OK(configB.initialize(configA.toBSON()));
     ASSERT_TRUE(configA == configB);
 }
@@ -891,22 +934,22 @@ TEST(ReplicaSetConfig, toBSONRoundTripAbilityLarge) {
 TEST(ReplicaSetConfig, toBSONRoundTripAbilityInvalid) {
     ReplicaSetConfig configA;
     ReplicaSetConfig configB;
-    ASSERT_OK(
-        configA.initialize(BSON("_id"
-                                << ""
-                                << "version" << -3 << "members"
-                                << BSON_ARRAY(BSON("_id" << 0 << "host"
-                                                         << "localhost:12345"
-                                                         << "arbiterOnly" << true << "votes" << 0)
-                                              << BSON("_id" << 0 << "host"
-                                                            << "localhost:3828"
-                                                            << "arbiterOnly" << false
-                                                            << "buildIndexes" << false << "priority"
-                                                            << 2)
-                                              << BSON("_id" << 2 << "host"
-                                                            << "localhost:3828"
-                                                            << "priority" << 9 << "votes" << 0))
-                                << "settings" << BSON("heartbeatTimeoutSecs" << -20))));
+    ASSERT_OK(configA.initialize(
+        BSON("_id"
+             << ""
+             << "version" << -3 << "members"
+             << BSON_ARRAY(BSON("_id" << 0 << "host"
+                                      << "localhost:12345"
+                                      << "arbiterOnly" << true << "votes" << 0 << "priority" << 0)
+                           << BSON("_id" << 0 << "host"
+                                         << "localhost:3828"
+                                         << "arbiterOnly" << false << "buildIndexes" << false
+                                         << "priority" << 2)
+                           << BSON("_id" << 2 << "host"
+                                         << "localhost:3828"
+                                         << "votes" << 0 << "priority" << 0)) << "settings"
+             << BSON("heartbeatIntervalMillis" << -5000 << "heartbeatTimeoutSecs" << -20
+                                               << "electionTimeoutMillis" << -2))));
     ASSERT_OK(configB.initialize(configA.toBSON()));
     ASSERT_NOT_OK(configA.validate());
     ASSERT_NOT_OK(configB.validate());
@@ -992,129 +1035,8 @@ TEST(ReplicaSetConfig, CheckIfWriteConcernCanBeSatisfied) {
 TEST(ReplicaSetConfig, CheckMaximumNodesOkay) {
     ReplicaSetConfig configA;
     ReplicaSetConfig configB;
-    ASSERT_OK(configA.initialize(
-        BSON("_id"
-             << "rs0"
-             << "version" << 1 << "members"
-             << BSON_ARRAY(BSON("_id" << 0 << "host"
-                                      << "node0")
-                           << BSON("_id" << 1 << "host"
-                                         << "node1") << BSON("_id" << 2 << "host"
-                                                                   << "node2")
-                           << BSON("_id" << 3 << "host"
-                                         << "node3") << BSON("_id" << 4 << "host"
-                                                                   << "node4")
-                           << BSON("_id" << 5 << "host"
-                                         << "node5") << BSON("_id" << 6 << "host"
-                                                                   << "node6")
-                           << BSON("_id" << 7 << "host"
-                                         << "node7"
-                                         << "votes" << 0) << BSON("_id" << 8 << "host"
-                                                                        << "node8"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 9 << "host"
-                                         << "node9"
-                                         << "votes" << 0) << BSON("_id" << 10 << "host"
-                                                                        << "node10"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 11 << "host"
-                                         << "node11"
-                                         << "votes" << 0) << BSON("_id" << 12 << "host"
-                                                                        << "node12"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 13 << "host"
-                                         << "node13"
-                                         << "votes" << 0) << BSON("_id" << 14 << "host"
-                                                                        << "node14"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 15 << "host"
-                                         << "node15"
-                                         << "votes" << 0) << BSON("_id" << 16 << "host"
-                                                                        << "node16"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 17 << "host"
-                                         << "node17"
-                                         << "votes" << 0) << BSON("_id" << 18 << "host"
-                                                                        << "node18"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 19 << "host"
-                                         << "node19"
-                                         << "votes" << 0) << BSON("_id" << 20 << "host"
-                                                                        << "node20"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 21 << "host"
-                                         << "node21"
-                                         << "votes" << 0) << BSON("_id" << 22 << "host"
-                                                                        << "node22"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 23 << "host"
-                                         << "node23"
-                                         << "votes" << 0) << BSON("_id" << 24 << "host"
-                                                                        << "node24"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 25 << "host"
-                                         << "node25"
-                                         << "votes" << 0) << BSON("_id" << 26 << "host"
-                                                                        << "node26"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 27 << "host"
-                                         << "node27"
-                                         << "votes" << 0) << BSON("_id" << 28 << "host"
-                                                                        << "node28"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 29 << "host"
-                                         << "node29"
-                                         << "votes" << 0) << BSON("_id" << 30 << "host"
-                                                                        << "node30"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 31 << "host"
-                                         << "node31"
-                                         << "votes" << 0) << BSON("_id" << 32 << "host"
-                                                                        << "node32"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 33 << "host"
-                                         << "node33"
-                                         << "votes" << 0) << BSON("_id" << 34 << "host"
-                                                                        << "node34"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 35 << "host"
-                                         << "node35"
-                                         << "votes" << 0) << BSON("_id" << 36 << "host"
-                                                                        << "node36"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 37 << "host"
-                                         << "node37"
-                                         << "votes" << 0) << BSON("_id" << 38 << "host"
-                                                                        << "node38"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 39 << "host"
-                                         << "node39"
-                                         << "votes" << 0) << BSON("_id" << 40 << "host"
-                                                                        << "node40"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 41 << "host"
-                                         << "node41"
-                                         << "votes" << 0) << BSON("_id" << 42 << "host"
-                                                                        << "node42"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 43 << "host"
-                                         << "node43"
-                                         << "votes" << 0) << BSON("_id" << 44 << "host"
-                                                                        << "node44"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 45 << "host"
-                                         << "node45"
-                                         << "votes" << 0) << BSON("_id" << 46 << "host"
-                                                                        << "node46"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 47 << "host"
-                                         << "node47"
-                                         << "votes" << 0) << BSON("_id" << 48 << "host"
-                                                                        << "node48"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 49 << "host"
-                                         << "node49"
-                                         << "votes" << 0)))));
+    const int memberCount = 50;
+    ASSERT_OK(configA.initialize(createConfigDoc(memberCount)));
     ASSERT_OK(configB.initialize(configA.toBSON()));
     ASSERT_OK(configA.validate());
     ASSERT_OK(configB.validate());
@@ -1124,131 +1046,8 @@ TEST(ReplicaSetConfig, CheckMaximumNodesOkay) {
 TEST(ReplicaSetConfig, CheckBeyondMaximumNodesFailsValidate) {
     ReplicaSetConfig configA;
     ReplicaSetConfig configB;
-    ASSERT_OK(configA.initialize(
-        BSON("_id"
-             << "rs0"
-             << "version" << 1 << "members"
-             << BSON_ARRAY(BSON("_id" << 0 << "host"
-                                      << "node0")
-                           << BSON("_id" << 1 << "host"
-                                         << "node1") << BSON("_id" << 2 << "host"
-                                                                   << "node2")
-                           << BSON("_id" << 3 << "host"
-                                         << "node3") << BSON("_id" << 4 << "host"
-                                                                   << "node4")
-                           << BSON("_id" << 5 << "host"
-                                         << "node5") << BSON("_id" << 6 << "host"
-                                                                   << "node6")
-                           << BSON("_id" << 7 << "host"
-                                         << "node7"
-                                         << "votes" << 0) << BSON("_id" << 8 << "host"
-                                                                        << "node8"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 9 << "host"
-                                         << "node9"
-                                         << "votes" << 0) << BSON("_id" << 10 << "host"
-                                                                        << "node10"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 11 << "host"
-                                         << "node11"
-                                         << "votes" << 0) << BSON("_id" << 12 << "host"
-                                                                        << "node12"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 13 << "host"
-                                         << "node13"
-                                         << "votes" << 0) << BSON("_id" << 14 << "host"
-                                                                        << "node14"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 15 << "host"
-                                         << "node15"
-                                         << "votes" << 0) << BSON("_id" << 16 << "host"
-                                                                        << "node16"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 17 << "host"
-                                         << "node17"
-                                         << "votes" << 0) << BSON("_id" << 18 << "host"
-                                                                        << "node18"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 19 << "host"
-                                         << "node19"
-                                         << "votes" << 0) << BSON("_id" << 20 << "host"
-                                                                        << "node20"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 21 << "host"
-                                         << "node21"
-                                         << "votes" << 0) << BSON("_id" << 22 << "host"
-                                                                        << "node22"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 23 << "host"
-                                         << "node23"
-                                         << "votes" << 0) << BSON("_id" << 24 << "host"
-                                                                        << "node24"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 25 << "host"
-                                         << "node25"
-                                         << "votes" << 0) << BSON("_id" << 26 << "host"
-                                                                        << "node26"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 27 << "host"
-                                         << "node27"
-                                         << "votes" << 0) << BSON("_id" << 28 << "host"
-                                                                        << "node28"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 29 << "host"
-                                         << "node29"
-                                         << "votes" << 0) << BSON("_id" << 30 << "host"
-                                                                        << "node30"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 31 << "host"
-                                         << "node31"
-                                         << "votes" << 0) << BSON("_id" << 32 << "host"
-                                                                        << "node32"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 33 << "host"
-                                         << "node33"
-                                         << "votes" << 0) << BSON("_id" << 34 << "host"
-                                                                        << "node34"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 35 << "host"
-                                         << "node35"
-                                         << "votes" << 0) << BSON("_id" << 36 << "host"
-                                                                        << "node36"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 37 << "host"
-                                         << "node37"
-                                         << "votes" << 0) << BSON("_id" << 38 << "host"
-                                                                        << "node38"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 39 << "host"
-                                         << "node39"
-                                         << "votes" << 0) << BSON("_id" << 40 << "host"
-                                                                        << "node40"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 41 << "host"
-                                         << "node41"
-                                         << "votes" << 0) << BSON("_id" << 42 << "host"
-                                                                        << "node42"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 43 << "host"
-                                         << "node43"
-                                         << "votes" << 0) << BSON("_id" << 44 << "host"
-                                                                        << "node44"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 45 << "host"
-                                         << "node45"
-                                         << "votes" << 0) << BSON("_id" << 46 << "host"
-                                                                        << "node46"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 47 << "host"
-                                         << "node47"
-                                         << "votes" << 0) << BSON("_id" << 48 << "host"
-                                                                        << "node48"
-                                                                        << "votes" << 0)
-                           << BSON("_id" << 49 << "host"
-                                         << "node49"
-                                         << "votes" << 0) << BSON("_id" << 50 << "host"
-                                                                        << "node50"
-                                                                        << "votes" << 0)))));
+    const int memberCount = 51;
+    ASSERT_OK(configA.initialize(createConfigDoc(memberCount)));
     ASSERT_OK(configB.initialize(configA.toBSON()));
     ASSERT_NOT_OK(configA.validate());
     ASSERT_NOT_OK(configB.validate());
@@ -1259,7 +1058,7 @@ TEST(ReplicaSetConfig, CheckConfigServerCantHaveArbiters) {
     ReplicaSetConfig configA;
     ASSERT_OK(configA.initialize(BSON("_id"
                                       << "rs0"
-                                      << "version" << 1 << "configServer" << true << "members"
+                                      << "version" << 1 << "configsvr" << true << "members"
                                       << BSON_ARRAY(BSON("_id" << 0 << "host"
                                                                << "localhost:12345")
                                                     << BSON("_id" << 1 << "host"

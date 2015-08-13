@@ -150,8 +150,14 @@ public:
             max = Helpers::toKeyFormat(kp.extendRangeBound(max, false));
         }
 
-        unique_ptr<PlanExecutor> exec(InternalPlanner::indexScan(
-            txn, collection, idx, min, max, false, InternalPlanner::FORWARD));
+        unique_ptr<PlanExecutor> exec(InternalPlanner::indexScan(txn,
+                                                                 collection,
+                                                                 idx,
+                                                                 min,
+                                                                 max,
+                                                                 false,  // endKeyInclusive
+                                                                 PlanExecutor::YIELD_MANUAL,
+                                                                 InternalPlanner::FORWARD));
         exec->setYieldPolicy(PlanExecutor::YIELD_AUTO);
 
         // Find the 'missingField' value used to represent a missing document field in a key of
@@ -395,8 +401,14 @@ public:
             long long currCount = 0;
             long long numChunks = 0;
 
-            unique_ptr<PlanExecutor> exec(InternalPlanner::indexScan(
-                txn, collection, idx, min, max, false, InternalPlanner::FORWARD));
+            unique_ptr<PlanExecutor> exec(InternalPlanner::indexScan(txn,
+                                                                     collection,
+                                                                     idx,
+                                                                     min,
+                                                                     max,
+                                                                     false,  // endKeyInclusive
+                                                                     PlanExecutor::YIELD_MANUAL,
+                                                                     InternalPlanner::FORWARD));
 
             BSONObj currKey;
             PlanExecutor::ExecState state = exec->getNext(&currKey, NULL);
@@ -457,8 +469,14 @@ public:
                 log() << "splitVector doing another cycle because of force, keyCount now: "
                       << keyCount << endl;
 
-                exec = InternalPlanner::indexScan(
-                    txn, collection, idx, min, max, false, InternalPlanner::FORWARD);
+                exec = InternalPlanner::indexScan(txn,
+                                                  collection,
+                                                  idx,
+                                                  min,
+                                                  max,
+                                                  false,  // endKeyInclusive
+                                                  PlanExecutor::YIELD_MANUAL,
+                                                  InternalPlanner::FORWARD);
 
                 exec->setYieldPolicy(PlanExecutor::YIELD_AUTO);
                 state = exec->getNext(&currKey, NULL);
@@ -601,9 +619,9 @@ public:
         }
 
         // Initialize our current shard name in the shard state if needed
-        shardingState->gotShardName(shardName);
+        shardingState->setShardName(shardName);
 
-        auto configLocStatus = ConnectionString::parse(shardingState->getConfigServer());
+        auto configLocStatus = ConnectionString::parse(shardingState->getConfigServer(txn));
         if (!configLocStatus.isOK()) {
             warning() << configLocStatus.getStatus();
             return false;
@@ -617,7 +635,7 @@ public:
 
         string whyMessage(str::stream() << "splitting chunk [" << minKey << ", " << maxKey
                                         << ") in " << ns);
-        auto scopedDistLock = grid.catalogManager()->getDistLockManager()->lock(ns, whyMessage);
+        auto scopedDistLock = grid.catalogManager(txn)->getDistLockManager()->lock(ns, whyMessage);
 
         if (!scopedDistLock.isOK()) {
             errmsg = str::stream() << "could not acquire collection lock for " << ns
@@ -787,7 +805,7 @@ public:
         // 4. apply the batch of updates to remote and local metadata
         //
         Status applyOpsStatus =
-            grid.catalogManager()->applyChunkOpsDeprecated(updates.arr(), preCond.arr());
+            grid.catalogManager(txn)->applyChunkOpsDeprecated(updates.arr(), preCond.arr());
         if (!applyOpsStatus.isOK()) {
             return appendCommandStatus(result, applyOpsStatus);
         }
@@ -824,8 +842,8 @@ public:
             appendShortVersion(logDetail.subobjStart("left"), *newChunks[0]);
             appendShortVersion(logDetail.subobjStart("right"), *newChunks[1]);
 
-            grid.catalogManager()->logChange(
-                txn->getClient()->clientAddress(true), "split", ns, logDetail.obj());
+            grid.catalogManager(txn)
+                ->logChange(txn->getClient()->clientAddress(true), "split", ns, logDetail.obj());
         } else {
             BSONObj beforeDetailObj = logDetail.obj();
             BSONObj firstDetailObj = beforeDetailObj.getOwned();
@@ -838,7 +856,7 @@ public:
                 chunkDetail.append("of", newChunksSize);
                 appendShortVersion(chunkDetail.subobjStart("chunk"), *newChunks[i]);
 
-                grid.catalogManager()->logChange(
+                grid.catalogManager(txn)->logChange(
                     txn->getClient()->clientAddress(true), "multi-split", ns, chunkDetail.obj());
             }
         }
@@ -905,8 +923,13 @@ private:
         BSONObj newmin = Helpers::toKeyFormat(kp.extendRangeBound(chunk->getMin(), false));
         BSONObj newmax = Helpers::toKeyFormat(kp.extendRangeBound(chunk->getMax(), true));
 
-        unique_ptr<PlanExecutor> exec(
-            InternalPlanner::indexScan(txn, collection, idx, newmin, newmax, false));
+        unique_ptr<PlanExecutor> exec(InternalPlanner::indexScan(txn,
+                                                                 collection,
+                                                                 idx,
+                                                                 newmin,
+                                                                 newmax,
+                                                                 false,  // endKeyInclusive
+                                                                 PlanExecutor::YIELD_MANUAL));
 
         // check if exactly one document found
         if (PlanExecutor::ADVANCED == exec->getNext(NULL, NULL)) {

@@ -155,6 +155,7 @@ env.CppUnitTest(
         'cluster_ops',
         '$BUILD_DIR/mongo/db/common',
         '$BUILD_DIR/mongo/db/range_arithmetic',
+        '$BUILD_DIR/mongo/db/service_context',
     ]
 )
 
@@ -237,6 +238,7 @@ env.Library(
         'version_manager.cpp',
     ],
     LIBDEPS=[
+        '$BUILD_DIR/mongo/s/query/cluster_cursor_manager',
         'catalog/catalog_manager',
         'catalog/catalog_types',
         'client/sharding_client',
@@ -264,8 +266,6 @@ env.Library(
         '$BUILD_DIR/mongo/client/parallel',
         '$BUILD_DIR/mongo/db/fts/ftsmongos',
         '$BUILD_DIR/mongo/db/stats/counters',
-        '$BUILD_DIR/mongo/db/query/explain_common',
-        '$BUILD_DIR/mongo/db/query/lite_parsed_query',
         '$BUILD_DIR/mongo/s/query/cluster_query',
         '$BUILD_DIR/mongo/util/concurrency/task',
         'cluster_ops',

@@ -71,7 +71,7 @@ bool SyncSourceFeedback::replAuthenticate() {
 
     if (!isInternalAuthSet())
         return false;
-    return authenticateInternalUser(_connection.get());
+    return _connection->authenticateInternalUser();
 }
 
 bool SyncSourceFeedback::_connect(OperationContext* txn, const HostAndPort& host) {
@@ -79,7 +79,8 @@ bool SyncSourceFeedback::_connect(OperationContext* txn, const HostAndPort& host
         return true;
     }
     log() << "setting syncSourceFeedback to " << host.toString();
-    _connection.reset(new DBClientConnection(false, OplogReader::kSocketTimeout.count()));
+    _connection.reset(
+        new DBClientConnection(false, durationCount<Seconds>(OplogReader::kSocketTimeout)));
     string errmsg;
     try {
         if (!_connection->connect(host, errmsg) ||

@@ -34,6 +34,9 @@
 #include <vector>
 
 #include "mongo/base/disallow_copying.h"
+#include "mongo/db/jsobj.h"
+#include "mongo/db/repl/optime.h"
+#include "mongo/db/repl/read_concern_args.h"
 #include "mongo/s/client/shard.h"
 #include "mongo/stdx/mutex.h"
 
@@ -65,6 +68,16 @@ class ShardRegistry {
     MONGO_DISALLOW_COPYING(ShardRegistry);
 
 public:
+    struct CommandResponse {
+        BSONObj response;
+        repl::OpTime opTime;
+    };
+
+    struct QueryResponse {
+        std::vector<BSONObj> docs;
+        repl::OpTime opTime;
+    };
+
     /**
      * Instantiates a new shard registry.
      *
@@ -72,11 +85,12 @@ public:
      * @param commandRunner Command runner for executing commands against hosts
      * @param executor Asynchronous task executor to use for making calls to shards.
      * @param network Network interface backing executor.
-     * @param catalogManager Used to retrieve the list of registered shard. TODO: remove.
+     * @param configServerCS ConnectionString used for communicating with the config servers
      */
     ShardRegistry(std::unique_ptr<RemoteCommandTargeterFactory> targeterFactory,
                   std::unique_ptr<executor::TaskExecutor> executor,
-                  executor::NetworkInterface* network);
+                  executor::NetworkInterface* network,
+                  ConnectionString configServerCS);
 
     ~ShardRegistry();
 
@@ -103,6 +117,10 @@ public:
 
     executor::NetworkInterface* getNetwork() const {
         return _network;
+    }
+
+    ConnectionString getConfigServerConnectionString() const {
+        return _configServerCS;
     }
 
     void reload();
@@ -143,15 +161,25 @@ public:
      *
      * Note: should never be used outside of CatalogManagerReplicaSet or DistLockCatalogImpl.
      */
-    StatusWith<std::vector<BSONObj>> exhaustiveFind(const HostAndPort& host,
-                                                    const NamespaceString& nss,
-                                                    const BSONObj& query,
-                                                    const BSONObj& sort,
-                                                    boost::optional<long long> limit);
+    StatusWith<QueryResponse> exhaustiveFind(const HostAndPort& host,
+                                             const NamespaceString& nss,
+                                             const BSONObj& query,
+                                             const BSONObj& sort,
+                                             boost::optional<long long> limit,
+                                             boost::optional<repl::ReadConcernArgs> readConcern,
+                                             const BSONObj& metadata);
 
     /**
      * Runs a command against the specified host and returns the result.  It is the responsibility
      * of the caller to check the returned BSON for command-specific failures.
+     */
+    StatusWith<CommandResponse> runCommandWithMetadata(const HostAndPort& host,
+                                                       const std::string& dbName,
+                                                       const BSONObj& cmdObj,
+                                                       const BSONObj& metadata);
+
+    /**
+     * Runs a command against the specified host and returns the result.
      */
     StatusWith<BSONObj> runCommand(const HostAndPort& host,
                                    const std::string& dbName,
@@ -171,6 +199,11 @@ public:
     StatusWith<BSONObj> runCommandWithNotMasterRetries(const ShardId& shard,
                                                        const std::string& dbname,
                                                        const BSONObj& cmdObj);
+
+    StatusWith<CommandResponse> runCommandWithNotMasterRetries(const ShardId& shardId,
+                                                               const std::string& dbname,
+                                                               const BSONObj& cmdObj,
+                                                               const BSONObj& metadata);
 
 private:
     typedef std::map<ShardId, std::shared_ptr<Shard>> ShardMap;
@@ -197,6 +230,9 @@ private:
     // Network interface being used by _executor.  Used for asking questions about the network
     // configuration, such as getting the current server's hostname.
     executor::NetworkInterface* const _network;
+
+    // Config server connection string
+    ConnectionString _configServerCS;
 
     // Catalog manager from which to load the shard information. Not owned and must outlive
     // the shard registry object.  Should be set once by a call to init() then never modified again.

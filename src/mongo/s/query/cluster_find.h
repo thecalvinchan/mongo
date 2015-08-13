@@ -31,7 +31,8 @@
 #include <vector>
 
 #include "mongo/bson/bsonobj.h"
-#include "mongo/db/clientcursor.h"
+#include "mongo/db/cursor_id.h"
+#include "mongo/db/query/getmore_response.h"
 
 namespace mongo {
 
@@ -39,6 +40,7 @@ template <typename T>
 class StatusWith;
 class CanonicalQuery;
 class OperationContext;
+struct GetMoreRequest;
 struct ReadPreferenceSetting;
 
 /**
@@ -46,6 +48,10 @@ struct ReadPreferenceSetting;
  */
 class ClusterFind {
 public:
+    // The number of times we are willing to re-target and re-run the query after receiving a stale
+    // config message.
+    static const size_t kMaxStaleConfigRetries;
+
     /**
      * Runs query 'query', targeting remote hosts according to the read preference in 'readPref'.
      *
@@ -57,6 +63,12 @@ public:
                                          const CanonicalQuery& query,
                                          const ReadPreferenceSetting& readPref,
                                          std::vector<BSONObj>* results);
+
+    /**
+     * Executes the getMore request 'request', and on success returns a GetMoreResponse.
+     */
+    static StatusWith<GetMoreResponse> runGetMore(OperationContext* txn,
+                                                  const GetMoreRequest& request);
 };
 
 }  // namespace mongo

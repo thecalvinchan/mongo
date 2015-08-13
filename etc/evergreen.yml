@@ -59,6 +59,23 @@ variables:
   - solaris-64-bit
   - osx
 
+- &packaging_variants
+  - enterprise-rhel-57-64-bit
+  - enterprise-rhel-62-64-bit
+  - enterprise-rhel-70-64-bit
+  - enterprise-suse11-64
+  - enterprise-ubuntu1204-64
+  - enterprise-ubuntu1404-64
+  - enterprise-debian71-64
+  - rhel55
+  - rhel62
+  - rhel70
+  - suse11
+  - ubuntu1204
+  - ubuntu1404
+  - amazon
+  - debian71
+
 #######################################
 #            Functions                #
 #######################################
@@ -213,7 +230,7 @@ pre:
     params:
       silent: true
       script: |
-        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lldb; pkill -9 lock_mgr_test; pkill -9 background_job_test; pkill -9 repl_coordinator_impl_heartbeat_test; pkill -9 repl_coordinator_impl_test} >/dev/null 2>&1
+        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lldb; pkill -9 _test} >/dev/null 2>&1
         rm -rf src /data/db/*
         exit 0
 
@@ -225,7 +242,7 @@ post:
     params:
       silent: true
       script: |
-        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lldb; pkill -9 lock_mgr_test; pkill -9 background_job_test; pkill -9 repl_coordinator_impl_heartbeat_test; pkill -9 repl_coordinator_impl_test} >/dev/null 2>&1
+        ${killall_mci|pkill -9 mongod; pkill -9 mongos; pkill -9 mongo; pkill -9 bsondump; pkill -9 mongoimport; pkill -9 mongoexport; pkill -9 mongodump; pkill -9 mongorestore; pkill -9 mongostat; pkill -9 mongofiles; pkill -9 mongooplog; pkill -9 mongotop; pkill -9 mongobridge; pkill -9 mongod-2.6; pkill -9 mongos-2.6; pkill -9 mongo-2.6; pkill -9 bsondump-2.6; pkill -9 mongoimport-2.6; pkill -9 mongoexport-2.6; pkill -9 mongodump-2.6; pkill -9 mongorestore-2.6; pkill -9 mongostat-2.6; pkill -9 mongofiles-2.6; pkill -9 mongooplog-2.6; pkill -9 mongotop-2.6; pkill -9 mongobridge-2.6; pkill -9 mongod-2.4; pkill -9 mongos-2.4; pkill -9 mongo-2.4; pkill -9 bsondump-2.4; pkill -9 mongoimport-2.4; pkill -9 mongoexport-2.4; pkill -9 mongodump-2.4; pkill -9 mongorestore-2.4; pkill -9 mongostat-2.4; pkill -9 mongofiles-2.4; pkill -9 mongooplog-2.4; pkill -9 mongotop-2.4; pkill -9 resmoke.py; pkill -9 python; pkill -9 cl; pkill -9 lldb; pkill -9 _test} >/dev/null 2>&1
         exit 0
   - command: shell.cleanup
 
@@ -277,6 +294,18 @@ tasks:
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
 
+    - command: expansions.update
+      params:
+        file: src/compile_expansions.yml
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
+          if [ "${has_packages|}" = "true" ] ; then
+            cd buildscripts
+            ${python|python} ${packager_script} --prefix `pwd`/.. --distros ${packager_distro} --tarball `pwd`/../mongodb-binaries.tgz -s ${version} -m HEAD
+            cd ..
+          fi
     - command: archive.targz_pack
       params:
         target: "artifacts.tgz"
@@ -297,6 +326,9 @@ tasks:
           - "./**.pdb"
           - "./**.msi"
           - "./etc/*san.suppressions"
+          - "./build/integration_tests/**"
+          - "./build/integration_tests.txt"
+          - "repo/**"
         exclude_files:
           - "*_test.pdb"
     - func: "upload debugsymbols"
@@ -374,8 +406,16 @@ tasks:
           set -o errexit
           set -o verbose
 
-          curl --silent --max-time 600 http://boxes.10gen.com/build/node-v0.12.4-linux-x64.tar.gz --output node.tar.gz
+          curl --silent --max-time 600 http://boxes.10gen.com/build/node-v0.12.7-linux-x64.tar.gz --output node.tar.gz
           ${decompress} node.tar.gz
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
+          set -o errexit
+          set -o verbose
+
+          cp mongodb*/bin/mongod .
     - command: shell.exec
       type: test
       params:
@@ -384,7 +424,7 @@ tasks:
           set -o errexit
           set -o verbose
 
-          export PATH="$PATH":${workdir}/src/node-v0.12.4-linux-x64/bin
+          export PATH="$PATH":${workdir}/src/node-v0.12.7-linux-x64/bin
 
           # Create an output directory for the generated test cases and ensure it always contains at least one JS file
           # for resmoke to run so that glob expansion cannot result in an error.
@@ -598,6 +638,22 @@ tasks:
   - func: "run tests"
     vars:
       resmoke_args: --suites=gle_auth_basics_passthrough --shellWriteMode=commands --storageEngine=wiredTiger
+
+- <<: *task_template
+  name: integration_tests_standalone
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=integration_tests_standalone
+
+- <<: *task_template
+  name: integration_tests_replset
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=integration_tests_replset
 
 - <<: *task_template
   name: sharding_gle_auth_basics_passthrough
@@ -1146,6 +1202,14 @@ tasks:
     vars:
       resmoke_args: --suites=decimal
 
+- <<: *task_template
+  name: jsDecimalCore_WT
+  commands:
+  - func: "do setup"
+  - func: "run tests"
+    vars:
+      resmoke_args: --suites=decimal --storageEngine=wiredTiger
+
 - name: push
   depends_on:
   - name: "*"
@@ -1185,7 +1249,23 @@ tasks:
           mv distsrc.${ext|tgz} mongodb-src-${src_suffix}.${ext|tar.gz} || true
           /usr/bin/find build/ -type f | grep msi$ | xargs -I original_filename cp original_filename mongodb-win32-${push_arch}-${suffix}.msi || true
 
-          notary-client.py --key-name "${signing_key_name}" --auth-token-file ./signing_auth_token --comment "MCI Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tar.gz}
+          notary-client.py --key-name "${signing_key_name}" --auth-token-file ${workdir}/src/signing_auth_token --comment "Evergreen Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tgz}
+
+          if [ "${has_packages|}" = "true" ] ; then
+            for rpm in $(find repo/ -name \*.rpm) ; do
+              pushd $(dirname $rpm)
+              # Use --package-file-suffix "" to overwrite existing RPM's instead of saving new "-signed.rpm" RPM files
+              #
+              notary-client.py --key-name "${signing_key_name}" --auth-token-file ${workdir}/src/signing_auth_token --comment "Evergreen Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --archive-file-ext gpg --outputs sig --package-file-suffix "" $(basename $rpm)
+              popd
+            done
+            for release_file in $(find repo/ -name Release) ; do
+              pushd $(dirname $release_file)
+              notary-client.py --key-name "${signing_key_name}" --auth-token-file ${workdir}/src/signing_auth_token --comment "Evergreen Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --outputs sig Release
+              popd
+            done
+          fi
+          tar zcvf repo-${push_arch}.tgz repo || true
           rm signing_auth_token
 
     # Put the binaries tarball/zipfile
@@ -1410,11 +1490,29 @@ tasks:
         content_type: text/plain
         remote_file: ${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.md5
 
+    # Put the tarred up Package repo
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        build_variants: *packaging_variants
+        local_file: src/repo-${push_arch}.tgz
+        bucket: build-push-testing
+        permissions: public-read
+        content_type: ${content_type|application/x-gzip}
+        remote_file: ${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz
+
     - command: s3Copy.copy
       params:
         aws_key: ${aws_key}
         aws_secret: ${aws_secret}
         s3_copy_files:
+            #Package repo tarballs
+            - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
+               'destination': {'path': 'packages/repo-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
+                build_variants: *packaging_variants
+                 }
+
             #Binaries
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-${suffix}-${task_id}.${ext|tgz}', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz}', 'bucket': '${push_bucket}'}}
@@ -1514,11 +1612,6 @@ tasks:
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.md5', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-win32-${push_arch}-${suffix}-signed.msi.md5', 'bucket': '${push_bucket}'},
                'build_variants': ['enterprise-windows-64', 'windows-64', 'windows-64-2k8', 'windows-64-2k8-ssl', 'windows-32'], }
-    - command: shell.exec
-      params:
-        working_dir: src
-        script: |
-          ssh distro-deb2.build.10gen.cc sudo -H -u ubuntu /home/ubuntu/git/kernel-tools/releases/publish_packages/publish_packages.sh master ${version} ${revision} || true
 
 #######################################
 #               Modules               #
@@ -1587,6 +1680,8 @@ buildvariants:
   - name: gle_auth_basics_passthrough_WT
   - name: gle_auth_basics_passthrough_write_cmd
   - name: gle_auth_basics_passthrough_write_cmd_WT
+  - name: integration_tests_standalone
+  - name: integration_tests_replset
   - name: sharding_gle_auth_basics_passthrough
   - name: sharding_gle_auth_basics_passthrough_WT
   - name: sharding_gle_auth_basics_passthrough_write_cmd
@@ -1651,6 +1746,7 @@ buildvariants:
   run_on:
   - rhel55
   - rhel55-test
+  batchtime: 1440 # 1 day
   expansions:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
@@ -1729,6 +1825,7 @@ buildvariants:
   run_on:
   - rhel55
   - rhel55-test
+  batchtime: 1440 # 1 day
   expansions:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
@@ -1786,6 +1883,7 @@ buildvariants:
   run_on:
   - rhel55
   - rhel55-test
+  batchtime: 1440 # 1 day
   expansions:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
@@ -1832,6 +1930,7 @@ buildvariants:
   modules: ~
   run_on:
   - ubuntu1204-test
+  batchtime: 1440 # 1 day
   expansions:
     tooltags: "-tags ssl"
     push_path: linux
@@ -1842,6 +1941,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: ubuntu1204
   tasks:
   - name: compile
     distros:
@@ -1927,6 +2029,7 @@ buildvariants:
   modules: ~
   run_on:
   - ubuntu1404-test
+  batchtime: 1440 # 1 day
   expansions:
     tooltags: "-tags ssl"
     push_path: linux
@@ -1937,6 +2040,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: ubuntu1404
   tasks:
   - name: compile
     distros:
@@ -2033,10 +2139,14 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: amazon
   tasks:
   - name: compile
     distros:
     - linux-64-amzn-build
+  - name: lint
   - name: aggregation_auth
   - name: audit
   - name: audit_WT
@@ -2044,8 +2154,10 @@ buildvariants:
   - name: auth_WT
   - name: dbtest
   - name: dbtest_WT
+  - name: ese_WT
   - name: failpoints_auth
   - name: jsCore_auth
+  - name: jsCore_WT_ese
   - name: jstestfuzz
   - name: mmap
   - name: noPassthrough
@@ -2054,10 +2166,12 @@ buildvariants:
   - name: noPassthroughWithMongod_WT
   - name: bulk_gle_passthrough
   - name: bulk_gle_passthrough_WT
+  - name: replica_sets_WT_ese
   - name: replicasets_auth
   - name: replication_auth
   - name: sasl
   - name: sharding_auth
+  - name: sharding_WT_ese
   - name: slow1
   - name: slow1_WT
   - name: slow2
@@ -2077,6 +2191,7 @@ buildvariants:
   modules: ~
   run_on:
   - linux-64-amzn-test
+  batchtime: 1440 # 1 day
   expansions:
     tooltags: "-tags 'ssl'"
     push_path: linux
@@ -2172,6 +2287,7 @@ buildvariants:
   modules: ~
   run_on:
   - rhel55-32
+  batchtime: 1440 # 1 day
   expansions:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go32 PATH=/opt/go32/bin:$PATH
@@ -2201,6 +2317,7 @@ buildvariants:
   modules: ~
   run_on:
   - rhel55
+  batchtime: 1440 # 1 day
   expansions:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
@@ -2220,6 +2337,7 @@ buildvariants:
   - name: dbtest_WT
   - name: jsCore
   - name: jsDecimalCore
+  - name: jsDecimalCore_WT
   - name: jstestfuzz
   - name: push
     distros:
@@ -2234,6 +2352,7 @@ buildvariants:
   modules: ~
   run_on:
   - windows-64-vs2013-test
+  batchtime: 1440 # 1 day
   expansions:
     exe: ".exe"
     push_path: win32
@@ -2321,6 +2440,7 @@ buildvariants:
   modules: ~
   run_on:
   - windows-64-vs2013-test
+  batchtime: 1440 # 1 day
   expansions:
     exe: ".exe"
     push_path: win32
@@ -2347,6 +2467,18 @@ buildvariants:
   - name: disk
   - name: durability
   - name: failpoints
+  - name: gle_auth
+  - name: gle_auth_WT
+  - name: gle_auth_write_cmd
+  - name: gle_auth_write_cmd_WT
+  - name: gle_auth_basics_passthrough
+  - name: gle_auth_basics_passthrough_WT
+  - name: gle_auth_basics_passthrough_write_cmd
+  - name: gle_auth_basics_passthrough_write_cmd_WT
+  - name: sharding_gle_auth_basics_passthrough
+  - name: sharding_gle_auth_basics_passthrough_WT
+  - name: sharding_gle_auth_basics_passthrough_write_cmd
+  - name: sharding_gle_auth_basics_passthrough_write_cmd_WT
   - name: jsCore
   - name: jsCore_WT
   - name: jsCore_compatibility
@@ -2421,6 +2553,8 @@ buildvariants:
   - name: disk
   - name: durability
   - name: failpoints
+  - name: integration_tests_standalone
+  - name: integration_tests_replset
   - name: jsCore
   - name: jsCore_WT
   - name: jsCore_compatibility
@@ -2507,6 +2641,7 @@ buildvariants:
   modules: ~
   run_on:
   - windows-64-vs2013-test
+  batchtime: 1440 # 1 day
   expansions:
     exe: ".exe"
     gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'
@@ -2586,6 +2721,7 @@ buildvariants:
   modules: ~
   run_on:
   - windows-32
+  batchtime: 1440 # 1 day
   expansions:
     exe: ".exe"
     gorootvars: GOARCH=386
@@ -2622,6 +2758,7 @@ buildvariants:
   modules: ~
   run_on:
   - osx-108
+  batchtime: 1440 # 1 day
   expansions:
     push_path: osx
     push_bucket: downloads.mongodb.org
@@ -2703,6 +2840,7 @@ buildvariants:
   modules: ~
   run_on:
   - osx-108
+  batchtime: 1440 # 1 day
   expansions:
     push_path: osx
     push_bucket: downloads.mongodb.org
@@ -2832,6 +2970,7 @@ buildvariants:
   - enterprise
   run_on:
   - rhel55-test
+  batchtime: 1440 # 1 day
   expansions:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
@@ -2844,11 +2983,13 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: rhel57
   tasks:
   - name: compile
     distros:
     - rhel55
-  - name: lint
   - name: audit
   - name: audit_WT
   - name: dbtest
@@ -2873,6 +3014,7 @@ buildvariants:
   - enterprise
   run_on:
   - rhel62-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
@@ -2885,6 +3027,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: rhel62
   tasks:
   - name: compile
     distros:
@@ -2893,15 +3038,11 @@ buildvariants:
   - name: audit_WT
   - name: dbtest
   - name: dbtest_WT
-  - name: ese_WT
-  - name: jsCore_WT_ese
   - name: jstestfuzz
-  - name: replica_sets_WT_ese
-  - name: sharding_WT_ese
   - name: mmap
   - name: jsCore_auth
   - name: replicasets_auth
-  - name: rlp
+  - name: rlp # RLP only runs on this variant
   - name: rlp_WT
   - name: sasl
   - name: sharding_auth
@@ -2919,6 +3060,7 @@ buildvariants:
   - enterprise
   run_on:
   - rhel70
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
@@ -2930,6 +3072,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: rhel70
   tasks:
   - name: compile
   - name: audit
@@ -2956,6 +3101,7 @@ buildvariants:
   run_on:
   - rhel55
   - rhel55-test
+  batchtime: 1440 # 1 day
   expansions:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
@@ -2968,6 +3114,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: rhel55
   tasks:
   - name: compile
     distros:
@@ -3053,6 +3202,7 @@ buildvariants:
   modules: ~
   run_on:
   - rhel62-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
@@ -3064,6 +3214,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: rhel62
   tasks:
   - name: compile
     distros:
@@ -3149,6 +3302,7 @@ buildvariants:
   modules: ~
   run_on:
   - rhel70
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
@@ -3160,6 +3314,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: rhel70
   tasks:
   - name: compile
     distros:
@@ -3250,6 +3407,7 @@ buildvariants:
   - enterprise
   run_on:
   - ubuntu1204-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
@@ -3261,6 +3419,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: ubuntu1204
   tasks:
   - name: compile
     distros:
@@ -3289,6 +3450,7 @@ buildvariants:
   - enterprise
   run_on:
   - ubuntu1404-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
@@ -3300,6 +3462,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: ubuntu1404
   tasks:
   - name: compile
     distros:
@@ -3332,6 +3497,7 @@ buildvariants:
   - enterprise
   run_on:
   - suse11-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
@@ -3343,6 +3509,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: suse11
   tasks:
   - name: compile
     distros:
@@ -3370,6 +3539,7 @@ buildvariants:
   modules: ~
   run_on:
   - suse11-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
@@ -3381,6 +3551,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: suse11
   tasks:
   - name: compile
     distros:
@@ -3544,6 +3717,7 @@ buildvariants:
   - enterprise
   run_on:
   - debian71-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
@@ -3555,6 +3729,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: debian71
   tasks:
   - name: compile
     distros:
@@ -3582,6 +3759,7 @@ buildvariants:
   modules: ~
   run_on:
   - debian71-test
+  batchtime: 1440 # 1 day
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
@@ -3593,6 +3771,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: debian71
   tasks:
   - name: compile
     distros:
@@ -3683,6 +3864,7 @@ buildvariants:
   - rocksdb
   run_on:
   - ubuntu1404-test
+  batchtime: 1440 # 1 day
   expansions:
     build_rocksdb: true
     compile_flags: -j$(grep -c ^processor /proc/cpuinfo) --dbg=off --opt=on CPPPATH=$(readlink -f ../rocksdb/include/) LIBPATH=$(readlink -f ../rocksdb/) LIBS=rocksdb CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ VARIANT_DIR=release
@@ -3742,7 +3924,7 @@ buildvariants:
   run_on:
   - ubuntu1410-build
   stepback: false
-  batchtime: 1440 # 3.5 days
+  batchtime: 1440 # 1 day
   expansions:
     tooltags: "-tags 'ssl'"
     asan_symbolizer: ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-3.5
@@ -3829,6 +4011,7 @@ buildvariants:
   run_on:
   - ubuntu1410-test
   stepback: false
+  batchtime: 1440 # 1 day
   expansions:
     tooltags: "-tags 'ssl'"
     compile_flags: CC=/usr/bin/clang CXX=/usr/bin/clang++ --libc++ --ssl -j$(grep -c ^processor /proc/cpuinfo) VARIANT_DIR=build --distmod=ubuntu1410-clang
@@ -3925,6 +4108,7 @@ buildvariants:
   run_on:
   - ubuntu1404-test
   stepback: false
+  batchtime: 1440 # 1 day
   expansions:
     tooltags: "-tags ssl"
     compile_flags: --ssl --distmod=ubuntu1404 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3948,7 +4132,7 @@ buildvariants:
   - name: concurrency_replication_WT
   - name: concurrency_sharded_WT
   - name: replicasets_WT
-  - name: replicasets_auth
+  #- name: replicasets_auth
   - name: replication_WT
   - name: replication_auth
   - name: sharding_WT
@@ -3966,6 +4150,7 @@ buildvariants:
   run_on:
   - windows-64-vs2013-test
   stepback: false
+  batchtime: 1440 # 1 day
   expansions:
     exe: ".exe"
     gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'

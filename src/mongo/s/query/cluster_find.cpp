@@ -38,12 +38,18 @@
 #include "mongo/base/status_with.h"
 #include "mongo/client/read_preference.h"
 #include "mongo/client/remote_command_targeter.h"
+#include "mongo/db/query/canonical_query.h"
+#include "mongo/db/query/find_common.h"
+#include "mongo/db/query/getmore_request.h"
 #include "mongo/s/catalog/catalog_cache.h"
 #include "mongo/s/chunk_manager.h"
 #include "mongo/s/client/shard_registry.h"
 #include "mongo/s/config.h"
 #include "mongo/s/grid.h"
 #include "mongo/s/query/cluster_client_cursor_impl.h"
+#include "mongo/s/query/cluster_cursor_manager.h"
+#include "mongo/stdx/memory.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -68,6 +74,7 @@ std::unique_ptr<LiteParsedQuery> transformQueryForShards(const LiteParsedQuery& 
                                           boost::none,  // Don't forward skip.
                                           newLimit,
                                           lpq.getBatchSize(),
+                                          lpq.getNToReturn(),
                                           lpq.wantMore(),
                                           lpq.isExplain(),
                                           lpq.getComment(),
@@ -87,7 +94,107 @@ std::unique_ptr<LiteParsedQuery> transformQueryForShards(const LiteParsedQuery& 
                                           lpq.isPartial());
 }
 
+StatusWith<CursorId> runQueryWithoutRetrying(OperationContext* txn,
+                                             const CanonicalQuery& query,
+                                             const ReadPreferenceSetting& readPref,
+                                             ChunkManager* chunkManager,
+                                             std::shared_ptr<Shard> primary,
+                                             std::vector<BSONObj>* results) {
+    auto shardRegistry = grid.shardRegistry();
+
+    // Get the set of shards on which we will run the query.
+    std::vector<std::shared_ptr<Shard>> shards;
+    if (primary) {
+        shards.emplace_back(std::move(primary));
+    } else {
+        invariant(chunkManager);
+
+        std::set<ShardId> shardIds;
+        chunkManager->getShardIdsForQuery(shardIds, query.getParsed().getFilter());
+
+        for (auto id : shardIds) {
+            shards.emplace_back(shardRegistry->getShard(id));
+        }
+    }
+
+    ClusterClientCursorParams params(query.nss());
+    params.limit = query.getParsed().getLimit();
+    params.batchSize = query.getParsed().getBatchSize();
+    params.limit = query.getParsed().getLimit();
+    params.sort = query.getParsed().getSort();
+    params.skip = query.getParsed().getSkip();
+
+    const auto lpqToForward = transformQueryForShards(query.getParsed());
+
+    // Use read pref to target a particular host from each shard. Also construct the find command
+    // that we will forward to each shard.
+    params.remotes.resize(shards.size());
+    for (size_t i = 0; i < shards.size(); ++i) {
+        const auto& shard = shards[i];
+        auto targeter = shard->getTargeter();
+        auto hostAndPort = targeter->findHost(readPref);
+        if (!hostAndPort.isOK()) {
+            return hostAndPort.getStatus();
+        }
+        params.remotes[i].hostAndPort = std::move(hostAndPort.getValue());
+
+        // Build the find command, and attach shard version if necessary.
+        BSONObjBuilder cmdBuilder;
+        lpqToForward->asFindCommand(&cmdBuilder);
+
+        if (chunkManager) {
+            auto shardVersion = chunkManager->getVersion(shard->getId());
+            cmdBuilder.appendArray(LiteParsedQuery::kShardVersionField, shardVersion.toBSON());
+        }
+
+        params.remotes[i].cmdObj = cmdBuilder.obj();
+    }
+
+    auto ccc =
+        stdx::make_unique<ClusterClientCursorImpl>(shardRegistry->getExecutor(), std::move(params));
+
+    // Register the cursor with the cursor manager.
+    auto cursorManager = grid.getCursorManager();
+    const auto cursorType = chunkManager ? ClusterCursorManager::CursorType::NamespaceSharded
+                                         : ClusterCursorManager::CursorType::NamespaceNotSharded;
+    const auto cursorLifetime = query.getParsed().isNoCursorTimeout()
+        ? ClusterCursorManager::CursorLifetime::Immortal
+        : ClusterCursorManager::CursorLifetime::Mortal;
+    auto pinnedCursor =
+        cursorManager->registerCursor(std::move(ccc), query.nss(), cursorType, cursorLifetime);
+
+    auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
+    int bytesBuffered = 0;
+    while (!FindCommon::enoughForFirstBatch(query.getParsed(), results->size(), bytesBuffered)) {
+        auto next = pinnedCursor.next();
+        if (!next.isOK()) {
+            return next.getStatus();
+        }
+
+        if (!next.getValue()) {
+            // We reached end-of-stream.
+            cursorState = ClusterCursorManager::CursorState::Exhausted;
+            break;
+        }
+
+        // Add doc to the batch.
+        bytesBuffered += next.getValue()->objsize();
+        results->push_back(std::move(*next.getValue()));
+    }
+
+    CursorId idToReturn = (cursorState == ClusterCursorManager::CursorState::Exhausted)
+        ? CursorId(0)
+        : pinnedCursor.getCursorId();
+
+    // Transfer ownership of the cursor back to the cursor manager.
+    pinnedCursor.returnCursor(cursorState);
+
+    return idToReturn;
+}
+
 }  // namespace
+
+const size_t ClusterFind::kMaxStaleConfigRetries = 10;
 
 StatusWith<CursorId> ClusterFind::runQuery(OperationContext* txn,
                                            const CanonicalQuery& query,
@@ -95,68 +202,81 @@ StatusWith<CursorId> ClusterFind::runQuery(OperationContext* txn,
                                            std::vector<BSONObj>* results) {
     invariant(results);
 
-    auto dbConfig = grid.catalogCache()->getDatabase(query.nss().db().toString());
+    auto dbConfig = grid.catalogCache()->getDatabase(txn, query.nss().db().toString());
     if (!dbConfig.isOK()) {
         return dbConfig.getStatus();
     }
 
-    auto shardRegistry = grid.shardRegistry();
-
-    // Get the set of shards on which we will run the query.
-    std::vector<std::shared_ptr<Shard>> shards;
-    std::shared_ptr<ChunkManager> manager;
+    std::shared_ptr<ChunkManager> chunkManager;
     std::shared_ptr<Shard> primary;
-    dbConfig.getValue()->getChunkManagerOrPrimary(query.nss().ns(), manager, primary);
-    if (primary) {
-        shards.emplace_back(std::move(primary));
-    } else {
-        invariant(manager);
+    dbConfig.getValue()->getChunkManagerOrPrimary(query.nss().ns(), chunkManager, primary);
 
-        std::set<ShardId> shardIds;
-        manager->getShardIdsForQuery(shardIds, query.getParsed().getFilter());
-
-        for (auto id : shardIds) {
-            shards.emplace_back(shardRegistry->getShard(id));
+    // Re-target and re-send the initial find command to the shards until we have established the
+    // shard version.
+    for (size_t retries = 1; retries <= kMaxStaleConfigRetries; ++retries) {
+        auto cursorId = runQueryWithoutRetrying(
+            txn, query, readPref, chunkManager.get(), std::move(primary), results);
+        if (cursorId.isOK()) {
+            return cursorId;
         }
+        auto status = std::move(cursorId.getStatus());
+
+        if (status != ErrorCodes::RecvStaleConfig) {
+            // Errors other than receiving a stale config message from mongoD are fatal to the
+            // operation.
+            return status;
+        }
+
+        LOG(1) << "Received stale config for query " << query.toStringShort() << " on attempt "
+               << retries << " of " << kMaxStaleConfigRetries << ": " << status.reason();
+
+        invariant(chunkManager);
+        chunkManager = chunkManager->reload(txn);
     }
 
-    // Use read pref to target a particular host from each shard.
-    std::vector<HostAndPort> remotes;
-    for (const auto& shard : shards) {
-        auto targeter = shard->getTargeter();
-        auto hostAndPort = targeter->findHost(readPref);
-        if (!hostAndPort.isOK()) {
-            return hostAndPort.getStatus();
-        }
-        remotes.emplace_back(std::move(hostAndPort.getValue()));
+    return {ErrorCodes::StaleShardVersion,
+            str::stream() << "Retried " << kMaxStaleConfigRetries
+                          << " times without establishing shard version."};
+}
+
+StatusWith<GetMoreResponse> ClusterFind::runGetMore(OperationContext* txn,
+                                                    const GetMoreRequest& request) {
+    auto cursorManager = grid.getCursorManager();
+
+    auto pinnedCursor = cursorManager->checkOutCursor(request.nss, request.cursorid);
+    if (!pinnedCursor.isOK()) {
+        return pinnedCursor.getStatus();
     }
+    invariant(request.cursorid == pinnedCursor.getValue().getCursorId());
 
-    // TODO: handle other query options (projection).
-    ClusterClientCursorParams params(query.nss());
-    params.sort = query.getParsed().getSort();
-    params.skip = query.getParsed().getSkip();
+    std::vector<BSONObj> batch;
+    int bytesBuffered = 0;
+    long long batchSize = request.batchSize.value_or(0);
+    auto cursorState = ClusterCursorManager::CursorState::NotExhausted;
+    while (!FindCommon::enoughForGetMore(batchSize, batch.size(), bytesBuffered)) {
+        auto next = pinnedCursor.getValue().next();
+        if (!next.isOK()) {
+            return next.getStatus();
+        }
 
-    const auto lpqToForward = transformQueryForShards(query.getParsed());
-    params.cmdObj = lpqToForward->asFindCommand();
-
-    ClusterClientCursorImpl ccc(shardRegistry->getExecutor(), params, remotes);
-
-    // TODO: this should implement the batching logic rather than fully exhausting the cursor. It
-    // should allocate a cursor id and save the ClusterClientCursor rather than always returning a
-    // cursor id of 0.
-    StatusWith<boost::optional<BSONObj>> nextObj(boost::none);
-    while ((nextObj = ccc.next()).isOK()) {
-        if (!nextObj.getValue()) {
+        if (!next.getValue()) {
+            // We reached end-of-stream.
+            cursorState = ClusterCursorManager::CursorState::Exhausted;
             break;
         }
-        results->emplace_back(std::move(*nextObj.getValue()));
+
+        // Add doc to the batch.
+        bytesBuffered += next.getValue()->objsize();
+        batch.push_back(std::move(*next.getValue()));
     }
 
-    if (!nextObj.isOK()) {
-        return nextObj.getStatus();
-    }
+    // Transfer ownership of the cursor back to the cursor manager.
+    pinnedCursor.getValue().returnCursor(cursorState);
 
-    return CursorId(0);
+    CursorId idToReturn = (cursorState == ClusterCursorManager::CursorState::Exhausted)
+        ? CursorId(0)
+        : request.cursorid;
+    return GetMoreResponse(request.nss, idToReturn, std::move(batch));
 }
 
 }  // namespace mongo

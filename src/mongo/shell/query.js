@@ -642,14 +642,19 @@ function DBCommandCursor(mongo, cmdResult, batchSize) {
 
     if (mongo.useReadCommands()) {
         this._useReadCommands = true;
-        this._cursorid = cmdResult.cursor.id.toNumber();
+        this._cursorid = cmdResult.cursor.id;
         this._batchSize = batchSize;
 
         this._ns = cmdResult.cursor.ns;
         this._db = mongo.getDB(this._ns.substr(0, this._ns.indexOf(".")));
         this._collName = this._ns.substr(this._ns.indexOf(".") + 1);
-    }
-    else {
+
+        if (cmdResult.cursor.id) {
+            // Note that setting this._cursorid to 0 should be accompanied by
+            // this._cursorHandle.zeroCursorId().
+            this._cursorHandle = mongo.cursorHandleFromId(cmdResult.cursor.id);
+        }
+    } else {
         this._cursor = mongo.cursorFromId(cmdResult.cursor.ns, cmdResult.cursor.id, batchSize);
     }
 }
@@ -665,7 +670,7 @@ DBCommandCursor.prototype = {};
 DBCommandCursor.prototype._runGetMoreCommand = function() {
     // Construct the getMore command.
     var getMoreCmd = {
-        getMore: NumberLong(this._cursorid.toString()),
+        getMore: this._cursorid,
         collection: this._collName
     };
 
@@ -682,11 +687,13 @@ DBCommandCursor.prototype._runGetMoreCommand = function() {
                     this._ns + " != " + cmdRes.cursor.ns);
     }
 
-    if (cmdRes.cursor.id.toNumber() === 0) {
-        this._cursorid = 0;
+    if (!cmdRes.cursor.id.compare(NumberLong("0"))) {
+        this._cursorHandle.zeroCursorId();
+        this._cursorid = NumberLong("0");
     }
-    else if (this._cursorid !== cmdRes.cursor.id.toNumber()) {
-        throw Error("unexpected cursor id: " + this._cursorid + " != " + cmdRes.cursor.id);
+    else if (this._cursorid.compare(cmdRes.cursor.id)) {
+        throw Error("unexpected cursor id: " +
+                    this._cursorid.toString() + " != " + cmdRes.cursor.id.toString());
     }
 
     // Successfully retrieved the next batch.
@@ -697,7 +704,7 @@ DBCommandCursor.prototype._hasNextUsingCommands = function() {
     assert(this._useReadCommands);
 
     if (!this._batch.length) {
-        if (this._cursorid === 0) {
+        if (!this._cursorid.compare(NumberLong("0"))) {
             return false;
         }
 

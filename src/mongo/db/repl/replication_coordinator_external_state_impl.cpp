@@ -81,9 +81,7 @@ const char tsFieldName[] = "ts";
 
 // Set this to false to disable the background creation of snapshots. This can be used for A-B
 // benchmarking to find how much overhead repl::SnapshotThread introduces.
-// TODO SERVER-19213 Make this the default once secondaries can advance their commit
-//                   points (SERVER-19208) and we've validated the performance impact.
-MONGO_EXPORT_STARTUP_SERVER_PARAMETER(enableReplSnapshotThread, bool, false);
+MONGO_EXPORT_STARTUP_SERVER_PARAMETER(enableReplSnapshotThread, bool, true);
 }  // namespace
 
 ReplicationCoordinatorExternalStateImpl::ReplicationCoordinatorExternalStateImpl()
@@ -128,20 +126,53 @@ void ReplicationCoordinatorExternalStateImpl::shutdown() {
     }
 }
 
-void ReplicationCoordinatorExternalStateImpl::initiateOplog(OperationContext* txn) {
-    createOplog(txn);
+void ReplicationCoordinatorExternalStateImpl::initiateOplog(OperationContext* txn,
+                                                            bool updateReplOpTime) {
+    createOplog(txn, rsOplogName, true);
 
     MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
         ScopedTransaction scopedXact(txn, MODE_X);
         Lock::GlobalWrite globalWrite(txn->lockState());
 
         WriteUnitOfWork wuow(txn);
-        getGlobalServiceContext()->getOpObserver()->onOpMessage(txn,
-                                                                BSON("msg"
-                                                                     << "initiating set"));
+
+        const auto msgObj = BSON("msg"
+                                 << "initiating set");
+        if (updateReplOpTime) {
+            getGlobalServiceContext()->getOpObserver()->onOpMessage(txn, msgObj);
+        } else {
+            // 'updateReplOpTime' is false when called from the replSetInitiate command when the
+            // server is running with replication disabled. We bypass onOpMessage to invoke _logOp
+            // directly so that we can override the replication mode and keep _logO from updating
+            // the replication coordinator's op time (illegal operation when replication is not
+            // enabled).
+            repl::_logOp(txn,
+                         "n",
+                         "",
+                         msgObj,
+                         nullptr,
+                         false,
+                         rsOplogName,
+                         ReplicationCoordinator::modeReplSet,
+                         updateReplOpTime);
+        }
         wuow.commit();
     }
     MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "initiate oplog entry", "local.oplog.rs");
+}
+
+void ReplicationCoordinatorExternalStateImpl::logTransitionToPrimaryToOplog(OperationContext* txn) {
+    MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
+        ScopedTransaction scopedXact(txn, MODE_X);
+
+        WriteUnitOfWork wuow(txn);
+        txn->getClient()->getServiceContext()->getOpObserver()->onOpMessage(txn,
+                                                                            BSON("msg"
+                                                                                 << "new primary"));
+        wuow.commit();
+    }
+    MONGO_WRITE_CONFLICT_RETRY_LOOP_END(
+        txn, "logging transition to primary to oplog", "local.oplog.rs");
 }
 
 void ReplicationCoordinatorExternalStateImpl::forwardSlaveProgress() {
@@ -277,7 +308,7 @@ StatusWith<OpTime> ReplicationCoordinatorExternalStateImpl::loadLastOpTime(Opera
                                                     << " entry to have type Timestamp, but found "
                                                     << typeName(tsElement.type()));
         }
-        return StatusWith<OpTime>(extractOpTime(oplogEntry));
+        return OpTime::parseFromBSON(oplogEntry);
     } catch (const DBException& ex) {
         return StatusWith<OpTime>(ex.toStatus());
     }
@@ -340,10 +371,10 @@ void ReplicationCoordinatorExternalStateImpl::dropAllSnapshots() {
         manager->dropAllSnapshots();
 }
 
-void ReplicationCoordinatorExternalStateImpl::updateCommittedSnapshot(OpTime newCommitPoint) {
+void ReplicationCoordinatorExternalStateImpl::updateCommittedSnapshot(SnapshotName newCommitPoint) {
     auto manager = getGlobalServiceContext()->getGlobalStorageEngine()->getSnapshotManager();
     invariant(manager);  // This should never be called if there is no SnapshotManager.
-    manager->setCommittedSnapshot(SnapshotName(newCommitPoint.getTimestamp()));
+    manager->setCommittedSnapshot(newCommitPoint);
 }
 
 void ReplicationCoordinatorExternalStateImpl::forceSnapshotCreation() {

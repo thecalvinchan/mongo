@@ -35,6 +35,7 @@
 #include "mongo/scripting/mozjs/bson.h"
 #include "mongo/scripting/mozjs/countdownlatch.h"
 #include "mongo/scripting/mozjs/cursor.h"
+#include "mongo/scripting/mozjs/cursor_handle.h"
 #include "mongo/scripting/mozjs/db.h"
 #include "mongo/scripting/mozjs/dbcollection.h"
 #include "mongo/scripting/mozjs/dbpointer.h"
@@ -46,9 +47,11 @@
 #include "mongo/scripting/mozjs/maxkey.h"
 #include "mongo/scripting/mozjs/minkey.h"
 #include "mongo/scripting/mozjs/mongo.h"
+#include "mongo/scripting/mozjs/mongohelpers.h"
 #include "mongo/scripting/mozjs/nativefunction.h"
 #include "mongo/scripting/mozjs/numberint.h"
 #include "mongo/scripting/mozjs/numberlong.h"
+#include "mongo/scripting/mozjs/numberdecimal.h"
 #include "mongo/scripting/mozjs/object.h"
 #include "mongo/scripting/mozjs/oid.h"
 #include "mongo/scripting/mozjs/regexp.h"
@@ -103,6 +106,7 @@ public:
     double getNumber(const char* field) override;
     int getNumberInt(const char* field) override;
     long long getNumberLongLong(const char* field) override;
+    Decimal128 getNumberDecimal(const char* field) override;
     std::string getString(const char* field) override;
     bool getBoolean(const char* field) override;
     BSONObj getObject(const char* field) override;
@@ -158,6 +162,10 @@ public:
         return _cursorProto;
     }
 
+    WrapType<CursorHandleInfo>& getCursorHandleProto() {
+        return _cursorHandleProto;
+    }
+
     WrapType<DBCollectionInfo>& getDbCollectionProto() {
         return _dbCollectionProto;
     }
@@ -194,6 +202,10 @@ public:
         return _mongoExternalProto;
     }
 
+    WrapType<MongoHelpersInfo>& getMongoHelpersProto() {
+        return _mongoHelpersProto;
+    }
+
     WrapType<MongoLocalInfo>& getMongoLocalProto() {
         return _mongoLocalProto;
     }
@@ -208,6 +220,10 @@ public:
 
     WrapType<NumberLongInfo>& getNumberLongProto() {
         return _numberLongProto;
+    }
+
+    WrapType<NumberDecimalInfo>& getNumberDecimalProto() {
+        return _numberDecimalProto;
     }
 
     WrapType<ObjectInfo>& getObjectProto() {
@@ -301,6 +317,7 @@ private:
     WrapType<BSONInfo> _bsonProto;
     WrapType<CountDownLatchInfo> _countDownLatchProto;
     WrapType<CursorInfo> _cursorProto;
+    WrapType<CursorHandleInfo> _cursorHandleProto;
     WrapType<DBCollectionInfo> _dbCollectionProto;
     WrapType<DBPointerInfo> _dbPointerProto;
     WrapType<DBQueryInfo> _dbQueryProto;
@@ -310,10 +327,12 @@ private:
     WrapType<MaxKeyInfo> _maxKeyProto;
     WrapType<MinKeyInfo> _minKeyProto;
     WrapType<MongoExternalInfo> _mongoExternalProto;
+    WrapType<MongoHelpersInfo> _mongoHelpersProto;
     WrapType<MongoLocalInfo> _mongoLocalProto;
     WrapType<NativeFunctionInfo> _nativeFunctionProto;
     WrapType<NumberIntInfo> _numberIntProto;
     WrapType<NumberLongInfo> _numberLongProto;
+    WrapType<NumberDecimalInfo> _numberDecimalProto;
     WrapType<ObjectInfo> _objectProto;
     WrapType<OIDInfo> _oidProto;
     WrapType<RegExpInfo> _regExpProto;

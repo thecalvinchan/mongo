@@ -59,6 +59,7 @@ public:
     double toNumber();
     int32_t toInt32();
     int64_t toInt64();
+    Decimal128 toDecimal128();
     bool toBoolean();
 
     /**

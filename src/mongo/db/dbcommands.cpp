@@ -85,6 +85,7 @@
 #include "mongo/db/repl/replication_coordinator_global.h"
 #include "mongo/db/s/operation_shard_version.h"
 #include "mongo/db/s/sharding_state.h"
+#include "mongo/db/server_parameters.h"
 #include "mongo/db/write_concern.h"
 #include "mongo/rpc/request_interface.h"
 #include "mongo/rpc/reply_builder_interface.h"
@@ -106,6 +107,17 @@ using std::ostringstream;
 using std::string;
 using std::stringstream;
 using std::unique_ptr;
+
+// This is a special flag that allows for testing of snapshot behavior by skipping the replication
+// related checks and isolating the storage/query side of snapshotting.
+bool testingSnapshotBehaviorInIsolation = false;
+ExportedServerParameter<bool> TestingSnapshotBehaviorInIsolation(
+    ServerParameterSet::getGlobal(),
+    "testingSnapshotBehaviorInIsolation",
+    &testingSnapshotBehaviorInIsolation,
+    true,
+    false);
+
 
 class CmdShutdownMongoD : public CmdShutdown {
 public:
@@ -754,7 +766,7 @@ public:
                 result.append("millis", timer.millis());
                 return 1;
             }
-            exec = InternalPlanner::collectionScan(txn, ns, collection);
+            exec = InternalPlanner::collectionScan(txn, ns, collection, PlanExecutor::YIELD_MANUAL);
         } else if (min.isEmpty() || max.isEmpty()) {
             errmsg = "only one of min or max specified";
             return false;
@@ -778,7 +790,13 @@ public:
             min = Helpers::toKeyFormat(kp.extendRangeBound(min, false));
             max = Helpers::toKeyFormat(kp.extendRangeBound(max, false));
 
-            exec = InternalPlanner::indexScan(txn, collection, idx, min, max, false);
+            exec = InternalPlanner::indexScan(txn,
+                                              collection,
+                                              idx,
+                                              min,
+                                              max,
+                                              false,  // endKeyInclusive
+                                              PlanExecutor::YIELD_MANUAL);
         }
 
         long long avgObjSize = collection->dataSize(txn) / collection->numRecords(txn);
@@ -1282,8 +1300,7 @@ bool Command::run(OperationContext* txn,
             // Only return an error if a non-nullish readConcern was parsed, but do not process
             // readConcern regardless.
             if (!readConcern.getOpTime().isNull() ||
-                readConcern.getLevel() !=
-                    repl::ReadConcernArgs::ReadConcernLevel::kLocalReadConcern) {
+                readConcern.getLevel() != repl::ReadConcernLevel::kLocalReadConcern) {
                 replyBuilder->setMetadata(rpc::makeEmptyMetadata())
                     .setCommandReply({ErrorCodes::InvalidOptions,
                                       str::stream()
@@ -1292,16 +1309,18 @@ bool Command::run(OperationContext* txn,
                 return false;
             }
         } else {
-            // wait for readConcern to be satisfied
-            auto readConcernResult = replCoord->waitUntilOpTime(txn, readConcern);
-            readConcernResult.appendInfo(&replyBuilderBob);
-            if (!readConcernResult.getStatus().isOK()) {
-                replyBuilder->setMetadata(rpc::makeEmptyMetadata())
-                    .setCommandReply(readConcernResult.getStatus(), replyBuilderBob.done());
-                return false;
+            // Skip waiting for the OpTime when testing snapshot behavior.
+            if (!testingSnapshotBehaviorInIsolation) {
+                // Wait for readConcern to be satisfied.
+                auto readConcernResult = replCoord->waitUntilOpTime(txn, readConcern);
+                readConcernResult.appendInfo(&replyBuilderBob);
+                if (!readConcernResult.getStatus().isOK()) {
+                    replyBuilder->setMetadata(rpc::makeEmptyMetadata())
+                        .setCommandReply(readConcernResult.getStatus(), replyBuilderBob.done());
+                    return false;
+                }
             }
-            if (readConcern.getLevel() ==
-                repl::ReadConcernArgs::ReadConcernLevel::kMajorityReadConcern) {
+            if (readConcern.getLevel() == repl::ReadConcernLevel::kMajorityReadConcern) {
                 Status status = txn->recoveryUnit()->setReadFromMajorityCommittedSnapshot();
                 if (!status.isOK()) {
                     replyBuilder->setMetadata(rpc::makeEmptyMetadata()).setCommandReply(status);
@@ -1334,10 +1353,8 @@ bool Command::run(OperationContext* txn,
             replCoord->getElectionId()).writeToMetadata(&metadataBob);
     }
 
-    const auto& metadata = request.getMetadata();
-    if (isReplSet && metadata.hasField(rpc::kReplicationMetadataFieldName)) {
-        BSONObjBuilder replInfoBob(metadataBob.subobjStart(rpc::kReplicationMetadataFieldName));
-        replCoord->prepareReplResponseMetadata(&replInfoBob);
+    if (isReplSet) {
+        replCoord->prepareReplResponseMetadata(request, &metadataBob);
     }
 
     auto cmdResponse = replyBuilderBob.done();

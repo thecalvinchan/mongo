@@ -564,7 +564,13 @@ def decide_platform_tools():
 def variable_tools_converter(val):
     tool_list = shlex.split(val)
     return tool_list + [
-        "jsheader", "mergelib", "mongo_unittest", "textfile", "distsrc", "gziptool"
+        "distsrc",
+        "gziptool",
+        "jsheader",
+        "mergelib",
+        "mongo_integrationtest",
+        "mongo_unittest",
+        "textfile",
     ]
 
 def variable_distsrc_converter(val):
@@ -811,6 +817,8 @@ envDict = dict(BUILD_ROOT=buildDir,
                # TODO: Move unittests.txt to $BUILD_DIR, but that requires
                # changes to MCI.
                UNITTEST_LIST='$BUILD_ROOT/unittests.txt',
+               INTEGRATION_TEST_ALIAS='integration_tests',
+               INTEGRATION_TEST_LIST='$BUILD_ROOT/integration_tests.txt',
                CONFIGUREDIR=sconsDataDir.Dir('sconf_temp'),
                CONFIGURELOG=sconsDataDir.File('config.log'),
                INSTALL_DIR=installDir,
@@ -2370,7 +2378,17 @@ env.AlwaysBuild( "lint" )
 def getSystemInstallName():
     dist_arch = GetOption("distarch")
     arch_name = env['TARGET_ARCH'] if not dist_arch else dist_arch
-    n = env.GetTargetOSName() + "-" + arch_name
+
+    # We need to make sure the directory names inside dist tarballs are permanently
+    # consistent, even if the target OS name used in scons is different. Any differences
+    # between the names used by env.TargetOSIs/env.GetTargetOSName should be added
+    # to the translation dictionary below.
+    os_name_translations = {
+        'windows': 'win32'
+    }
+    os_name = env.GetTargetOSName()
+    os_name = os_name_translations.get(os_name, os_name)
+    n = os_name + "-" + arch_name
 
     if len(mongo_modules):
             n += "-" + "-".join(m.name for m in mongo_modules)
@@ -2447,4 +2465,4 @@ env.Alias("distsrc", "distsrc-tgz")
 
 env.SConscript('src/SConscript', variant_dir='$BUILD_DIR', duplicate=False)
 
-env.Alias('all', ['core', 'tools', 'dbtest', 'unittests'])
+env.Alias('all', ['core', 'tools', 'dbtest', 'unittests', 'integration_tests'])

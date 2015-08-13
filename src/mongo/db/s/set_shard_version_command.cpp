@@ -88,17 +88,6 @@ public:
              int options,
              string& errmsg,
              BSONObjBuilder& result) {
-        // Compatibility error for < v3.0 mongoses still active in the cluster
-        // TODO: Remove post-3.0
-        if (!cmdObj["serverID"].eoo()) {
-            // This mongos is too old to talk to us
-            string errMsg = stream() << "v3.0 mongod is incompatible with v2.6 mongos, "
-                                     << "a v2.6 mongos may be running in the v3.0 cluster at "
-                                     << txn->getClient()->clientAddress(false);
-            error() << errMsg;
-            return appendCommandStatus(result, Status(ErrorCodes::ProtocolError, errMsg));
-        }
-
         // Steps
         // 1. check basic config
         // 2. extract params from command
@@ -128,10 +117,9 @@ public:
 
         // check shard name is correct
         if (cmdObj["shard"].type() == String) {
-            // The shard host is also sent when using setShardVersion, report this host if there
-            // is an error.
-            ShardingState::get(txn)
-                ->gotShardNameAndHost(cmdObj["shard"].String(), cmdObj["shardHost"].str());
+            // The shard host is also sent when using setShardVersion, report this host if there is
+            // an error
+            ShardingState::get(txn)->setShardName(cmdObj["shard"].String());
         }
 
         // Handle initial shard connection
@@ -324,15 +312,15 @@ private:
         }
 
         if (ShardingState::get(txn)->enabled()) {
-            if (configdb == ShardingState::get(txn)->getConfigServer())
+            if (configdb == ShardingState::get(txn)->getConfigServer(txn))
                 return true;
 
             result.append("configdb",
-                          BSON("stored" << ShardingState::get(txn)->getConfigServer() << "given"
+                          BSON("stored" << ShardingState::get(txn)->getConfigServer(txn) << "given"
                                         << configdb));
 
             errmsg = str::stream() << "mongos specified a different config database string : "
-                                   << "stored : " << ShardingState::get(txn)->getConfigServer()
+                                   << "stored : " << ShardingState::get(txn)->getConfigServer(txn)
                                    << " vs given : " << configdb;
             return false;
         }

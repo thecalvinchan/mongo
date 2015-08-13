@@ -40,6 +40,7 @@ namespace mongo {
 class BSONObj;
 class OID;
 class OperationContext;
+class SnapshotName;
 class Status;
 struct HostAndPort;
 template <typename T>
@@ -88,8 +89,14 @@ public:
 
     /**
      * Creates the oplog and writes the first entry.
+     * Sets replCoord last optime if 'updateReplOpTime' is true.
      */
-    virtual void initiateOplog(OperationContext* txn) = 0;
+    virtual void initiateOplog(OperationContext* txn, bool updateReplOpTime) = 0;
+
+    /**
+     * Writes a message about our transition to primary to the oplog.
+     */
+    virtual void logTransitionToPrimaryToOplog(OperationContext* txn) = 0;
 
     /**
      * Simple wrapper around SyncSourceFeedback::forwardSlaveProgress.  Signals to the
@@ -197,13 +204,13 @@ public:
      *
      * It is illegal to call with a newCommitPoint that does not name an existing snapshot.
      */
-    virtual void updateCommittedSnapshot(OpTime newCommitPoint) = 0;
+    virtual void updateCommittedSnapshot(SnapshotName newCommitPoint) = 0;
 
     /**
      * Signals the SnapshotThread, if running, to take a forced snapshot even if the global
      * timestamp hasn't changed.
      *
-     * Does not wait for the timestamp to be taken.
+     * Does not wait for the snapshot to be taken.
      */
     virtual void forceSnapshotCreation() = 0;
 

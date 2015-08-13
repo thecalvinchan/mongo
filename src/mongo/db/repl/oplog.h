@@ -35,6 +35,7 @@
 #include "mongo/base/status.h"
 #include "mongo/base/disallow_copying.h"
 #include "mongo/db/repl/optime.h"
+#include "mongo/db/repl/replication_coordinator.h"
 #include "mongo/util/concurrency/mutex.h"
 #include "mongo/util/time_support.h"
 
@@ -49,11 +50,20 @@ class Timestamp;
 class RecordId;
 
 namespace repl {
-class ReplicationCoordinator;
+class ReplSettings;
 
-// Create a new capped collection for the oplog if it doesn't yet exist.
-// This will be either local.oplog.rs (replica sets) or local.oplog.$main (master/slave)
-// If the collection already exists, set the 'last' OpTime if master/slave (side effect!)
+
+/**
+ * Create a new capped collection for the oplog if it doesn't yet exist.
+ * If the collection already exists, set the 'last' OpTime if master/slave (side effect!)
+ */
+void createOplog(OperationContext* txn, const std::string& oplogCollectionName, bool replEnabled);
+
+/*
+ * Create a new capped collection for the oplog using createOplog() if it doesn't yet exist.
+ * Collection name will be "_oplogCollectionName" initialized in setOplogCollectionName().
+ * This will be either local.oplog.rs (replica sets) or local.oplog.$main (master/slave)
+ */
 void createOplog(OperationContext* txn);
 
 // This function writes ops into the replica-set oplog;
@@ -79,7 +89,19 @@ extern int OPLOG_VERSION;
  *
  * For 'u' records, 'obj' captures the mutation made to the object but not
  * the object itself. 'o2' captures the the criteria for the object that will be modified.
+ *
+ * Sets replCoord last optime if 'updateReplOpTime' is true.
  */
+void _logOp(OperationContext* txn,
+            const char* opstr,
+            const char* ns,
+            const BSONObj& obj,
+            BSONObj* o2,
+            bool fromMigrate,
+            const std::string& oplogCollectionName,
+            ReplicationCoordinator::Mode replicationMode,
+            bool updateReplOpTime);
+
 void _logOp(OperationContext* txn,
             const char* opstr,
             const char* ns,
@@ -118,11 +140,6 @@ void initTimestampFromOplog(OperationContext* txn, const std::string& oplogNS);
  * Sets the global Timestamp to be 'newTime'.
  */
 void setNewTimestamp(const Timestamp& newTime);
-
-/*
- * Extract the OpTime from log entry.
- */
-OpTime extractOpTime(const BSONObj& op);
 
 /**
  * Detects the current replication mode and sets the "_oplogCollectionName" accordingly.

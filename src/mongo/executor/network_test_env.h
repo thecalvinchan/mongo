@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -129,11 +130,17 @@ public:
             std::move(future), _executor, _mockNetwork};
     }
 
-
     using OnCommandFunction = stdx::function<StatusWith<BSONObj>(const RemoteCommandRequest&)>;
+    using OnCommandWithMetadataFunction =
+        stdx::function<StatusWith<RemoteCommandResponse>(const RemoteCommandRequest&)>;
 
     using OnFindCommandFunction =
         stdx::function<StatusWith<std::vector<BSONObj>>(const RemoteCommandRequest&)>;
+    // Function that accepts a find request and returns a tuple of resulting documents and response
+    // metadata.
+    using OnFindCommandWithMetadataFunction =
+        stdx::function<StatusWith<std::tuple<std::vector<BSONObj>, BSONObj>>(
+            const RemoteCommandRequest&)>;
 
     /**
      * Create a new environment based on the given network.
@@ -146,7 +153,9 @@ public:
      * single request + response or find tests.
      */
     void onCommand(OnCommandFunction func);
+    void onCommandWithMetadata(OnCommandWithMetadataFunction func);
     void onFindCommand(OnFindCommandFunction func);
+    void onFindWithMetadataCommand(OnFindCommandWithMetadataFunction func);
 
 private:
     // Task executor used for running asynchronous operations.
