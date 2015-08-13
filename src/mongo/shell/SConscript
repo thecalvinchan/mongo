@@ -3,7 +3,7 @@
 Import("env")
 
 # Files added here need to be added in scripting/engine.cpp and buildscripts/vcxproj.header as well.
-env.JSHeader(
+js_header = env.JSHeader(
     target="mongo.cpp",
     source=[
         "assert.js",
@@ -13,6 +13,7 @@ env.JSHeader(
         "db.js",
         "explain_query.js",
         "explainable.js",
+        "error_codes.js",
         "mongo.js",
         "mr.js",
         "query.js",
@@ -21,8 +22,9 @@ env.JSHeader(
         "utils.js",
         "utils_sh.js",
         "utils_auth.js",
-    ],
+    ]
 )
+env.Depends(js_header, env.Alias('generated-sources'))
 
 # Files added here need to be added in shell/shell_utils.cpp and buildscripts/vcxproj.header as
 # well.
