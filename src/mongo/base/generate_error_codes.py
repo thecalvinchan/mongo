@@ -42,7 +42,7 @@ Usage:
 usage_msg = "usage: %prog <cpp|js> /path/to/error_codes.err [options]"
 
 from optparse import OptionParser
-import sys, yaml
+import sys
 
 def main(argv):
     generator = argv[1]
