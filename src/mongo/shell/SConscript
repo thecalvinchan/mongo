@@ -4,7 +4,7 @@ Import("env")
 
 generateJSErrorCodes = env.Command(
     target=['error_codes.js'],
-    source=['../base/generate_error_codes.py', '../base/error_codes.err'],
+    source=['$BUILD_DIR/mongo/base/generate_error_codes.py', '$BUILD_DIR/mongo/base/error_codes.err'],
     action=['$PYTHON ${SOURCES[0]} js ${SOURCES[1]} --js-source=${TARGETS[0]}'])
 env.Alias('generated-sources', generateJSErrorCodes)
 
