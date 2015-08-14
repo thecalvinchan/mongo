@@ -2,11 +2,11 @@
 
 Import("env")
 
-generateErrorCodes = env.Command(
+generateJSErrorCodes = env.Command(
     target=['error_codes.js'],
     source=['../base/generate_error_codes.py', '../base/error_codes.err'],
     action=['$PYTHON ${SOURCES[0]} js ${SOURCES[1]} --js-source=${TARGETS[0]}'])
-env.Alias('generated-sources', generateErrorCodes)
+env.Alias('generated-sources', generateJSErrorCodes)
 
 # Files added here need to be added in scripting/engine.cpp and buildscripts/vcxproj.header as well.
 js_header = env.JSHeader(
