@@ -300,8 +300,13 @@ void processMessage(Connection& c, Message& m) {
                 out() << "command name: " << c.getCommandName() << endl;
                 out() << "metadata: " << c.getMetadata().toString() << endl;
                 out() << "command args: " << c.getCommandArgs() << endl;
-                out() << "input docs: " << c.getInputDocs().toString() << endl;
-                //out() << "protocol: " << c.getProtocol() << endl;
+                //out() << "protocol: " << c.getProtocol().toString().value() << endl;
+                mongo::rpc::DocumentRange docs = c.getInputDocs();
+                mongo::rpc::DocumentRange::const_iterator it = docs.begin();
+                while (it != docs.end()) {
+                    out() << it->toString() << endl;
+                    it++;
+                }
                 break;
             }
             case mongo::dbCommandReply: {
