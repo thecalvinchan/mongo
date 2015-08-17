@@ -67,6 +67,8 @@
 #include "mongo/db/dbmessage.h"
 #include "mongo/util/net/message.h"
 #include "mongo/db/storage/mmap_v1/mmap.h"
+#include "mongo/rpc/command_request.h"
+#include "mongo/rpc/command_reply.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/net/message.h"
 #include "mongo/util/quick_exit.h"
@@ -291,6 +293,22 @@ void processMessage(Connection& c, Message& m) {
 
     try {
         switch (m.operation()) {
+            case mongo::dbCommand: {
+                out() << "dbCommand" << endl;
+                mongo::rpc::CommandRequest c(&m);
+                out() << "database: " << c.getDatabase() << endl;
+                out() << "command name: " << c.getCommandName() << endl;
+                out() << "metadata: " << c.getMetadata().toString() << endl;
+                out() << "command args: " << c.getCommandArgs() << endl;
+                out() << "input docs: " << c.getInputDocs().toString() << endl;
+                //out() << "protocol: " << c.getProtocol() << endl;
+                break;
+            }
+            case mongo::dbCommandReply: {
+                out() << "dbCommandReply" << endl;
+                mongo::rpc::CommandReply c(&m);
+                break;
+            }
             case mongo::opReply: {
                 mongo::QueryResult::View r = m.singleData().view2ptr();
 
