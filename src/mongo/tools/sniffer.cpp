@@ -294,19 +294,23 @@ void processMessage(Connection& c, Message& m) {
     try {
         switch (m.operation()) {
             case mongo::dbCommand: {
-                out() << "dbCommand" << endl;
                 mongo::rpc::CommandRequest c(&m);
-                out() << "database: " << c.getDatabase() << endl;
-                out() << "command name: " << c.getCommandName() << endl;
-                out() << "metadata: " << c.getMetadata().toString() << endl;
-                out() << "command args: " << c.getCommandArgs() << endl;
+                out() << "command: " << c.getCommandName() << " ";
+                out() << "database: " << c.getDatabase() << " ";
+                out() << "metadata: " << c.getMetadata().toString() << " ";
+                out() << "commandArgs: " << c.getCommandArgs() << " ";
+                out() << "inputDocs: [ ";
                 //out() << "protocol: " << c.getProtocol().toString().value() << endl;
                 mongo::rpc::DocumentRange docs = c.getInputDocs();
                 mongo::rpc::DocumentRange::const_iterator it = docs.begin();
+                if (it != docs.end()) {
+                    out() << endl;
+                }
                 while (it != docs.end()) {
                     out() << it->toString() << endl;
                     it++;
                 }
+                out() << "]";
                 break;
             }
             case mongo::dbCommandReply: {
