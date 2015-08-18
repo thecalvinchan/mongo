@@ -295,34 +295,38 @@ void processMessage(Connection& c, Message& m) {
         switch (m.operation()) {
             case mongo::dbCommand: {
                 mongo::rpc::CommandRequest c(&m);
-                std::string commandName = c.getCommandName().toString();
-                if (commandName == "insert") {
-                    out() << "command: insert; ";
-                    out() << "database: " << c.getDatabase() << "; ";
-                    out() << "documents: " << c.getCommandArgs()["documents"];
-                }
-
-
-
-
-                /*out() << "dbCommand" << endl;
-                
-                out() << "database: " << c.getDatabase() << endl;
-                out() << "command name: " << c.getCommandName() << endl;
-                out() << "metadata: " << c.getMetadata().toString() << endl;
-                out() << "command args: " << c.getCommandArgs() << endl;
-                //out() << "protocol: " << c.getProtocol().toString().value() << endl;
+                out() << "command: " << c.getCommandName() << " ";
+                out() << "database: " << c.getDatabase() << " ";
+                out() << "metadata: " << c.getMetadata().toString() << " ";
+                out() << "commandArgs: " << c.getCommandArgs() << " ";
+                out() << "inputDocs: [ ";
                 mongo::rpc::DocumentRange docs = c.getInputDocs();
                 mongo::rpc::DocumentRange::const_iterator it = docs.begin();
+                if (it != docs.end()) {
+                    out() << endl;
+                }
                 while (it != docs.end()) {
                     out() << it->toString() << endl;
                     it++;
-                }*/
+                }
+                out() << "]" << endl;
                 break;
             }
             case mongo::dbCommandReply: {
-                out() << "dbCommandReply" << endl;
                 mongo::rpc::CommandReply c(&m);
+                out() << "commandReply: " << c.getCommandReply() << " ";
+                out() << "metadata: " << c.getMetadata().toString() << " ";
+                out() << "outputDocs: [ ";
+                mongo::rpc::DocumentRange docs = c.getOutputDocs();
+                mongo::rpc::DocumentRange::const_iterator it = docs.begin();
+                if (it != docs.end()) {
+                    out() << endl;
+                }
+                while (it != docs.end()) {
+                    out() << it->toString() << endl;
+                    it++;
+                }
+                out() << "]" << endl;
                 break;
             }
             case mongo::opReply: {
