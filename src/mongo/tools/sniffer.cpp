@@ -294,7 +294,7 @@ void processMessage(Connection& c, Message& m) {
         switch (m.operation()) {
             case mongo::dbCommand: {
                 mongo::rpc::CommandRequest c(&m);
-                out() << "command: " << c.getCommandName() << " ";
+                out() << "command: " << c.getCommandName() << "\t";
                 out() << "database: " << c.getDatabase() << " ";
                 out() << "metadata: " << c.getMetadata().toString() << " ";
                 out() << "commandArgs: " << c.getCommandArgs() << " ";
@@ -311,7 +311,7 @@ void processMessage(Connection& c, Message& m) {
             }
             case mongo::dbCommandReply: {
                 mongo::rpc::CommandReply c(&m);
-                out() << "commandReply: " << c.getCommandReply() << " ";
+                out() << "commandReply: " << c.getCommandReply() << "\t";
                 out() << "metadata: " << c.getMetadata().toString() << " ";
                 out() << "outputDocs: [ ";
                 mongo::rpc::DocumentRange docs = c.getOutputDocs();
