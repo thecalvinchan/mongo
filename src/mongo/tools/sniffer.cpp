@@ -294,8 +294,19 @@ void processMessage(Connection& c, Message& m) {
     try {
         switch (m.operation()) {
             case mongo::dbCommand: {
-                out() << "dbCommand" << endl;
                 mongo::rpc::CommandRequest c(&m);
+                std::string commandName = c.getCommandName().toString();
+                if (commandName == "insert") {
+                    out() << "command: insert; ";
+                    out() << "database: " << c.getDatabase() << "; ";
+                    out() << "documents: " << c.getCommandArgs()["documents"];
+                }
+
+
+
+
+                /*out() << "dbCommand" << endl;
+                
                 out() << "database: " << c.getDatabase() << endl;
                 out() << "command name: " << c.getCommandName() << endl;
                 out() << "metadata: " << c.getMetadata().toString() << endl;
@@ -306,7 +317,7 @@ void processMessage(Connection& c, Message& m) {
                 while (it != docs.end()) {
                     out() << it->toString() << endl;
                     it++;
-                }
+                }*/
                 break;
             }
             case mongo::dbCommandReply: {
