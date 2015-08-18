@@ -301,13 +301,11 @@ void processMessage(Connection& c, Message& m) {
                 out() << "commandArgs: " << c.getCommandArgs() << " ";
                 out() << "inputDocs: [ ";
                 mongo::rpc::DocumentRange docs = c.getInputDocs();
-                mongo::rpc::DocumentRange::const_iterator it = docs.begin();
-                if (it != docs.end()) {
+                if (docs.begin() != docs.end()) {
                     out() << endl;
                 }
-                while (it != docs.end()) {
-                    out() << it->toString() << endl;
-                    it++;
+                for (const auto& doc : docs) {
+                   out() << doc.toString() << endl;
                 }
                 out() << "]" << endl;
                 break;
@@ -318,13 +316,11 @@ void processMessage(Connection& c, Message& m) {
                 out() << "metadata: " << c.getMetadata().toString() << " ";
                 out() << "outputDocs: [ ";
                 mongo::rpc::DocumentRange docs = c.getOutputDocs();
-                mongo::rpc::DocumentRange::const_iterator it = docs.begin();
-                if (it != docs.end()) {
+                if (docs.begin() != docs.end()) {
                     out() << endl;
                 }
-                while (it != docs.end()) {
-                    out() << it->toString() << endl;
-                    it++;
+                for (const auto& doc : docs) {
+                   out() << doc.toString() << endl;
                 }
                 out() << "]" << endl;
                 break;
