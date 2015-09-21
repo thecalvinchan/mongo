@@ -37,10 +37,12 @@
 #include <vector>
 
 #include "mongo/base/status.h"
+#include "mongo/db/client.h"
 #include "mongo/db/commands.h"
 #include "mongo/db/pipeline/document_source.h"
 #include "mongo/db/pipeline/expression_context.h"
 #include "mongo/db/pipeline/pipeline.h"
+#include "mongo/platform/random.h"
 #include "mongo/rpc/get_status_from_command_result.h"
 #include "mongo/s/catalog/catalog_cache.h"
 #include "mongo/s/chunk_manager.h"
@@ -86,10 +88,10 @@ public:
     }
 
     // virtuals from Command
-    virtual void addRequiredPrivileges(const std::string& dbname,
-                                       const BSONObj& cmdObj,
-                                       std::vector<Privilege>* out) {
-        Pipeline::addRequiredPrivileges(this, dbname, cmdObj, out);
+    Status checkAuthForCommand(ClientBasic* client,
+                               const std::string& dbname,
+                               const BSONObj& cmdObj) final {
+        return Pipeline::checkAuthForCommand(client, dbname, cmdObj);
     }
 
     virtual bool run(OperationContext* txn,
@@ -100,16 +102,14 @@ public:
                      BSONObjBuilder& result) {
         const string fullns = parseNs(dbname, cmdObj);
 
-        auto status = grid.catalogCache()->getDatabase(dbname);
+        auto status = grid.catalogCache()->getDatabase(txn, dbname);
         if (!status.isOK()) {
             return appendEmptyResultSet(result, status.getStatus(), fullns);
         }
 
         shared_ptr<DBConfig> conf = status.getValue();
 
-        // If the system isn't running sharded, or the target collection isn't sharded, pass
-        // this on to a mongod.
-        if (!conf->isShardingEnabled() || !conf->isSharded(fullns)) {
+        if (!conf->isShardingEnabled()) {
             return aggPassthrough(conf, cmdObj, result, options);
         }
 
@@ -125,17 +125,26 @@ public:
             return false;
         }
 
+        for (auto&& ns : pipeline->getInvolvedCollections()) {
+            uassert(
+                28769, str::stream() << ns.ns() << " cannot be sharded", !conf->isSharded(ns.ns()));
+        }
+
+        if (!conf->isSharded(fullns)) {
+            return aggPassthrough(conf, cmdObj, result, options);
+        }
+
         // If the first $match stage is an exact match on the shard key, we only have to send it
         // to one shard, so send the command to that shard.
         BSONObj firstMatchQuery = pipeline->getInitialQuery();
-        ChunkManagerPtr chunkMgr = conf->getChunkManager(fullns);
+        ChunkManagerPtr chunkMgr = conf->getChunkManager(txn, fullns);
         BSONObj shardKeyMatches = uassertStatusOK(
             chunkMgr->getShardKeyPattern().extractShardKeyFromQuery(firstMatchQuery));
 
-        // Don't need to split pipeline if the first $match is an exact match on shard key, but
-        // we can't send the entire pipeline to one shard if there is a $out stage, since that
-        // shard may not be the primary shard for the database.
-        bool needSplit = shardKeyMatches.isEmpty() || pipeline->hasOutStage();
+        // Don't need to split pipeline if the first $match is an exact match on shard key, unless
+        // there is a stage that needs to be run on the primary shard.
+        const bool needPrimaryShardMerger = pipeline->needsPrimaryShardMerger();
+        const bool needSplit = shardKeyMatches.isEmpty() || needPrimaryShardMerger;
 
         // Split the pipeline into pieces for mongod(s) and this mongos. If needSplit is true,
         // 'pipeline' will become the merger side.
@@ -164,14 +173,15 @@ public:
         // Run the command on the shards
         // TODO need to make sure cursors are killed if a retry is needed
         vector<Strategy::CommandResult> shardResults;
-        Strategy::commandOp(dbname, shardedCommand, options, fullns, shardQuery, &shardResults);
+        Strategy::commandOp(
+            txn, dbname, shardedCommand, options, fullns, shardQuery, &shardResults);
 
         if (pipeline->isExplain()) {
             // This must be checked before we start modifying result.
             uassertAllShardsSupportExplain(shardResults);
 
             if (needSplit) {
-                result << "splitPipeline"
+                result << "needsPrimaryShardMerger" << needPrimaryShardMerger << "splitPipeline"
                        << DOC("shardsPart" << shardPipeline->writeExplainOps() << "mergerPart"
                                            << pipeline->writeExplainOps());
             } else {
@@ -218,10 +228,14 @@ public:
             outputNsOrEmpty = out->getOutputNs().ns();
         }
 
-        // Run merging command on primary shard of database. Need to use ShardConnection so
-        // that the merging mongod is sent the config servers on connection init.
-        const auto shard = grid.shardRegistry()->getShard(conf->getPrimaryId());
-        ShardConnection conn(shard->getConnString(), outputNsOrEmpty);
+        // Run merging command on random shard, unless a stage needs the primary shard. Need to use
+        // ShardConnection so that the merging mongod is sent the config servers on connection init.
+        auto& prng = txn->getClient()->getPrng();
+        const auto& mergingShardId = needPrimaryShardMerger
+            ? conf->getPrimaryId()
+            : shardResults[prng.nextInt32(shardResults.size())].shardTargetId;
+        const auto mergingShard = grid.shardRegistry()->getShard(mergingShardId);
+        ShardConnection conn(mergingShard->getConnString(), outputNsOrEmpty);
         BSONObj mergedResults =
             aggRunCommand(conn.get(), dbname, mergeCmd.freeze().toBson(), options);
         conn.done();

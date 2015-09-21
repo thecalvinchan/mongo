@@ -84,7 +84,7 @@ ShardingTest = function( testName , numShards , verboseLevel , numMongos , other
 
     // Check if testName is an object, if so, pull params from there
     var keyFile = undefined
-    var numConfigs = 2;
+    var numConfigs = 3;
     otherParams = Object.merge( otherParams || {}, {} )
 
     if( isObject( testName ) ){
@@ -268,11 +268,6 @@ ShardingTest = function( testName , numShards , verboseLevel , numMongos , other
         otherParams.sync = true;
     }
 
-    if (numConfigs == 3) {
-        // TODO(spencer): Remove this once we support 3 node config server replica sets
-        otherParams.sync = true;
-    }
-
     this._configServers = []
     this._configServersAreRS = !otherParams.sync;
 
@@ -342,7 +337,11 @@ ShardingTest = function( testName , numShards , verboseLevel , numMongos , other
 
         this.configRS = new ReplSetTest(rstOptions);
         this.configRS.startSet(startOptions);
-        this.configRS.initiate();
+
+        var config = this.configRS.getReplSetConfig();
+        config.configsvr = true;
+        this.configRS.initiate(config);
+
         this.configRS.getMaster(); // Wait for master to be elected before starting mongos
 
         this._configDB = this.configRS.getURL();

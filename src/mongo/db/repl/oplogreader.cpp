@@ -73,7 +73,7 @@ bool replAuthenticate(DBClientBase* conn) {
 
     if (!isInternalAuthSet())
         return false;
-    return authenticateInternalUser(conn);
+    return conn->authenticateInternalUser();
 }
 
 const Seconds OplogReader::kSocketTimeout(30);
@@ -91,8 +91,8 @@ OplogReader::OplogReader() {
 bool OplogReader::connect(const HostAndPort& host) {
     if (conn() == NULL || _host != host) {
         resetConnection();
-        _conn =
-            shared_ptr<DBClientConnection>(new DBClientConnection(false, kSocketTimeout.count()));
+        _conn = shared_ptr<DBClientConnection>(
+            new DBClientConnection(false, durationCount<Seconds>(kSocketTimeout)));
         string errmsg;
         if (!_conn->connect(host, errmsg) ||
             (getGlobalAuthorizationManager()->isAuthEnabled() && !replAuthenticate(_conn.get()))) {
@@ -183,14 +183,14 @@ void OplogReader::connectToSyncSource(OperationContext* txn,
         // Read the first (oldest) op and confirm that it's not newer than our last
         // fetched op. Otherwise, we have fallen off the back of that source's oplog.
         BSONObj remoteOldestOp(findOne(rsOplogName.c_str(), Query()));
-        OpTime remoteOldOpTime = extractOpTime(remoteOldestOp);
+        OpTime remoteOldOpTime = fassertStatusOK(28776, OpTime::parseFromBSON(remoteOldestOp));
 
         // remoteOldOpTime may come from a very old config, so we cannot compare their terms.
         if (!lastOpTimeFetched.isNull() &&
             lastOpTimeFetched.getTimestamp() < remoteOldOpTime.getTimestamp()) {
             // We're too stale to use this sync source.
             resetConnection();
-            replCoord->blacklistSyncSource(candidate, Date_t::now() + Minutes(10));
+            replCoord->blacklistSyncSource(candidate, Date_t::now() + Minutes(1));
             if (oldestOpTimeSeen.getTimestamp() > remoteOldOpTime.getTimestamp()) {
                 warning() << "we are too stale to use " << candidate.toString()
                           << " as a sync source";

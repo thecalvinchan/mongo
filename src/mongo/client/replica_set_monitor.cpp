@@ -257,17 +257,7 @@ int ReplicaSetMonitor::maxConsecutiveFailedChecks = 30;
 bool ReplicaSetMonitor::useDeterministicHostSelection = false;
 
 ReplicaSetMonitor::ReplicaSetMonitor(StringData name, const std::set<HostAndPort>& seeds)
-    : _state(std::make_shared<SetState>(name, seeds)) {
-    log() << "starting new replica set monitor for replica set " << name << " with seeds ";
-
-    for (std::set<HostAndPort>::const_iterator it = seeds.begin(); it != seeds.end(); ++it) {
-        if (it != seeds.begin()) {
-            log() << ',';
-        }
-
-        log() << *it;
-    }
-}
+    : _state(std::make_shared<SetState>(name, seeds)) {}
 
 HostAndPort ReplicaSetMonitor::getHostOrRefresh(const ReadPreferenceSetting& criteria) {
     {
@@ -498,8 +488,19 @@ void Refresher::receivedIsMaster(const HostAndPort& from,
     }
 
     if (reply.setName != _set->name) {
-        warning() << "node: " << from << " isn't a part of set: " << _set->name
-                  << " ismaster: " << replyObj;
+        if (reply.raw["isreplicaset"].trueValue()) {
+            // The reply came from a node in the state referred to as RSGhost in the SDAM
+            // spec. RSGhost corresponds to either REMOVED or STARTUP member states. In any event,
+            // if a reply from a ghost offers a list of possible other members of the replica set,
+            // and if this refresher has yet to find the replica set master, we add hosts listed in
+            // the reply to the list of possible replica set members.
+            if (!_scan->foundUpMaster) {
+                _scan->possibleNodes.insert(reply.normalHosts.begin(), reply.normalHosts.end());
+            }
+        } else {
+            warning() << "node: " << from << " isn't a part of set: " << _set->name
+                      << " ismaster: " << replyObj;
+        }
         failedHost(from);
         return;
     }

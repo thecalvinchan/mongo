@@ -46,6 +46,7 @@
 #include "mongo/db/global_timestamp.h"
 #include "mongo/db/query/cursor_responses.h"
 #include "mongo/db/query/find.h"
+#include "mongo/db/query/find_common.h"
 #include "mongo/db/query/getmore_request.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
 #include "mongo/db/repl/oplog.h"
@@ -211,18 +212,9 @@ public:
                                      << " rejected due to active fail point rsStopGetMoreCmd"));
         }
 
-        const bool hasOwnMaxTime = CurOp::get(txn)->isMaxTimeSet();
-
         // Validation related to awaitData.
         if (isCursorAwaitData(cursor)) {
             invariant(isCursorTailable(cursor));
-
-            if (!hasOwnMaxTime) {
-                Status status(ErrorCodes::BadValue,
-                              str::stream() << "Must set maxTimeMS on a getMore if the initial "
-                                            << "query had 'awaitData' set: " << cmdObj);
-                return appendCommandStatus(result, status);
-            }
 
             if (cursor->isAggCursor()) {
                 Status status(ErrorCodes::BadValue,
@@ -250,11 +242,19 @@ public:
         // Reset timeout timer on the cursor since the cursor is still in use.
         cursor->setIdleTime(0);
 
-        // If there is no time limit set directly on this getMore command, but the operation
-        // that spawned this cursor had a time limit set, then we have to apply any leftover
-        // time to this getMore.
+        const bool hasOwnMaxTime = CurOp::get(txn)->isMaxTimeSet();
+
         if (!hasOwnMaxTime) {
-            CurOp::get(txn)->setMaxTimeMicros(cursor->getLeftoverMaxTimeMicros());
+            // There is no time limit set directly on this getMore command. If the cursor is
+            // awaitData, then we supply a default time of one second. Otherwise we roll over
+            // any leftover time from the maxTimeMS of the operation that spawned this cursor,
+            // applying it to this getMore.
+            if (isCursorAwaitData(cursor)) {
+                Seconds awaitDataTimeout(1);
+                CurOp::get(txn)->setMaxTimeMicros(durationCount<Microseconds>(awaitDataTimeout));
+            } else {
+                CurOp::get(txn)->setMaxTimeMicros(cursor->getLeftoverMaxTimeMicros());
+            }
         }
         txn->checkForInterrupt();  // May trigger maxTimeAlwaysTimeOut fail point.
 
@@ -385,7 +385,7 @@ public:
                 nextBatch->append(obj);
                 (*numResults)++;
 
-                if (enoughForGetMore(
+                if (FindCommon::enoughForGetMore(
                         request.batchSize.value_or(0), *numResults, nextBatch->len())) {
                     break;
                 }

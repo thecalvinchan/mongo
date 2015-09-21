@@ -43,13 +43,6 @@ namespace repl {
 const Client::Decoration<ReplClientInfo> ReplClientInfo::forClient =
     Client::declareDecoration<ReplClientInfo>();
 
-long long ReplClientInfo::getTerm() {
-    if (_cachedTerm == kUninitializedTerm) {
-        _cachedTerm = getGlobalReplicationCoordinator()->getTerm();
-    }
-    return _cachedTerm;
-}
-
 void ReplClientInfo::setLastOpToSystemLastOpTime(OperationContext* txn) {
     ReplicationCoordinator* replCoord = repl::ReplicationCoordinator::get(txn->getServiceContext());
     if (replCoord->isReplEnabled()) {

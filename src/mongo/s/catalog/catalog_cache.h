@@ -39,6 +39,7 @@ namespace mongo {
 
 class CatalogManager;
 class DBConfig;
+class OperationContext;
 template <typename T>
 class StatusWith;
 
@@ -52,7 +53,7 @@ class CatalogCache {
     MONGO_DISALLOW_COPYING(CatalogCache);
 
 public:
-    explicit CatalogCache(CatalogManager* catalogManager);
+    CatalogCache();
 
     /**
      * Retrieves the cached metadata for the specified database. The returned value is still
@@ -63,7 +64,8 @@ public:
      * @param dbname The name of the database (must not contain dots, etc).
      * @return The database if it exists, NULL otherwise.
      */
-    StatusWith<std::shared_ptr<DBConfig>> getDatabase(const std::string& dbName);
+    StatusWith<std::shared_ptr<DBConfig>> getDatabase(OperationContext* txn,
+                                                      const std::string& dbName);
 
     /**
      * Removes the database information for the specified name from the cache, so that the
@@ -78,10 +80,6 @@ public:
 
 private:
     typedef std::map<std::string, std::shared_ptr<DBConfig>> ShardedDatabasesMap;
-
-
-    // Reference to the catalog manager. Not owned.
-    CatalogManager* const _catalogManager;
 
     // Databases catalog map and mutex to protect it
     stdx::mutex _mutex;

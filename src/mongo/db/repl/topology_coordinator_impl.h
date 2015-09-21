@@ -39,11 +39,16 @@
 #include "mongo/db/repl/replica_set_config.h"
 #include "mongo/db/repl/replication_coordinator.h"
 #include "mongo/db/repl/topology_coordinator.h"
+#include "mongo/db/server_options.h"
 #include "mongo/util/time_support.h"
 
 namespace mongo {
 
 class OperationContext;
+
+namespace rpc {
+class ReplSetMetadata;
+}  // namespace rpc
 
 namespace repl {
 
@@ -117,12 +122,23 @@ private:
 
 class TopologyCoordinatorImpl : public TopologyCoordinator {
 public:
+    struct Options {
+        // A sync source is re-evaluated after it lags behind further than this amount.
+        Seconds maxSyncSourceLagSecs{0};
+
+        // Whether or not this node is running as a config server, and if so whether it was started
+        // with --configsvrMode=SCCC.
+        ServerGlobalParams::ConfigServerMode configServerMode{
+            ServerGlobalParams::ConfigServerMode::NONE};
+
+        // Whether or not the storage engine supports read committed.
+        bool storageEngineSupportsReadCommitted{true};
+    };
+
     /**
      * Constructs a Topology Coordinator object.
-     * @param maxSyncSourceLagSecs a sync source is re-evaluated after it lags behind further
-     *                             than this amount.
      **/
-    TopologyCoordinatorImpl(Seconds maxSyncSourceLagSecs);
+    TopologyCoordinatorImpl(Options options);
 
     ////////////////////////////////////////////////////////////
     //
@@ -202,7 +218,8 @@ public:
     virtual bool stepDown(Date_t until, bool force, const OpTime& lastOpApplied);
     virtual bool stepDownIfPending();
     virtual Date_t getStepDownTime() const;
-    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder,
+    virtual void prepareReplResponseMetadata(rpc::ReplSetMetadata* metadata,
+                                             const OpTime& lastVisibleOpTime,
                                              const OpTime& lastCommitttedOpTime) const;
     Status processReplSetDeclareElectionWinner(const ReplSetDeclareElectionWinnerArgs& args,
                                                long long* responseTerm);
@@ -211,11 +228,13 @@ public:
                                             const OpTime& lastAppliedOpTime);
     virtual void summarizeAsHtml(ReplSetHtmlSummary* output);
     virtual void loadLastVote(const LastVote& lastVote);
-    virtual void incrementTerm();
     virtual void voteForMyselfV1();
     virtual long long getTerm();
     virtual void prepareForStepDown();
     virtual void setPrimaryIndex(long long primaryIndex);
+    virtual HeartbeatResponseAction setMemberAsDown(Date_t now,
+                                                    const int memberIndex,
+                                                    const OpTime& myLastOpApplied);
 
     ////////////////////////////////////////////////////////////
     //
@@ -314,9 +333,10 @@ private:
     const MemberConfig* _currentPrimaryMember() const;
 
     /**
-     * Performs updating "_hbdata" and "_currentPrimaryIndex" for processHeartbeatResponse().
+     * Performs updating "_currentPrimaryIndex" for processHeartbeatResponse(), and determines if an
+     * election should commence.
      */
-    HeartbeatResponseAction _updateHeartbeatDataImpl(int updatedConfigIndex,
+    HeartbeatResponseAction _updatePrimaryFromHBData(int updatedConfigIndex,
                                                      const MemberState& originalState,
                                                      Date_t now,
                                                      const OpTime& lastOpApplied);
@@ -367,8 +387,9 @@ private:
     std::map<HostAndPort, Date_t> _syncSourceBlacklist;
     // The next sync source to be chosen, requested via a replSetSyncFrom command
     int _forceSyncSourceIndex;
-    // How far this node must fall behind before considering switching sync sources
-    Seconds _maxSyncSourceLagSecs;
+
+    // Options for this TopologyCoordinator
+    Options _options;
 
     // "heartbeat message"
     // sent in requestHeartbeat respond in field "hbm"

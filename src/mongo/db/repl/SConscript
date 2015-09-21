@@ -165,6 +165,7 @@ env.Library(
     LIBDEPS=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/client/clientdriver',
+        'oplog_interface_remote',
     ],
 )
 
@@ -205,6 +206,7 @@ env.Library('topology_coordinator',
             ],
             LIBDEPS=[
                 'repl_coordinator_interface',
+                '$BUILD_DIR/mongo/rpc/metadata',
             ])
 
 env.Library('topology_coordinator_impl',
@@ -245,12 +247,13 @@ env.Library('repl_coordinator_impl',
             ],
             LIBDEPS=[
                      '$BUILD_DIR/mongo/db/common',
-                     '$BUILD_DIR/mongo/db/index/index_descriptor',
-                     '$BUILD_DIR/mongo/util/fail_point',
                      '$BUILD_DIR/mongo/db/global_timestamp',
-                     '$BUILD_DIR/mongo/rpc/command_status',
+                     '$BUILD_DIR/mongo/db/index/index_descriptor',
                      '$BUILD_DIR/mongo/db/server_options_core',
                      '$BUILD_DIR/mongo/db/service_context',
+                     '$BUILD_DIR/mongo/rpc/command_status',
+                     '$BUILD_DIR/mongo/rpc/metadata',
+                     '$BUILD_DIR/mongo/util/fail_point',
                      'data_replicator',
                      'repl_coordinator_global',
                      'repl_coordinator_interface',
@@ -395,17 +398,17 @@ env.Library('replica_set_messages',
                 'repl_set_request_votes_args.cpp',
                 'replica_set_config.cpp',
                 'replica_set_tag.cpp',
-                'replication_metadata.cpp',
                 'update_position_args.cpp',
                 'last_vote.cpp',
             ],
             LIBDEPS=[
-                'read_concern_args',
                 '$BUILD_DIR/mongo/base',
                 '$BUILD_DIR/mongo/bson/util/bson_extract',
-                '$BUILD_DIR/mongo/util/net/hostandport',
                 '$BUILD_DIR/mongo/db/common',
+                '$BUILD_DIR/mongo/db/server_options_core',
+                '$BUILD_DIR/mongo/util/net/hostandport',
                 'optime',
+                'read_concern_args',
             ])
 
 env.CppUnitTest('replica_set_config_test',
@@ -662,3 +665,4 @@ env.CppUnitTest(
         'roll_back_local_operations',
     ],
 )
+

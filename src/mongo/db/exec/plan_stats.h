@@ -276,22 +276,32 @@ struct DeleteStats : public SpecificStats {
 };
 
 struct DistinctScanStats : public SpecificStats {
-    DistinctScanStats() : keysExamined(0), indexVersion(0) {}
-
     SpecificStats* clone() const final {
         DistinctScanStats* specific = new DistinctScanStats(*this);
+        // BSON objects have to be explicitly copied.
         specific->keyPattern = keyPattern.getOwned();
+        specific->indexBounds = indexBounds.getOwned();
         return specific;
     }
 
     // How many keys did we look at while distinct-ing?
-    size_t keysExamined;
-
-    std::string indexName;
+    size_t keysExamined = 0;
 
     BSONObj keyPattern;
 
-    int indexVersion;
+    // Properties of the index used for the distinct scan.
+    std::string indexName;
+    int indexVersion = 0;
+    bool isMultiKey = false;
+    bool isPartial = false;
+    bool isSparse = false;
+    bool isUnique = false;
+
+    // >1 if we're traversing the index forwards and <1 if we're traversing it backwards.
+    int direction = 1;
+
+    // A BSON representation of the distinct scan's index bounds.
+    BSONObj indexBounds;
 };
 
 struct FetchStats : public SpecificStats {
@@ -514,28 +524,17 @@ struct SkipStats : public SpecificStats {
 };
 
 struct IntervalStats {
-    IntervalStats()
-        : numResultsFound(0),
-          numResultsBuffered(0),
-          minDistanceAllowed(-1),
-          maxDistanceAllowed(-1),
-          inclusiveMaxDistanceAllowed(false),
-          minDistanceFound(-1),
-          maxDistanceFound(-1),
-          minDistanceBuffered(-1),
-          maxDistanceBuffered(-1) {}
+    // Number of results found in the covering of this interval.
+    long long numResultsBuffered = 0;
+    // Number of documents in this interval returned to the parent stage.
+    long long numResultsReturned = 0;
 
-    long long numResultsFound;
-    long long numResultsBuffered;
-
-    double minDistanceAllowed;
-    double maxDistanceAllowed;
-    bool inclusiveMaxDistanceAllowed;
-
-    double minDistanceFound;
-    double maxDistanceFound;
-    double minDistanceBuffered;
-    double maxDistanceBuffered;
+    // Min distance of this interval - always inclusive.
+    double minDistanceAllowed = -1;
+    // Max distance of this interval - inclusive iff inclusiveMaxDistanceAllowed.
+    double maxDistanceAllowed = -1;
+    // True only in the last interval.
+    bool inclusiveMaxDistanceAllowed = false;
 };
 
 class NearStats : public SpecificStats {
@@ -544,16 +543,6 @@ public:
 
     SpecificStats* clone() const final {
         return new NearStats(*this);
-    }
-
-    long long totalResultsFound() {
-        long long totalResultsFound = 0;
-        for (std::vector<IntervalStats>::iterator it = intervalStats.begin();
-             it != intervalStats.end();
-             ++it) {
-            totalResultsFound += it->numResultsFound;
-        }
-        return totalResultsFound;
     }
 
     std::vector<IntervalStats> intervalStats;

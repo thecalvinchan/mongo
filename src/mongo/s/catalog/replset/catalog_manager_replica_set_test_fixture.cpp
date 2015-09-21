@@ -40,18 +40,23 @@
 #include "mongo/db/commands.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/query/lite_parsed_query.h"
+#include "mongo/db/repl/read_concern_args.h"
 #include "mongo/db/service_context_noop.h"
 #include "mongo/executor/network_interface_mock.h"
 #include "mongo/executor/thread_pool_task_executor_test_fixture.h"
+#include "mongo/rpc/metadata/repl_set_metadata.h"
 #include "mongo/s/catalog/dist_lock_manager_mock.h"
 #include "mongo/s/catalog/replset/catalog_manager_replica_set.h"
 #include "mongo/s/catalog/type_changelog.h"
+#include "mongo/s/catalog/type_collection.h"
 #include "mongo/s/catalog/type_shard.h"
 #include "mongo/s/client/shard_registry.h"
 #include "mongo/s/grid.h"
+#include "mongo/s/set_shard_version_request.h"
 #include "mongo/s/write_ops/batched_command_request.h"
 #include "mongo/s/write_ops/batched_command_response.h"
 #include "mongo/stdx/memory.h"
+#include "mongo/util/clock_source_mock.h"
 
 namespace mongo {
 
@@ -73,6 +78,7 @@ const stdx::chrono::seconds CatalogManagerReplSetTestFixture::kFutureTimeout{5};
 
 void CatalogManagerReplSetTestFixture::setUp() {
     _service = stdx::make_unique<ServiceContextNoop>();
+    _service->setClockSource(stdx::make_unique<ClockSourceMock>());
     _messagePort = stdx::make_unique<MessagingPortMock>();
     _client = _service->makeClient("CatalogManagerReplSetTestFixture", _messagePort.get());
     _opCtx = _client->makeOperationContext();
@@ -88,25 +94,25 @@ void CatalogManagerReplSetTestFixture::setUp() {
     _networkTestEnv = stdx::make_unique<NetworkTestEnv>(executor.get(), _mockNetwork);
     _executor = executor.get();
 
-    std::unique_ptr<CatalogManagerReplicaSet> cm(stdx::make_unique<CatalogManagerReplicaSet>());
+    std::unique_ptr<CatalogManagerReplicaSet> cm(
+        stdx::make_unique<CatalogManagerReplicaSet>(stdx::make_unique<DistLockManagerMock>()));
 
-    ASSERT_OK(cm->init(
-        ConnectionString::forReplicaSet("CatalogManagerReplSetTest",
-                                        {HostAndPort{"TestHost1"}, HostAndPort{"TestHost2"}}),
-        stdx::make_unique<DistLockManagerMock>()));
+    ConnectionString configCS = ConnectionString::forReplicaSet(
+        "CatalogManagerReplSetTest", {HostAndPort{"TestHost1"}, HostAndPort{"TestHost2"}});
 
     auto configTargeter(stdx::make_unique<RemoteCommandTargeterMock>());
     _configTargeter = configTargeter.get();
-    _targeterFactory->addTargeterToReturn(cm->connectionString(), std::move(configTargeter));
+    _targeterFactory->addTargeterToReturn(configCS, std::move(configTargeter));
 
     auto shardRegistry(stdx::make_unique<ShardRegistry>(
-        std::move(targeterFactory), std::move(executor), _mockNetwork));
-    shardRegistry->init(cm.get());
+        std::move(targeterFactory), std::move(executor), _mockNetwork, configCS));
     shardRegistry->startup();
 
     // For now initialize the global grid object. All sharding objects will be accessible
     // from there until we get rid of it.
-    grid.init(std::move(cm), std::move(shardRegistry));
+    grid.init(std::move(cm),
+              std::move(shardRegistry),
+              stdx::make_unique<ClusterCursorManager>(_service->getClockSource()));
 }
 
 void CatalogManagerReplSetTestFixture::tearDown() {
@@ -126,7 +132,7 @@ void CatalogManagerReplSetTestFixture::shutdownExecutor() {
 }
 
 CatalogManagerReplicaSet* CatalogManagerReplSetTestFixture::catalogManager() const {
-    auto cm = dynamic_cast<CatalogManagerReplicaSet*>(grid.catalogManager());
+    auto cm = dynamic_cast<CatalogManagerReplicaSet*>(grid.catalogManager(_opCtx.get()).get());
     invariant(cm);
 
     return cm;
@@ -177,8 +183,18 @@ void CatalogManagerReplSetTestFixture::onCommand(NetworkTestEnv::OnCommandFuncti
     _networkTestEnv->onCommand(func);
 }
 
+void CatalogManagerReplSetTestFixture::onCommandWithMetadata(
+    NetworkTestEnv::OnCommandWithMetadataFunction func) {
+    _networkTestEnv->onCommandWithMetadata(func);
+}
+
 void CatalogManagerReplSetTestFixture::onFindCommand(NetworkTestEnv::OnFindCommandFunction func) {
     _networkTestEnv->onFindCommand(func);
+}
+
+void CatalogManagerReplSetTestFixture::onFindWithMetadataCommand(
+    NetworkTestEnv::OnFindCommandWithMetadataFunction func) {
+    _networkTestEnv->onFindWithMetadataCommand(func);
 }
 
 void CatalogManagerReplSetTestFixture::setupShards(const std::vector<ShardType>& shards) {
@@ -190,7 +206,7 @@ void CatalogManagerReplSetTestFixture::setupShards(const std::vector<ShardType>&
 }
 
 void CatalogManagerReplSetTestFixture::expectGetShards(const std::vector<ShardType>& shards) {
-    onFindCommand([&shards](const RemoteCommandRequest& request) {
+    onFindCommand([this, &shards](const RemoteCommandRequest& request) {
         const NamespaceString nss(request.dbname, request.cmdObj.firstElement().String());
         ASSERT_EQ(nss.toString(), ShardType::ConfigNS);
 
@@ -203,6 +219,8 @@ void CatalogManagerReplSetTestFixture::expectGetShards(const std::vector<ShardTy
         ASSERT_EQ(query->getFilter(), BSONObj());
         ASSERT_EQ(query->getSort(), BSONObj());
         ASSERT_FALSE(query->getLimit().is_initialized());
+
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
 
         vector<BSONObj> shardsToReturn;
 
@@ -306,6 +324,58 @@ void CatalogManagerReplSetTestFixture::expectChangeLogInsert(const HostAndPort& 
     });
 }
 
+void CatalogManagerReplSetTestFixture::expectUpdateCollection(const HostAndPort& expectedHost,
+                                                              const CollectionType& coll) {
+    onCommand([&](const RemoteCommandRequest& request) {
+        ASSERT_EQUALS(expectedHost, request.target);
+        ASSERT_EQUALS(BSON(rpc::kReplSetMetadataFieldName << 1), request.metadata);
+        ASSERT_EQUALS("config", request.dbname);
+
+        BatchedUpdateRequest actualBatchedUpdate;
+        std::string errmsg;
+        ASSERT_TRUE(actualBatchedUpdate.parseBSON(request.dbname, request.cmdObj, &errmsg));
+        ASSERT_EQUALS(CollectionType::ConfigNS, actualBatchedUpdate.getNS().ns());
+        auto updates = actualBatchedUpdate.getUpdates();
+        ASSERT_EQUALS(1U, updates.size());
+        auto update = updates.front();
+
+        ASSERT_TRUE(update->getUpsert());
+        ASSERT_FALSE(update->getMulti());
+        ASSERT_EQUALS(update->getQuery(), BSON(CollectionType::fullNs(coll.getNs().toString())));
+        ASSERT_EQUALS(update->getUpdateExpr(), coll.toBSON());
+
+        BatchedCommandResponse response;
+        response.setOk(true);
+        response.setNModified(1);
+
+        return response.toBSON();
+    });
+}
+
+void CatalogManagerReplSetTestFixture::expectSetShardVersion(
+    const HostAndPort& expectedHost,
+    const ShardType& expectedShard,
+    const NamespaceString& expectedNs,
+    const ChunkVersion& expectedChunkVersion) {
+    onCommand([&](const RemoteCommandRequest& request) {
+        ASSERT_EQ(expectedHost, request.target);
+        ASSERT_EQUALS(rpc::makeEmptyMetadata(), request.metadata);
+
+        SetShardVersionRequest ssv =
+            assertGet(SetShardVersionRequest::parseFromBSON(request.cmdObj));
+
+        ASSERT(!ssv.isInit());
+        ASSERT(ssv.isAuthoritative());
+        ASSERT_EQ(grid.shardRegistry()->getConfigServerConnectionString().toString(),
+                  ssv.getConfigServer().toString());
+        ASSERT_EQ(expectedShard.getHost(), ssv.getShardConnectionString().toString());
+        ASSERT_EQ(expectedNs.toString(), ssv.getNS().ns());
+        ASSERT_EQ(expectedChunkVersion.toString(), ssv.getNSVersion().toString());
+
+        return BSON("ok" << true);
+    });
+}
+
 void CatalogManagerReplSetTestFixture::expectCount(const HostAndPort& configHost,
                                                    const NamespaceString& expectedNs,
                                                    const BSONObj& expectedQuery,
@@ -327,10 +397,32 @@ void CatalogManagerReplSetTestFixture::expectCount(const HostAndPort& configHost
             return BSON("ok" << 1 << "n" << response.getValue());
         }
 
+        checkReadConcern(request.cmdObj, Timestamp(0, 0), 0);
+
         BSONObjBuilder responseBuilder;
         Command::appendCommandStatus(responseBuilder, response.getStatus());
         return responseBuilder.obj();
     });
+}
+
+void CatalogManagerReplSetTestFixture::checkReadConcern(const BSONObj& cmdObj,
+                                                        const Timestamp& expectedTS,
+                                                        long long expectedTerm) const {
+    auto readConcernElem = cmdObj[repl::ReadConcernArgs::kReadConcernFieldName];
+    ASSERT_EQ(Object, readConcernElem.type());
+
+    auto readConcernObj = readConcernElem.Obj();
+    ASSERT_EQ("majority", readConcernObj[repl::ReadConcernArgs::kLevelFieldName].str());
+
+    auto afterElem = readConcernObj[repl::ReadConcernArgs::kOpTimeFieldName];
+    ASSERT_EQ(Object, afterElem.type());
+
+    auto afterObj = afterElem.Obj();
+
+    ASSERT_TRUE(afterObj.hasField(repl::ReadConcernArgs::kOpTimestampFieldName));
+    ASSERT_EQ(expectedTS, afterObj[repl::ReadConcernArgs::kOpTimestampFieldName].timestamp());
+    ASSERT_TRUE(afterObj.hasField(repl::ReadConcernArgs::kOpTermFieldName));
+    ASSERT_EQ(expectedTerm, afterObj[repl::ReadConcernArgs::kOpTermFieldName].numberLong());
 }
 
 }  // namespace mongo

@@ -25,6 +25,17 @@ var rs4 = new ReplSetTest({ 'name': 'admin', nodes: 3, startPort: 31209 });
 rs4.startSet();
 rs4.initiate();
 
+// replica set with configsvr: true should *not* be allowed to be added as a shard
+var rs5 = new ReplSetTest({ name: 'csrs',
+                            nodes: 3,
+                            startPort: 31212,
+                            nodeOptions: {configsvr: "", storageEngine: "wiredTiger" }});
+rs5.startSet();
+var conf = rs5.getReplSetConfig();
+conf.configsvr = true;
+rs5.initiate(conf);
+
+
 // step 1. name given
 assert(s.admin.runCommand({"addshard" : getHostName()+":" + conn1.port, "name" : "bar"}).ok,
        "failed to add shard in step 1");
@@ -82,8 +93,12 @@ var wRes = s.getDB('test').foo.insert({ x: 1 });
 assert(!wRes.hasWriteError() && wRes.nInserted === 1,
        'failed to insert document into "test.foo" unsharded collection');
 
+// SERVER-19545 Should not be able to add config server replsets as shards.
+assert.commandFailed(s.admin.runCommand({addshard: rs5.getURL()}));
+
 s.stop();
 rs1.stopSet();
 rs2.stopSet();
 rs3.stopSet();
 rs4.stopSet();
+rs5.stopSet();

@@ -52,10 +52,24 @@ env.Library(
     LIBDEPS=[
         '$BUILD_DIR/mongo/base',
         '$BUILD_DIR/mongo/db/common',
-        '$BUILD_DIR/mongo/s/batch_write_types',
         '$BUILD_DIR/mongo/s/catalog/catalog_types',
         '$BUILD_DIR/mongo/s/client/sharding_client',
         '$BUILD_DIR/mongo/s/shard_util',
+        '$BUILD_DIR/mongo/s/write_ops/batch_write_types',
+    ]
+)
+
+env.Library(
+    target='forwarding_catalog_manager',
+    source=[
+        'forwarding_catalog_manager.cpp'
+    ],
+    LIBDEPS=[
+        'catalog_manager',
+        'dist_lock_catalog_impl',
+        'legacy/catalog_manager_legacy',
+        'replset/catalog_manager_replica_set',
+        'replset/replset_dist_lock_manager',
     ]
 )
 
@@ -133,6 +147,7 @@ env.Library(
         '$BUILD_DIR/mongo/client/remote_command_targeter',
         '$BUILD_DIR/mongo/db/common',
         '$BUILD_DIR/mongo/db/query/command_request_response',
+        '$BUILD_DIR/mongo/db/repl/read_concern_args',
         '$BUILD_DIR/mongo/rpc/command_status',
         '$BUILD_DIR/mongo/s/client/sharding_client',
         '$BUILD_DIR/mongo/util/net/hostandport',

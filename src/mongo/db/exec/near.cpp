@@ -46,8 +46,7 @@ NearStage::NearStage(OperationContext* txn,
                      StageType type,
                      WorkingSet* workingSet,
                      Collection* collection)
-    : PlanStage(typeName),
-      _txn(txn),
+    : PlanStage(typeName, txn),
       _workingSet(workingSet),
       _collection(collection),
       _searchState(SearchState_Initializing),
@@ -70,7 +69,7 @@ NearStage::CoveredInterval::CoveredInterval(PlanStage* covering,
 
 
 PlanStage::StageState NearStage::initNext(WorkingSetID* out) {
-    PlanStage::StageState state = initialize(_txn, _workingSet, _collection, out);
+    PlanStage::StageState state = initialize(getOpCtx(), _workingSet, _collection, out);
     if (state == PlanStage::IS_EOF) {
         _searchState = SearchState_Buffering;
         return PlanStage::NEED_TIME;
@@ -150,7 +149,8 @@ PlanStage::StageState NearStage::bufferNext(WorkingSetID* toReturn, Status* erro
     //
 
     if (!_nextInterval) {
-        StatusWith<CoveredInterval*> intervalStatus = nextInterval(_txn, _workingSet, _collection);
+        StatusWith<CoveredInterval*> intervalStatus =
+            nextInterval(getOpCtx(), _workingSet, _collection);
         if (!intervalStatus.isOK()) {
             _searchState = SearchState_Finished;
             *error = intervalStatus.getStatus();
@@ -202,7 +202,7 @@ PlanStage::StageState NearStage::bufferNext(WorkingSetID* toReturn, Status* erro
         }
     }
 
-    ++_nextIntervalStats->numResultsFound;
+    ++_nextIntervalStats->numResultsBuffered;
 
     StatusWith<double> distanceStatus = computeDistance(nextMember);
 
@@ -215,12 +215,6 @@ PlanStage::StageState NearStage::bufferNext(WorkingSetID* toReturn, Status* erro
     // If the member's distance is in the current distance interval, add it to our buffered
     // results.
     double memberDistance = distanceStatus.getValue();
-
-    // Update found distance stats
-    if (_nextIntervalStats->minDistanceFound < 0 ||
-        memberDistance < _nextIntervalStats->minDistanceFound) {
-        _nextIntervalStats->minDistanceFound = memberDistance;
-    }
 
     _resultBuffer.push(SearchResult(nextMemberID, memberDistance));
 
@@ -275,7 +269,7 @@ PlanStage::StageState NearStage::advanceNext(WorkingSetID* toReturn) {
         return PlanStage::NEED_TIME;
     }
 
-    // The next document in _resultBuffer is in the search interval, so we can return it
+    // The next document in _resultBuffer is in the search interval, so we can return it.
     _resultBuffer.pop();
 
     // If we're returning something, take it out of our RecordId -> WSID map so that future
@@ -286,24 +280,14 @@ PlanStage::StageState NearStage::advanceNext(WorkingSetID* toReturn) {
         _seenDocuments.erase(member->loc);
     }
 
-    // TODO: SERVER-19480 Find a more appropriate place to increment numResultsBuffered
-    ++_nextIntervalStats->numResultsBuffered;
-
-    // Update buffered distance stats
-    if (_nextIntervalStats->minDistanceBuffered < 0 ||
-        memberDistance < _nextIntervalStats->minDistanceBuffered) {
-        _nextIntervalStats->minDistanceBuffered = memberDistance;
-    }
+    // This value is used by nextInterval() to determine the size of the next interval.
+    ++_nextIntervalStats->numResultsReturned;
 
     return PlanStage::ADVANCED;
 }
 
 bool NearStage::isEOF() {
     return SearchState_Finished == _searchState;
-}
-
-void NearStage::doReattachToOperationContext(OperationContext* opCtx) {
-    _txn = opCtx;
 }
 
 void NearStage::doInvalidate(OperationContext* txn, const RecordId& dl, InvalidationType type) {

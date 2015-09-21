@@ -219,6 +219,24 @@ var authCommandsLib = {
             ]
         },
         {
+            // Test that clusterManager role has permission to run addTagRange
+            testname: "addTagRange",
+            command: {  // addTagRange is not a "real command"; it updates config.tags
+                update: "tags",
+                updates: [ {
+                    q: {_id: { ns : "test.x" , min : 1 }},
+                    u: {_id: { ns : "test.x" , min : 1 },
+                    ns : "test.x"}
+                } ] },
+            skipStandalone: true,
+            testcases: [
+                {
+                    runOnDb: "config",
+                    roles: Object.extend({readWriteAnyDatabase: 1}, roles_clusterManager)
+                }
+            ]
+        },
+        {
             testname: "applyOps",
             command: {applyOps: "x"},
             testcases: [
@@ -786,27 +804,7 @@ var authCommandsLib = {
                     ]
                 }
             ]
-        },
-        {
-            testname: "cursorInfo",
-            command: {cursorInfo: 1},
-            testcases: [
-                {
-                    runOnDb: firstDbName,
-                    roles: roles_monitoring,
-                    privileges: [
-                        { resource: {cluster: true}, actions: ["cursorInfo"] }
-                    ]
-                },
-                {
-                    runOnDb: secondDbName,
-                    roles: roles_monitoring,
-                    privileges: [
-                        { resource: {cluster: true}, actions: ["cursorInfo"] }
-                    ]
-                }
-            ]
-        },
+        }, /* Removed until SERVER-19640 is resolved.
         {
             testname: "dataSize_1",
             command: {dataSize: firstDbName + ".x"},
@@ -832,7 +830,7 @@ var authCommandsLib = {
                     ]
                 }
             ]
-        },
+        },*/
         {
             testname: "dbHash",
             command: {dbHash: 1},
@@ -1100,7 +1098,6 @@ var authCommandsLib = {
         {
             testname: "find",
             command: {find: "foo"},
-            skipSharded: true, // TODO: remove when find command is implemented in mongos
             testcases: [
                 {
                     runOnDb: firstDbName,
@@ -1290,7 +1287,6 @@ var authCommandsLib = {
         {
             testname: "getMore",
             command: {getMore: NumberLong("1"), collection: "foo"},
-            skipSharded: true, // TODO: remove when getMore command is implemented in mongos
             testcases: [
                 {
                     runOnDb: firstDbName,
@@ -2514,7 +2510,7 @@ var authCommandsLib = {
                 }
             ]
         },
-/*      temporarily removed see SERVER-13555 
+/*      temporarily removed see SERVER-13555
          {
             testname: "storageDetails",
             command: {storageDetails: "x", analyze: "diskStorage"},
@@ -2620,6 +2616,20 @@ var authCommandsLib = {
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["validate"] }
                     ]
+                }
+            ]
+        },
+        {
+            // Test that the root role has the privilege to validate any system.* collection
+            testname: "validate_system",
+            command: {validate: "system.users"},
+            testcases: [
+                {
+                    runOnDb: adminDbName,
+                    roles: {
+                        root: 1,
+                        __system: 1
+                    }
                 }
             ]
         },

@@ -1196,9 +1196,29 @@ TEST_F(QueryPlannerTest, Snapshot) {
     runQuerySnapshot(fromjson("{a: {$gt: 0}}"));
 
     assertNumSolutions(1U);
+    assertSolutionExists("{cscan: {filter: {a: {$gt: 0}}, dir: 1}}");
+}
+
+TEST_F(QueryPlannerTest, SnapshotUseId) {
+    params.options = QueryPlannerParams::SNAPSHOT_USE_ID;
+
+    addIndex(BSON("a" << 1));
+    runQuerySnapshot(fromjson("{a: {$gt: 0}}"));
+
+    assertNumSolutions(1U);
     assertSolutionExists(
         "{fetch: {filter: {a:{$gt:0}}, node: "
         "{ixscan: {filter: null, pattern: {_id: 1}}}}}");
+}
+
+TEST_F(QueryPlannerTest, CannotSnapshotWithGeoNear) {
+    // Snapshot is skipped with geonear queries.
+    addIndex(BSON("a"
+                  << "2d"));
+    runQuerySnapshot(fromjson("{a: {$near: [0,0]}}"));
+
+    ASSERT_EQUALS(getNumSolutions(), 1U);
+    assertSolutionExists("{geoNear2d: {a: '2d'}}");
 }
 
 //
@@ -3934,6 +3954,30 @@ TEST(BadInputTest, TagAccordingToCache) {
     indexTree->children.push_back(child);
     s = QueryPlanner::tagAccordingToCache(scopedCq->root(), indexTree.get(), indexMap);
     ASSERT_NOT_OK(s);
+}
+
+// A query run as a find command with a sort and ntoreturn should generate a plan implementing
+// the 'ntoreturn hack'.
+TEST_F(QueryPlannerTest, NToReturnHackWithFindCommand) {
+    params.options |= QueryPlannerParams::SPLIT_LIMITED_SORT;
+
+    runQueryAsCommand(fromjson("{find: 'testns', sort: {a:1}, ntoreturn:3}"));
+
+    assertNumSolutions(1U);
+    assertSolutionExists(
+        "{or: {nodes: ["
+        "{sort: {limit:3, pattern: {a:1}, node: {cscan: {dir:1}}}}, "
+        "{sort: {limit:0, pattern: {a:1}, node: {cscan: {dir:1}}}}"
+        "]}}");
+}
+
+TEST_F(QueryPlannerTest, NToReturnHackWithSingleBatch) {
+    params.options |= QueryPlannerParams::SPLIT_LIMITED_SORT;
+
+    runQueryAsCommand(fromjson("{find: 'testns', sort: {a:1}, ntoreturn:3, singleBatch:true}"));
+
+    assertNumSolutions(1U);
+    assertSolutionExists("{sort: {pattern: {a:1}, limit:3, node: {cscan: {dir:1, filter: {}}}}}");
 }
 
 }  // namespace

@@ -31,7 +31,9 @@
 #include <string>
 #include <vector>
 
+#include "mongo/s/query/cluster_cursor_manager.h"
 #include "mongo/stdx/memory.h"
+#include "mongo/util/concurrency/rwlock.h"
 
 namespace mongo {
 
@@ -39,6 +41,7 @@ class BSONObj;
 class CatalogCache;
 class CatalogManager;
 class DBConfig;
+class OperationContext;
 class SettingsType;
 class ShardRegistry;
 template <typename T>
@@ -51,23 +54,26 @@ class StatusWith;
  */
 class Grid {
 public:
+    class CatalogManagerGuard;
+
     Grid();
 
     /**
-     * Called at startup time so the global sharding services (catalog manager, shard registry)
-     * can be set. This method must be called once and once only for the lifetime of the
-     * service.
+     * Called at startup time so the global sharding services can be set. This method must be called
+     * once and once only for the lifetime of the service.
      *
      * NOTE: Unit-tests are allowed to call it more than once, provided they reset the object's
      *       state using clearForUnitTests.
      */
     void init(std::unique_ptr<CatalogManager> catalogManager,
-              std::unique_ptr<ShardRegistry> shardRegistry);
+              std::unique_ptr<ShardRegistry> shardRegistry,
+              std::unique_ptr<ClusterCursorManager> cursorManager);
 
     /**
      * Implicitly creates the specified database as non-sharded.
      */
-    StatusWith<std::shared_ptr<DBConfig>> implicitCreateDb(const std::string& dbName);
+    StatusWith<std::shared_ptr<DBConfig>> implicitCreateDb(OperationContext* txn,
+                                                           const std::string& dbName);
 
     /**
      * @return true if shards and config servers are allowed to use 'localhost' in address
@@ -88,16 +94,20 @@ public:
     /**
      * Returns true if the config server settings indicate that the balancer should be active.
      */
-    bool getConfigShouldBalance() const;
+    bool getConfigShouldBalance(OperationContext* txn) const;
 
-    CatalogManager* catalogManager() const {
-        return _catalogManager.get();
-    }
-    CatalogCache* catalogCache() const {
+    Grid::CatalogManagerGuard catalogManager(OperationContext* txn);
+    Grid::CatalogManagerGuard catalogManager();  // TODO(spencer): remove
+
+    CatalogCache* catalogCache() {
         return _catalogCache.get();
     }
-    ShardRegistry* shardRegistry() const {
+    ShardRegistry* shardRegistry() {
         return _shardRegistry.get();
+    }
+
+    ClusterCursorManager* getCursorManager() {
+        return _cursorManager.get();
     }
 
     /**
@@ -113,9 +123,54 @@ private:
     std::unique_ptr<CatalogManager> _catalogManager;
     std::unique_ptr<CatalogCache> _catalogCache;
     std::unique_ptr<ShardRegistry> _shardRegistry;
+    std::unique_ptr<ClusterCursorManager> _cursorManager;
 
     // can 'localhost' be used in shard addresses?
     bool _allowLocalShard;
+
+    /**
+     * Protects access to _catalogManager.
+     * All normal accessors of the current CatalogManager will go through Grid::CatalogManagerGuard,
+     * which always takes the lock in shared mode.  In order to swap the active catalog manager,
+     * the lock must be held in exclusive mode.
+     * TODO(SERVER-19875) Use a new lock manager resource for this instead.
+     */
+    RWLock _catalogManagerLock;
+};
+
+/**
+ * Guard object that protects access to the current active CatalogManager to enable switching the
+ * active catalog manager at runtime.
+ * Note: Never contstruct a CatalogManagerGuard directly, they should only be given out by calling
+ * grid.catalogManager().
+ */
+class Grid::CatalogManagerGuard {
+    MONGO_DISALLOW_COPYING(CatalogManagerGuard);
+
+public:
+    CatalogManagerGuard(OperationContext* txn, Grid* grid);
+    ~CatalogManagerGuard();
+
+    CatalogManager* operator->() const;
+
+    explicit operator bool() const;
+
+    CatalogManager* get() const;
+
+#if defined(_MSC_VER) && _MSC_VER < 1900
+    CatalogManagerGuard(CatalogManagerGuard&& other) : _grid(other._grid) {}
+
+    CatalogManagerGuard& operator=(CatalogManagerGuard&& other) {
+        _grid = other._grid;
+        return *this;
+    }
+#else
+    CatalogManagerGuard(CatalogManagerGuard&& other) = default;
+    CatalogManagerGuard& operator=(CatalogManagerGuard&& other) = default;
+#endif
+
+private:
+    Grid* _grid;
 };
 
 extern Grid grid;

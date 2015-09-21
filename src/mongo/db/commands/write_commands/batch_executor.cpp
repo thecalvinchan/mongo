@@ -51,7 +51,6 @@
 #include "mongo/db/lasterror.h"
 #include "mongo/db/namespace_string.h"
 #include "mongo/db/op_observer.h"
-#include "mongo/db/operation_context_impl.h"
 #include "mongo/db/ops/delete_request.h"
 #include "mongo/db/ops/insert.h"
 #include "mongo/db/ops/parsed_delete.h"
@@ -83,10 +82,10 @@
 
 namespace mongo {
 
-using std::endl;
 using std::string;
 using std::unique_ptr;
 using std::vector;
+using str::stream;
 
 namespace {
 
@@ -118,18 +117,7 @@ private:
     std::unique_ptr<WriteErrorDetail> _error;
 };
 
-}  // namespace
-
-// TODO: Determine queueing behavior we want here
-MONGO_EXPORT_SERVER_PARAMETER(queueForMigrationCommit, bool, true);
-
-using mongoutils::str::stream;
-
-WriteBatchExecutor::WriteBatchExecutor(OperationContext* txn, OpCounters* opCounters, LastError* le)
-    : _txn(txn), _opCounters(opCounters), _le(le), _stats(new WriteBatchStats) {}
-
-static WCErrorDetail* toWriteConcernError(const Status& wcStatus,
-                                          const WriteConcernResult& wcResult) {
+WCErrorDetail* toWriteConcernError(const Status& wcStatus, const WriteConcernResult& wcResult) {
     WCErrorDetail* wcError = new WCErrorDetail;
 
     wcError->setErrCode(wcStatus.code());
@@ -140,7 +128,7 @@ static WCErrorDetail* toWriteConcernError(const Status& wcStatus,
     return wcError;
 }
 
-static WriteErrorDetail* toWriteError(const Status& status) {
+WriteErrorDetail* toWriteError(const Status& status) {
     WriteErrorDetail* error = new WriteErrorDetail;
 
     // TODO: Complex transform here?
@@ -150,7 +138,7 @@ static WriteErrorDetail* toWriteError(const Status& status) {
     return error;
 }
 
-static void toBatchError(const Status& status, BatchedCommandResponse* response) {
+void toBatchError(const Status& status, BatchedCommandResponse* response) {
     response->clear();
     response->setErrCode(status.code());
     response->setErrMessage(status.reason());
@@ -158,13 +146,84 @@ static void toBatchError(const Status& status, BatchedCommandResponse* response)
     dassert(response->isValid(NULL));
 }
 
-static void noteInCriticalSection(WriteErrorDetail* staleError) {
+void noteInCriticalSection(WriteErrorDetail* staleError) {
     BSONObjBuilder builder;
     if (staleError->isErrInfoSet())
         builder.appendElements(staleError->getErrInfo());
     builder.append("inCriticalSection", true);
     staleError->setErrInfo(builder.obj());
 }
+
+/**
+ * Translates write item type to wire protocol op code. Helper for
+ * WriteBatchExecutor::applyWriteItem().
+ */
+int getOpCode(const BatchItemRef& currWrite) {
+    switch (currWrite.getRequest()->getBatchType()) {
+        case BatchedCommandRequest::BatchType_Insert:
+            return dbInsert;
+        case BatchedCommandRequest::BatchType_Update:
+            return dbUpdate;
+        case BatchedCommandRequest::BatchType_Delete:
+            return dbDelete;
+        default:
+            MONGO_UNREACHABLE;
+    }
+}
+
+void buildStaleError(const ChunkVersion& shardVersionRecvd,
+                     const ChunkVersion& shardVersionWanted,
+                     WriteErrorDetail* error) {
+    // Write stale error to results
+    error->setErrCode(ErrorCodes::StaleShardVersion);
+
+    BSONObjBuilder infoB;
+    shardVersionWanted.addToBSON(infoB, "vWanted");
+    error->setErrInfo(infoB.obj());
+
+    string errMsg = stream() << "stale shard version detected before write, received "
+                             << shardVersionRecvd.toString() << " but local version is "
+                             << shardVersionWanted.toString();
+    error->setErrMessage(errMsg);
+}
+
+bool checkShardVersion(OperationContext* txn,
+                       const BatchedCommandRequest& request,
+                       WriteOpResult* result) {
+    const NamespaceString& nss = request.getTargetingNSS();
+    dassert(txn->lockState()->isCollectionLockedForMode(nss.ns(), MODE_IX));
+
+    ChunkVersion requestShardVersion =
+        request.isMetadataSet() && request.getMetadata()->isShardVersionSet()
+        ? request.getMetadata()->getShardVersion()
+        : ChunkVersion::IGNORED();
+
+    ShardingState* shardingState = ShardingState::get(txn);
+    if (shardingState->enabled()) {
+        CollectionMetadataPtr metadata = shardingState->getCollectionMetadata(nss.ns());
+
+        if (!ChunkVersion::isIgnoredVersion(requestShardVersion)) {
+            ChunkVersion shardVersion =
+                metadata ? metadata->getShardVersion() : ChunkVersion::UNSHARDED();
+
+            if (!requestShardVersion.isWriteCompatibleWith(shardVersion)) {
+                result->setError(new WriteErrorDetail);
+                buildStaleError(requestShardVersion, shardVersion, result->getError());
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+}  // namespace
+
+// TODO: Determine queueing behavior we want here
+MONGO_EXPORT_SERVER_PARAMETER(queueForMigrationCommit, bool, true);
+
+WriteBatchExecutor::WriteBatchExecutor(OperationContext* txn, OpCounters* opCounters, LastError* le)
+    : _txn(txn), _opCounters(opCounters), _le(le), _stats(new WriteBatchStats) {}
 
 // static
 Status WriteBatchExecutor::validateBatch(const BatchedCommandRequest& request) {
@@ -272,59 +331,50 @@ void WriteBatchExecutor::executeBatch(const BatchedCommandRequest& request,
         const BatchedRequestMetadata* requestMetadata = request.getMetadata();
         dassert(requestMetadata);
 
-        // Make sure our shard name is set or is the same as what was set previously
-        if (ShardingState::get(getGlobalServiceContext())
-                ->setShardName(requestMetadata->getShardName())) {
+        ShardingState* shardingState = ShardingState::get(_txn);
+
+        //
+        // First, we refresh metadata if we need to based on the requested version.
+        //
+        ChunkVersion latestShardVersion;
+        shardingState->refreshMetadataIfNeeded(_txn,
+                                               request.getTargetingNS(),
+                                               requestMetadata->getShardVersion(),
+                                               &latestShardVersion);
+
+        // Report if we're still changing our metadata
+        // TODO: Better reporting per-collection
+        if (shardingState->inCriticalMigrateSection()) {
+            noteInCriticalSection(writeErrors.back());
+        }
+
+        if (queueForMigrationCommit) {
             //
-            // First, we refresh metadata if we need to based on the requested version.
+            // Queue up for migration to end - this allows us to be sure that clients will
+            // not repeatedly try to refresh metadata that is not yet written to the config
+            // server.  Not necessary for correctness.
+            // Exposed as optional parameter to allow testing of queuing behavior with
+            // different network timings.
             //
 
-            ChunkVersion latestShardVersion;
-            ShardingState::get(getGlobalServiceContext())
-                ->refreshMetadataIfNeeded(_txn,
-                                          request.getTargetingNS(),
-                                          requestMetadata->getShardVersion(),
-                                          &latestShardVersion);
+            const ChunkVersion& requestShardVersion = requestMetadata->getShardVersion();
 
-            // Report if we're still changing our metadata
-            // TODO: Better reporting per-collection
-            if (ShardingState::get(getGlobalServiceContext())->inCriticalMigrateSection()) {
-                noteInCriticalSection(writeErrors.back());
-            }
+            //
+            // Only wait if we're an older version (in the current collection epoch) and
+            // we're not write compatible, implying that the current migration is affecting
+            // writes.
+            //
 
-            if (queueForMigrationCommit) {
-                //
-                // Queue up for migration to end - this allows us to be sure that clients will
-                // not repeatedly try to refresh metadata that is not yet written to the config
-                // server.  Not necessary for correctness.
-                // Exposed as optional parameter to allow testing of queuing behavior with
-                // different network timings.
-                //
+            if (requestShardVersion.isOlderThan(latestShardVersion) &&
+                !requestShardVersion.isWriteCompatibleWith(latestShardVersion)) {
+                while (shardingState->inCriticalMigrateSection()) {
+                    log() << "write request to old shard version "
+                          << requestMetadata->getShardVersion().toString()
+                          << " waiting for migration commit";
 
-                const ChunkVersion& requestShardVersion = requestMetadata->getShardVersion();
-
-                //
-                // Only wait if we're an older version (in the current collection epoch) and
-                // we're not write compatible, implying that the current migration is affecting
-                // writes.
-                //
-
-                if (requestShardVersion.isOlderThan(latestShardVersion) &&
-                    !requestShardVersion.isWriteCompatibleWith(latestShardVersion)) {
-                    while (
-                        ShardingState::get(getGlobalServiceContext())->inCriticalMigrateSection()) {
-                        log() << "write request to old shard version "
-                              << requestMetadata->getShardVersion().toString()
-                              << " waiting for migration commit" << endl;
-
-                        ShardingState::get(getGlobalServiceContext())
-                            ->waitTillNotInCriticalSection(10 /* secs */);
-                    }
+                    shardingState->waitTillNotInCriticalSection(10 /* secs */);
                 }
             }
-        } else {
-            // If our shard name is stale, our version must have been stale as well
-            dassert(writeErrors.size() == request.sizeWriteOps());
         }
     }
 
@@ -367,67 +417,6 @@ void WriteBatchExecutor::executeBatch(const BatchedCommandRequest& request,
     dassert(response->isValid(NULL));
 }
 
-// Translates write item type to wire protocol op code.
-// Helper for WriteBatchExecutor::applyWriteItem().
-static int getOpCode(const BatchItemRef& currWrite) {
-    switch (currWrite.getRequest()->getBatchType()) {
-        case BatchedCommandRequest::BatchType_Insert:
-            return dbInsert;
-        case BatchedCommandRequest::BatchType_Update:
-            return dbUpdate;
-        case BatchedCommandRequest::BatchType_Delete:
-            return dbDelete;
-        default:
-            MONGO_UNREACHABLE;
-    }
-}
-
-static void buildStaleError(const ChunkVersion& shardVersionRecvd,
-                            const ChunkVersion& shardVersionWanted,
-                            WriteErrorDetail* error) {
-    // Write stale error to results
-    error->setErrCode(ErrorCodes::StaleShardVersion);
-
-    BSONObjBuilder infoB;
-    shardVersionWanted.addToBSON(infoB, "vWanted");
-    error->setErrInfo(infoB.obj());
-
-    string errMsg = stream() << "stale shard version detected before write, received "
-                             << shardVersionRecvd.toString() << " but local version is "
-                             << shardVersionWanted.toString();
-    error->setErrMessage(errMsg);
-}
-
-static bool checkShardVersion(OperationContext* txn,
-                              const BatchedCommandRequest& request,
-                              WriteOpResult* result) {
-    const NamespaceString& nss = request.getTargetingNSS();
-    dassert(txn->lockState()->isCollectionLockedForMode(nss.ns(), MODE_IX));
-
-    ChunkVersion requestShardVersion =
-        request.isMetadataSet() && request.getMetadata()->isShardVersionSet()
-        ? request.getMetadata()->getShardVersion()
-        : ChunkVersion::IGNORED();
-
-    ShardingState* shardingState = ShardingState::get(getGlobalServiceContext());
-    if (shardingState->enabled()) {
-        CollectionMetadataPtr metadata = shardingState->getCollectionMetadata(nss.ns());
-
-        if (!ChunkVersion::isIgnoredVersion(requestShardVersion)) {
-            ChunkVersion shardVersion =
-                metadata ? metadata->getShardVersion() : ChunkVersion::UNSHARDED();
-
-            if (!requestShardVersion.isWriteCompatibleWith(shardVersion)) {
-                result->setError(new WriteErrorDetail);
-                buildStaleError(requestShardVersion, shardVersion, result->getError());
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
 static bool checkIsMasterForDatabase(const NamespaceString& ns, WriteOpResult* result) {
     if (!repl::getGlobalReplicationCoordinator()->canAcceptWritesFor(ns)) {
         WriteErrorDetail* errorDetail = new WriteErrorDetail;
@@ -457,7 +446,7 @@ static bool checkIndexConstraints(OperationContext* txn,
     if (!request.isUniqueIndexRequest())
         return true;
 
-    ShardingState* shardingState = ShardingState::get(getGlobalServiceContext());
+    ShardingState* shardingState = ShardingState::get(txn);
     if (shardingState->enabled()) {
         CollectionMetadataPtr metadata = shardingState->getCollectionMetadata(nss.ns());
 
@@ -569,7 +558,7 @@ static void finishCurrentOp(OperationContext* txn, WriteErrorDetail* opError) {
             ExceptionInfo(opError->getErrMessage(), opError->getErrCode());
 
         LOG(3) << " Caught Assertion in " << opToString(currentOp->getOp()) << ", continuing "
-               << causedBy(opError->getErrMessage()) << endl;
+               << causedBy(opError->getErrMessage());
     }
 
     bool logAll = logger::globalLogDomain()->shouldLog(logger::LogComponent::kWrite,

@@ -321,15 +321,18 @@ public:
         const OpTime& myLastOpApplied) = 0;
 
     /**
+     * Marks a member has down from our persepctive and returns a HeartbeatResponseAction, which
+     * will be StepDownSelf if we can no longer see a majority of the nodes.
+     */
+    virtual HeartbeatResponseAction setMemberAsDown(Date_t now,
+                                                    const int memberIndex,
+                                                    const OpTime& myLastOpApplied) = 0;
+
+    /**
      * If getRole() == Role::candidate and this node has not voted too recently, updates the
      * lastVote tracker and returns true.  Otherwise, returns false.
      */
     virtual bool voteForMyself(Date_t now) = 0;
-
-    /**
-     * Increase the term.
-     */
-    virtual void incrementTerm() = 0;
 
     /**
      * Set lastVote to be for ourself in this term.
@@ -390,7 +393,8 @@ public:
     /**
      * Prepares a BSONObj describing the current term, primary, and lastOp information.
      */
-    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder,
+    virtual void prepareReplResponseMetadata(rpc::ReplSetMetadata* metadata,
+                                             const OpTime& lastVisibleOpTime,
                                              const OpTime& lastCommittedOpTime) const = 0;
 
     /**

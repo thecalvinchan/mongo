@@ -45,7 +45,7 @@
 #include "mongo/db/service_context.h"
 #include "mongo/db/keypattern.h"
 #include "mongo/db/query/explain.h"
-#include "mongo/db/query/find_constants.h"
+#include "mongo/db/query/find_common.h"
 #include "mongo/db/query/get_executor.h"
 #include "mongo/db/query/internal_plans.h"
 #include "mongo/db/query/query_planner_params.h"
@@ -67,32 +67,8 @@ using std::endl;
 using std::unique_ptr;
 using stdx::make_unique;
 
-// The .h for this in find_constants.h.
-const int32_t MaxBytesToReturnToClientAtOnce = 4 * 1024 * 1024;
-
 // Failpoint for checking whether we've received a getmore.
 MONGO_FP_DECLARE(failReceivedGetmore);
-
-/**
- * If ntoreturn is zero, we stop generating additional results as soon as we have either 101
- * documents or at least 1MB of data. On subsequent getmores, there is no limit on the number
- * of results; we will stop as soon as we have at least 4 MB of data.  The idea is that on a
- * find() where one doesn't use much results, we don't return much, but once getmore kicks in,
- * we start pushing significant quantities.
- *
- * If ntoreturn is non-zero, the we stop building the first batch once we either have ntoreturn
- * results, or when the result set exceeds 4 MB.
- */
-bool enoughForFirstBatch(const LiteParsedQuery& pq, long long numDocs, int bytesBuffered) {
-    if (!pq.getBatchSize()) {
-        return (bytesBuffered > 1024 * 1024) || numDocs >= LiteParsedQuery::kDefaultBatchSize;
-    }
-    return numDocs >= *pq.getBatchSize() || bytesBuffered > MaxBytesToReturnToClientAtOnce;
-}
-
-bool enoughForGetMore(long long ntoreturn, long long numDocs, int bytesBuffered) {
-    return (ntoreturn && numDocs >= ntoreturn) || (bytesBuffered > MaxBytesToReturnToClientAtOnce);
-}
 
 bool isCursorTailable(const ClientCursor* cursor) {
     return cursor->queryOptions() & QueryOption_CursorTailable;
@@ -115,7 +91,7 @@ bool shouldSaveCursor(OperationContext* txn,
         return false;
     }
 
-    if (!pq.isFromFindCommand() && pq.getBatchSize() && *pq.getBatchSize() == 1) {
+    if (pq.getNToReturn().value_or(0) == 1) {
         return false;
     }
 
@@ -245,7 +221,7 @@ void generateBatch(int ntoreturn,
             }
         }
 
-        if (enoughForGetMore(ntoreturn, *numResults, bb->len())) {
+        if (FindCommon::enoughForGetMore(ntoreturn, *numResults, bb->len())) {
             break;
         }
     }
@@ -335,7 +311,8 @@ QueryResult::View getMore(OperationContext* txn,
     int numResults = 0;
     int startingResult = 0;
 
-    const int InitialBufSize = 512 + sizeof(QueryResult::Value) + MaxBytesToReturnToClientAtOnce;
+    const int InitialBufSize =
+        512 + sizeof(QueryResult::Value) + FindCommon::kMaxBytesToReturnToClientAtOnce;
 
     BufBuilder bb(InitialBufSize);
     bb.skip(sizeof(QueryResult::Value));
@@ -420,6 +397,13 @@ QueryResult::View getMore(OperationContext* txn,
             generateBatch(ntoreturn, cc, &bb, &numResults, &slaveReadTill, &state);
         }
 
+        // We have to do this before re-acquiring locks in the agg case because
+        // shouldSaveCursorGetMore() can make a network call for agg cursors.
+        //
+        // TODO: Getting rid of PlanExecutor::isEOF() in favor of PlanExecutor::IS_EOF would mean
+        // that this network operation is no longer necessary.
+        const bool shouldSaveCursor = shouldSaveCursorGetMore(state, exec, isCursorTailable(cc));
+
         // In order to deregister a cursor, we need to be holding the DB + collection lock and
         // if the cursor is aggregation, we release these locks.
         if (cc->isAggCursor()) {
@@ -434,7 +418,7 @@ QueryResult::View getMore(OperationContext* txn,
         //    this case, the pin's destructor will be invoked, which will call release() on the
         //    pin.  Because our ClientCursorPin is declared after our lock is declared, this
         //    will happen under the lock.
-        if (!shouldSaveCursorGetMore(state, exec, isCursorTailable(cc))) {
+        if (!shouldSaveCursor) {
             ccPin.deleteUnderlying();
 
             // cc is now invalid, as is the executor
@@ -595,9 +579,9 @@ std::string runQuery(OperationContext* txn,
             }
         }
 
-        if (enoughForFirstBatch(pq, numResults, bb.len())) {
+        if (FindCommon::enoughForFirstBatch(pq, numResults, bb.len())) {
             LOG(5) << "Enough for first batch, wantMore=" << pq.wantMore()
-                   << " batchSize=" << pq.getBatchSize().value_or(0) << " numResults=" << numResults
+                   << " ntoreturn=" << pq.getNToReturn().value_or(0) << " numResults=" << numResults
                    << endl;
             break;
         }

@@ -36,6 +36,7 @@
 #include "mongo/db/repl/read_concern_args.h"
 #include "mongo/db/repl/read_concern_response.h"
 #include "mongo/db/repl/replica_set_config.h"
+#include "mongo/db/storage/snapshot_name.h"
 #include "mongo/util/assert_util.h"
 
 namespace mongo {
@@ -145,6 +146,12 @@ void ReplicationCoordinatorMock::setMyLastOptime(const OpTime& opTime) {
     _myLastOpTime = opTime;
 }
 
+void ReplicationCoordinatorMock::setMyLastOptimeForward(const OpTime& opTime) {
+    if (opTime > _myLastOpTime) {
+        _myLastOpTime = opTime;
+    }
+}
+
 void ReplicationCoordinatorMock::resetMyLastOptime() {
     _myLastOpTime = OpTime();
 }
@@ -198,8 +205,7 @@ void ReplicationCoordinatorMock::processReplSetGetConfig(BSONObjBuilder* result)
     // TODO
 }
 
-void ReplicationCoordinatorMock::processReplicationMetadata(
-    const ReplicationMetadata& replMetadata) {}
+void ReplicationCoordinatorMock::processReplSetMetadata(const rpc::ReplSetMetadata& replMetadata) {}
 
 Status ReplicationCoordinatorMock::processReplSetGetStatus(BSONObjBuilder* result) {
     return Status::OK();
@@ -330,7 +336,10 @@ Status ReplicationCoordinatorMock::processReplSetDeclareElectionWinner(
     return Status::OK();
 }
 
-void ReplicationCoordinatorMock::prepareReplResponseMetadata(BSONObjBuilder* objBuilder) {}
+void ReplicationCoordinatorMock::prepareReplResponseMetadata(const rpc::RequestInterface& request,
+                                                             const OpTime& lastOpTimeFromClient,
+                                                             const ReadConcernArgs& readConcern,
+                                                             BSONObjBuilder* builder) {}
 
 Status ReplicationCoordinatorMock::processHeartbeatV1(const ReplSetHeartbeatArgsV1& args,
                                                       ReplSetHeartbeatResponse* response) {
@@ -351,9 +360,19 @@ Status ReplicationCoordinatorMock::updateTerm(long long term) {
     return Status::OK();
 }
 
-void ReplicationCoordinatorMock::onSnapshotCreate(OpTime timeOfSnapshot) {}
+SnapshotName ReplicationCoordinatorMock::reserveSnapshotName(OperationContext* txn) {
+    return SnapshotName(_snapshotNameGenerator.addAndFetch(1));
+}
+
+void ReplicationCoordinatorMock::forceSnapshotCreation() {}
+
+void ReplicationCoordinatorMock::onSnapshotCreate(OpTime timeOfSnapshot, SnapshotName name) {}
 
 void ReplicationCoordinatorMock::dropAllSnapshots() {}
+
+OpTime ReplicationCoordinatorMock::getCurrentCommittedSnapshotOpTime() {
+    return OpTime();
+}
 
 }  // namespace repl
 }  // namespace mongo

@@ -28,9 +28,11 @@
 
 #include "mongo/platform/basic.h"
 
+#include "mongo/db/pipeline/accumulator.h"
 #include "mongo/db/pipeline/document.h"
 #include "mongo/db/pipeline/expression.h"
 #include "mongo/dbtests/dbtests.h"
+#include "mongo/unittest/unittest.h"
 
 namespace ExpressionTests {
 
@@ -39,6 +41,30 @@ using std::numeric_limits;
 using std::set;
 using std::string;
 using std::vector;
+
+/**
+ * Takes the name of an expression as its first argument and a list of pairs of arguments and
+ * expected results as its second argument, and asserts that for the given expression the arguments
+ * evaluate to the expected results.
+ */
+static void assertExpectedResults(
+    std::string expression,
+    std::initializer_list<std::pair<std::vector<Value>, Value>> operations) {
+    for (auto&& op : operations) {
+        try {
+            VariablesIdGenerator idGenerator;
+            VariablesParseState vps(&idGenerator);
+            const BSONObj obj = BSON(expression << Value(op.first));
+            Value result =
+                Expression::parseExpression(obj.firstElement(), vps)->evaluate(Document());
+            ASSERT_EQUALS(op.second, result);
+            ASSERT_EQUALS(op.second.getType(), result.getType());
+        } catch (...) {
+            log() << "failed with arguments: " << Value(op.first);
+            throw;
+        }
+    }
+}
 
 /** Convert BSONObj to a BSONObj with our $const wrappings. */
 static BSONObj constify(const BSONObj& obj, bool parentIsArray = false) {
@@ -94,6 +120,158 @@ Value valueFromBson(BSONObj obj) {
     BSONElement element = obj.firstElement();
     return Value(element);
 }
+
+class ExpressionNaryTest : public unittest::Test {
+public:
+    void addOperand(intrusive_ptr<ExpressionNary> expr, Value arg) {
+        expr->addOperand(ExpressionConstant::create(arg));
+    }
+};
+
+class ExpressionNaryTestOneArg : public ExpressionNaryTest {
+public:
+    virtual void assertEvaluates(Value input, Value output) {
+        addOperand(_expr, input);
+        ASSERT_EQUALS(output, _expr->evaluate(Document()));
+        ASSERT_EQUALS(output.getType(), _expr->evaluate(Document()).getType());
+    }
+
+    intrusive_ptr<ExpressionNary> _expr;
+};
+
+/* ------------------------- ExpressionCeil -------------------------- */
+
+class ExpressionCeilTest : public ExpressionNaryTestOneArg {
+public:
+    virtual void assertEvaluates(Value input, Value output) override {
+        _expr = new ExpressionCeil();
+        ExpressionNaryTestOneArg::assertEvaluates(input, output);
+    }
+};
+
+TEST_F(ExpressionCeilTest, IntArg) {
+    assertEvaluates(Value(0), Value(0));
+    assertEvaluates(Value(numeric_limits<int>::min()), Value(numeric_limits<int>::min()));
+    assertEvaluates(Value(numeric_limits<int>::max()), Value(numeric_limits<int>::max()));
+}
+
+TEST_F(ExpressionCeilTest, LongArg) {
+    assertEvaluates(Value(0LL), Value(0LL));
+    assertEvaluates(Value(numeric_limits<long long>::min()),
+                    Value(numeric_limits<long long>::min()));
+    assertEvaluates(Value(numeric_limits<long long>::max()),
+                    Value(numeric_limits<long long>::max()));
+}
+
+TEST_F(ExpressionCeilTest, FloatArg) {
+    assertEvaluates(Value(2.0), Value(2.0));
+    assertEvaluates(Value(-2.0), Value(-2.0));
+    assertEvaluates(Value(0.9), Value(1.0));
+    assertEvaluates(Value(0.1), Value(1.0));
+    assertEvaluates(Value(-1.2), Value(-1.0));
+    assertEvaluates(Value(-1.7), Value(-1.0));
+
+    // Outside the range of long longs (there isn't enough precision for decimals in this range, so
+    // ceil should just preserve the number).
+    double largerThanLong = numeric_limits<long long>::max() * 2.0;
+    assertEvaluates(Value(largerThanLong), Value(largerThanLong));
+    double smallerThanLong = numeric_limits<long long>::min() * 2.0;
+    assertEvaluates(Value(smallerThanLong), Value(smallerThanLong));
+}
+
+TEST_F(ExpressionCeilTest, NullArg) {
+    assertEvaluates(Value(BSONNULL), Value(BSONNULL));
+}
+
+/* ------------------------- ExpressionFloor -------------------------- */
+
+class ExpressionFloorTest : public ExpressionNaryTestOneArg {
+public:
+    virtual void assertEvaluates(Value input, Value output) override {
+        _expr = new ExpressionFloor();
+        ExpressionNaryTestOneArg::assertEvaluates(input, output);
+    }
+};
+
+TEST_F(ExpressionFloorTest, IntArg) {
+    assertEvaluates(Value(0), Value(0));
+    assertEvaluates(Value(numeric_limits<int>::min()), Value(numeric_limits<int>::min()));
+    assertEvaluates(Value(numeric_limits<int>::max()), Value(numeric_limits<int>::max()));
+}
+
+TEST_F(ExpressionFloorTest, LongArg) {
+    assertEvaluates(Value(0LL), Value(0LL));
+    assertEvaluates(Value(numeric_limits<long long>::min()),
+                    Value(numeric_limits<long long>::min()));
+    assertEvaluates(Value(numeric_limits<long long>::max()),
+                    Value(numeric_limits<long long>::max()));
+}
+
+TEST_F(ExpressionFloorTest, FloatArg) {
+    assertEvaluates(Value(2.0), Value(2.0));
+    assertEvaluates(Value(-2.0), Value(-2.0));
+    assertEvaluates(Value(0.9), Value(0.0));
+    assertEvaluates(Value(0.1), Value(0.0));
+    assertEvaluates(Value(-1.2), Value(-2.0));
+    assertEvaluates(Value(-1.7), Value(-2.0));
+
+    // Outside the range of long longs (there isn't enough precision for decimals in this range, so
+    // floor should just preserve the number).
+    double largerThanLong = numeric_limits<long long>::max() * 2.0;
+    assertEvaluates(Value(largerThanLong), Value(largerThanLong));
+    double smallerThanLong = numeric_limits<long long>::min() * 2.0;
+    assertEvaluates(Value(smallerThanLong), Value(smallerThanLong));
+}
+
+TEST_F(ExpressionFloorTest, NullArg) {
+    assertEvaluates(Value(BSONNULL), Value(BSONNULL));
+}
+
+/* ------------------------- ExpressionTrunc -------------------------- */
+
+class ExpressionTruncTest : public ExpressionNaryTestOneArg {
+public:
+    virtual void assertEvaluates(Value input, Value output) override {
+        _expr = new ExpressionTrunc();
+        ExpressionNaryTestOneArg::assertEvaluates(input, output);
+    }
+};
+
+TEST_F(ExpressionTruncTest, IntArg) {
+    assertEvaluates(Value(0), Value(0));
+    assertEvaluates(Value(numeric_limits<int>::min()), Value(numeric_limits<int>::min()));
+    assertEvaluates(Value(numeric_limits<int>::max()), Value(numeric_limits<int>::max()));
+}
+
+TEST_F(ExpressionTruncTest, LongArg) {
+    assertEvaluates(Value(0LL), Value(0LL));
+    assertEvaluates(Value(numeric_limits<long long>::min()),
+                    Value(numeric_limits<long long>::min()));
+    assertEvaluates(Value(numeric_limits<long long>::max()),
+                    Value(numeric_limits<long long>::max()));
+}
+
+TEST_F(ExpressionTruncTest, FloatArg) {
+    assertEvaluates(Value(2.0), Value(2.0));
+    assertEvaluates(Value(-2.0), Value(-2.0));
+    assertEvaluates(Value(0.9), Value(0.0));
+    assertEvaluates(Value(0.1), Value(0.0));
+    assertEvaluates(Value(-1.2), Value(-1.0));
+    assertEvaluates(Value(-1.7), Value(-1.0));
+
+    // Outside the range of long longs (there isn't enough precision for decimals in this range, so
+    // should just preserve the number).
+    double largerThanLong = numeric_limits<long long>::max() * 2.0;
+    assertEvaluates(Value(largerThanLong), Value(largerThanLong));
+    double smallerThanLong = numeric_limits<long long>::min() * 2.0;
+    assertEvaluates(Value(smallerThanLong), Value(smallerThanLong));
+}
+
+TEST_F(ExpressionTruncTest, NullArg) {
+    assertEvaluates(Value(BSONNULL), Value(BSONNULL));
+}
+
+/* ------------------------- Old-style tests -------------------------- */
 
 namespace Add {
 
@@ -1234,6 +1412,72 @@ private:
 };
 
 }  // namespace Constant
+
+TEST(ExpressionFromAccumulators, Avg) {
+    assertExpectedResults("$avg",
+                          {// $avg ignores non-numeric inputs.
+                           {{Value("string"), Value(BSONNULL), Value(), Value(3)}, Value(3.0)},
+                           // $avg always returns a double.
+                           {{Value(10LL), Value(20LL)}, Value(15.0)},
+                           // $avg returns null when no arguments are provided.
+                           {{}, Value(BSONNULL)}});
+}
+
+TEST(ExpressionFromAccumulators, Max) {
+    assertExpectedResults("$max",
+                          {// $max treats non-numeric inputs as valid arguments.
+                           {{Value(1), Value(BSONNULL), Value(), Value("a")}, Value("a")},
+                           {{Value("a"), Value("b")}, Value("b")},
+                           // $max always preserves the type of the result.
+                           {{Value(10LL), Value(0.0), Value(5)}, Value(10LL)},
+                           // $max returns null when no arguments are provided.
+                           {{}, Value(BSONNULL)}});
+}
+
+TEST(ExpressionFromAccumulators, Min) {
+    assertExpectedResults("$min",
+                          {// $min treats non-numeric inputs as valid arguments.
+                           {{Value("string")}, Value("string")},
+                           {{Value(1), Value(BSONNULL), Value(), Value("a")}, Value(1)},
+                           {{Value("a"), Value("b")}, Value("a")},
+                           // $min always preserves the type of the result.
+                           {{Value(0LL), Value(20.0), Value(10)}, Value(0LL)},
+                           // $min returns null when no arguments are provided.
+                           {{}, Value(BSONNULL)}});
+}
+
+TEST(ExpressionFromAccumulators, Sum) {
+    assertExpectedResults(
+        "$sum",
+        {// $sum ignores non-numeric inputs.
+         {{Value("string"), Value(BSONNULL), Value(), Value(3)}, Value(3)},
+         // If any argument is a double, $sum returns a double
+         {{Value(10LL), Value(10.0)}, Value(20.0)},
+         // If no arguments are doubles and an argument is a long, $sum returns a long
+         {{Value(10LL), Value(10)}, Value(20LL)},
+         // $sum returns 0 when no arguments are provided.
+         {{}, Value(0)}});
+}
+
+TEST(ExpressionFromAccumulators, StdDevPop) {
+    assertExpectedResults("$stdDevPop",
+                          {// $stdDevPop ignores non-numeric inputs.
+                           {{Value("string"), Value(BSONNULL), Value(), Value(3)}, Value(0.0)},
+                           // $stdDevPop always returns a double.
+                           {{Value(1LL), Value(3LL)}, Value(1.0)},
+                           // $stdDevPop returns null when no arguments are provided.
+                           {{}, Value(BSONNULL)}});
+}
+
+TEST(ExpressionFromAccumulators, StdDevSamp) {
+    assertExpectedResults("$stdDevSamp",
+                          {// $stdDevSamp ignores non-numeric inputs.
+                           {{Value("string"), Value(BSONNULL), Value(), Value(3)}, Value(BSONNULL)},
+                           // $stdDevSamp always returns a double.
+                           {{Value(1LL), Value(2LL), Value(3LL)}, Value(1.0)},
+                           // $stdDevSamp returns null when no arguments are provided.
+                           {{}, Value(BSONNULL)}});
+}
 
 namespace FieldPath {
 

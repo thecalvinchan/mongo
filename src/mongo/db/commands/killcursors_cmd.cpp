@@ -1,5 +1,5 @@
 /**
- *    Copyright (C) 2014 MongoDB Inc.
+ *    Copyright (C) 2015 MongoDB Inc.
  *
  *    This program is free software: you can redistribute it and/or  modify
  *    it under the terms of the GNU Affero General Public License, version 3,
@@ -26,148 +26,46 @@
  *    it in the license file.
  */
 
-#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kQuery
-
 #include "mongo/platform/basic.h"
 
-#include <memory>
-
 #include "mongo/base/disallow_copying.h"
-#include "mongo/db/audit.h"
-#include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/catalog/collection.h"
 #include "mongo/db/catalog/cursor_manager.h"
-#include "mongo/db/client.h"
-#include "mongo/db/clientcursor.h"
-#include "mongo/db/commands.h"
+#include "mongo/db/commands/killcursors_common.h"
 #include "mongo/db/db_raii.h"
 #include "mongo/db/query/killcursors_request.h"
-#include "mongo/db/query/killcursors_response.h"
-#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
-/**
- * Attempt to kill a list of cursor ids. The ClientCursors will be removed from the CursorManager
- * and destroyed.
- */
-class KillCursorsCmd : public Command {
+class KillCursorsCmd final : public KillCursorsCmdBase {
     MONGO_DISALLOW_COPYING(KillCursorsCmd);
 
 public:
-    KillCursorsCmd() : Command("killCursors") {}
+    KillCursorsCmd() = default;
 
-    bool isWriteCommandForConfigServer() const override {
-        return false;
-    }
-
-    bool slaveOk() const override {
-        return false;
-    }
-
-    bool slaveOverrideOk() const override {
-        return true;
-    }
-
-    bool maintenanceOk() const override {
-        return false;
-    }
-
-    bool adminOnly() const override {
-        return false;
-    }
-
-    void help(std::stringstream& help) const override {
-        help << "kill a list of cursor ids";
-    }
-
-    bool shouldAffectCommandCounter() const override {
-        return true;
-    }
-
-    Status checkAuthForCommand(ClientBasic* client,
-                               const std::string& dbname,
-                               const BSONObj& cmdObj) override {
-        auto statusWithRequest = KillCursorsRequest::parseFromBSON(dbname, cmdObj);
-        if (!statusWithRequest.isOK()) {
-            return statusWithRequest.getStatus();
-        }
-        auto killCursorsRequest = std::move(statusWithRequest.getValue());
-
-        AuthorizationSession* as = AuthorizationSession::get(client);
-
-        for (CursorId id : killCursorsRequest.cursorIds) {
-            Status authorizationStatus = as->checkAuthForKillCursors(killCursorsRequest.nss, id);
-
-            if (!authorizationStatus.isOK()) {
-                audit::logKillCursorsAuthzCheck(
-                    client, killCursorsRequest.nss, id, ErrorCodes::Unauthorized);
-                return authorizationStatus;
-            }
-        }
-
-        return Status::OK();
-    }
-
-    bool run(OperationContext* txn,
-             const std::string& dbname,
-             BSONObj& cmdObj,
-             int options,
-             std::string& errmsg,
-             BSONObjBuilder& result) override {
-        auto statusWithRequest = KillCursorsRequest::parseFromBSON(dbname, cmdObj);
-        if (!statusWithRequest.isOK()) {
-            return appendCommandStatus(result, statusWithRequest.getStatus());
-        }
-        auto killCursorsRequest = std::move(statusWithRequest.getValue());
-
+private:
+    Status _killCursor(OperationContext* txn, const NamespaceString& nss, CursorId cursorId) final {
         std::unique_ptr<AutoGetCollectionForRead> ctx;
 
         CursorManager* cursorManager;
-        if (killCursorsRequest.nss.isListIndexesCursorNS() ||
-            killCursorsRequest.nss.isListCollectionsCursorNS()) {
+        if (nss.isListIndexesCursorNS() || nss.isListCollectionsCursorNS()) {
             // listCollections and listIndexes are special cursor-generating commands whose cursors
             // are managed globally, as they operate over catalog data rather than targeting the
             // data within a collection.
             cursorManager = CursorManager::getGlobalCursorManager();
         } else {
-            ctx = stdx::make_unique<AutoGetCollectionForRead>(txn, killCursorsRequest.nss);
+            ctx = stdx::make_unique<AutoGetCollectionForRead>(txn, nss);
             Collection* collection = ctx->getCollection();
             if (!collection) {
-                return appendCommandStatus(result,
-                                           {ErrorCodes::InvalidNamespace,
-                                            str::stream() << "collection does not exist: "
-                                                          << killCursorsRequest.nss.ns()});
+                return {ErrorCodes::CursorNotFound,
+                        str::stream() << "collection does not exist: " << nss.ns()};
             }
             cursorManager = collection->getCursorManager();
         }
         invariant(cursorManager);
 
-        std::vector<CursorId> cursorsKilled;
-        std::vector<CursorId> cursorsNotFound;
-        std::vector<CursorId> cursorsAlive;
-        std::vector<CursorId> cursorsUnknown;
-
-        for (CursorId id : killCursorsRequest.cursorIds) {
-            Status status = cursorManager->eraseCursor(txn, id, true /*shouldAudit*/);
-            if (status.isOK()) {
-                cursorsKilled.push_back(id);
-            } else if (status.code() == ErrorCodes::CursorNotFound) {
-                cursorsNotFound.push_back(id);
-            } else {
-                cursorsAlive.push_back(id);
-            }
-
-            audit::logKillCursorsAuthzCheck(
-                txn->getClient(), killCursorsRequest.nss, id, status.code());
-        }
-
-        KillCursorsResponse killCursorsResponse(
-            cursorsKilled, cursorsNotFound, cursorsAlive, cursorsUnknown);
-        killCursorsResponse.addToBSON(&result);
-        return true;
+        return cursorManager->eraseCursor(txn, cursorId, true /*shouldAudit*/);
     }
-
 } killCursorsCmd;
 
 }  // namespace mongo

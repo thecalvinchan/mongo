@@ -28,7 +28,6 @@
 
 #include "mongo/platform/basic.h"
 
-
 #include "mongo/client/connpool.h"
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/authorization_session.h"
@@ -138,7 +137,7 @@ public:
                 result, Status(ErrorCodes::InvalidNamespace, "no namespace specified"));
         }
 
-        auto status = grid.catalogCache()->getDatabase(nss.db().toString());
+        auto status = grid.catalogCache()->getDatabase(txn, nss.db().toString());
         if (!status.isOK()) {
             return appendCommandStatus(result, status.getStatus());
         }
@@ -151,7 +150,7 @@ public:
         }
 
         // This refreshes the chunk metadata if stale.
-        ChunkManagerPtr manager = config->getChunkManagerIfExists(nss.ns(), true);
+        ChunkManagerPtr manager = config->getChunkManagerIfExists(txn, nss.ns(), true);
         if (!manager) {
             return appendCommandStatus(
                 result,
@@ -170,14 +169,14 @@ public:
         minKey = manager->getShardKeyPattern().normalizeShardKey(minKey);
         maxKey = manager->getShardKeyPattern().normalizeShardKey(maxKey);
 
-        ChunkPtr firstChunk = manager->findIntersectingChunk(minKey);
+        ChunkPtr firstChunk = manager->findIntersectingChunk(txn, minKey);
         verify(firstChunk);
 
         BSONObjBuilder remoteCmdObjB;
         remoteCmdObjB.append(cmdObj[ClusterMergeChunksCommand::nsField()]);
         remoteCmdObjB.append(cmdObj[ClusterMergeChunksCommand::boundsField()]);
         remoteCmdObjB.append(ClusterMergeChunksCommand::configField(),
-                             grid.catalogManager()->connectionString().toString());
+                             grid.shardRegistry()->getConfigServerConnectionString().toString());
         remoteCmdObjB.append(ClusterMergeChunksCommand::shardNameField(), firstChunk->getShardId());
 
         BSONObj remoteResult;

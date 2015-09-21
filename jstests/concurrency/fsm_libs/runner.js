@@ -281,6 +281,12 @@ var runner = (function() {
 
         if (workerErrs.length > 0) {
             var stackTraces = workerErrs.map(function(e) {
+                if (e.err && e.stack) {
+                    // Prepend the error message to the stack trace because it
+                    // isn't automatically included in SpiderMonkey stack traces
+                    // (see: SERVER-18781).
+                    return e.err + '\n\n' + e.stack;
+                }
                 return e.stack || e.err;
             });
 
@@ -409,10 +415,15 @@ var runner = (function() {
 
                     startTime = new Date();
                     threadMgr.init(workloads, context, maxAllowedConnections);
-                    threadMgr.spawnAll(cluster, executionOptions);
-                    threadMgr.checkFailed(0.2);
 
-                    errors = threadMgr.joinAll();
+                    try {
+                        threadMgr.spawnAll(cluster, executionOptions);
+                        threadMgr.checkFailed(0.2);
+                    } finally {
+                        // Threads must be joined before destruction, so do this
+                        // even in the presence of exceptions.
+                        errors = threadMgr.joinAll();
+                    }
                 } finally {
                     endTime = new Date();
                     cleanup.forEach(function(workload) {

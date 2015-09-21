@@ -165,7 +165,7 @@ TEST_F(ConfigUpgradeTests, EmptyVersion) {
 
     // Zero version (no version doc)
     VersionType oldVersion;
-    Status status = getConfigVersion(grid.catalogManager(), &oldVersion);
+    Status status = getConfigVersion(grid.catalogManager(&_txn).get(), &oldVersion);
     ASSERT(status.isOK());
 
     ASSERT_EQUALS(oldVersion.getMinCompatibleVersion(), 0);
@@ -185,7 +185,7 @@ TEST_F(ConfigUpgradeTests, ClusterIDVersion) {
     newVersion.clear();
 
     // Current Version w/o clusterId (invalid!)
-    Status status = getConfigVersion(grid.catalogManager(), &newVersion);
+    Status status = getConfigVersion(grid.catalogManager(&_txn).get(), &newVersion);
     ASSERT(!status.isOK());
 
     newVersion.clear();
@@ -201,50 +201,12 @@ TEST_F(ConfigUpgradeTests, ClusterIDVersion) {
     newVersion.clear();
 
     // Current version w/ clusterId (valid!)
-    status = getConfigVersion(grid.catalogManager(), &newVersion);
+    status = getConfigVersion(grid.catalogManager(&_txn).get(), &newVersion);
     ASSERT(status.isOK());
 
     ASSERT_EQUALS(newVersion.getMinCompatibleVersion(), MIN_COMPATIBLE_CONFIG_VERSION);
     ASSERT_EQUALS(newVersion.getCurrentVersion(), CURRENT_CONFIG_VERSION);
     ASSERT_EQUALS(newVersion.getClusterId(), clusterId);
-}
-
-TEST_F(ConfigUpgradeTests, InitialUpgrade) {
-    //
-    // Tests initializing the config server to the initial version
-    //
-
-    // Empty version
-    VersionType versionOld;
-    VersionType version;
-    string errMsg;
-    bool result =
-        checkAndUpgradeConfigVersion(grid.catalogManager(), false, &versionOld, &version, &errMsg);
-
-    ASSERT(result);
-    ASSERT_EQUALS(versionOld.getCurrentVersion(), 0);
-    ASSERT_EQUALS(version.getMinCompatibleVersion(), MIN_COMPATIBLE_CONFIG_VERSION);
-    ASSERT_EQUALS(version.getCurrentVersion(), CURRENT_CONFIG_VERSION);
-    ASSERT_NOT_EQUALS(version.getClusterId(), OID());
-}
-
-TEST_F(ConfigUpgradeTests, BadVersionUpgrade) {
-    //
-    // Tests that we can't upgrade from a config version we don't have an upgrade path for
-    //
-
-    stopBalancer();
-
-    storeLegacyConfigVersion(1);
-
-    // Default version (not upgradeable)
-    VersionType versionOld;
-    VersionType version;
-    string errMsg;
-    bool result =
-        checkAndUpgradeConfigVersion(grid.catalogManager(), false, &versionOld, &version, &errMsg);
-
-    ASSERT(!result);
 }
 
 TEST_F(ConfigUpgradeTests, CheckMongoVersion) {
@@ -257,11 +219,11 @@ TEST_F(ConfigUpgradeTests, CheckMongoVersion) {
     storeShardsAndPings(5, 10);  // 5 shards, 10 pings
 
     // Our version is >= 2.2, so this works
-    Status status = checkClusterMongoVersions(grid.catalogManager(), "2.2");
+    Status status = checkClusterMongoVersions(grid.catalogManager(&_txn).get(), "2.2");
     ASSERT(status.isOK());
 
     // Our version is < 9.9, so this doesn't work (until we hit v99.99)
-    status = checkClusterMongoVersions(grid.catalogManager(), "99.99");
+    status = checkClusterMongoVersions(grid.catalogManager(&_txn).get(), "99.99");
     ASSERT(status.code() == ErrorCodes::RemoteValidationError);
 }
 

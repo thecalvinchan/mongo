@@ -35,11 +35,9 @@ namespace mongo {
 /**
  * Passes through the first n results and then returns boost::none.
  */
-class RouterStageLimit : public RouterExecStage {
+class RouterStageLimit final : public RouterExecStage {
 public:
     RouterStageLimit(std::unique_ptr<RouterExecStage> child, long long limit);
-
-    ~RouterStageLimit() final = default;
 
     StatusWith<boost::optional<BSONObj>> next() final;
 

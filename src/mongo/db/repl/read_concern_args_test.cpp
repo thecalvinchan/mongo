@@ -34,7 +34,7 @@ namespace mongo {
 namespace repl {
 namespace {
 
-TEST(ReadAfterParse, BasicFullSpecification) {
+TEST(ReadAfterParse, ReadAfterOnly) {
     ReadConcernArgs readAfterOpTime;
     ASSERT_OK(readAfterOpTime.initialize(
         BSON("find"
@@ -45,7 +45,18 @@ TEST(ReadAfterParse, BasicFullSpecification) {
 
     ASSERT_EQ(Timestamp(20, 30), readAfterOpTime.getOpTime().getTimestamp());
     ASSERT_EQ(2, readAfterOpTime.getOpTime().getTerm());
-    ASSERT(ReadConcernArgs::ReadConcernLevel::kLocalReadConcern == readAfterOpTime.getLevel());
+    ASSERT(ReadConcernLevel::kLocalReadConcern == readAfterOpTime.getLevel());
+}
+
+TEST(ReadAfterParse, ReadCommitLevelOnly) {
+    ReadConcernArgs readAfterOpTime;
+    ASSERT_OK(
+        readAfterOpTime.initialize(BSON("find"
+                                        << "test" << ReadConcernArgs::kReadConcernFieldName
+                                        << BSON(ReadConcernArgs::kLevelFieldName << "majority"))));
+
+    ASSERT_TRUE(readAfterOpTime.getOpTime().isNull());
+    ASSERT_TRUE(ReadConcernLevel::kMajorityReadConcern == readAfterOpTime.getLevel());
 }
 
 TEST(ReadAfterParse, ReadCommittedFullSpecification) {
@@ -60,7 +71,7 @@ TEST(ReadAfterParse, ReadCommittedFullSpecification) {
 
     ASSERT_EQ(Timestamp(20, 30), readAfterOpTime.getOpTime().getTimestamp());
     ASSERT_EQ(2, readAfterOpTime.getOpTime().getTerm());
-    ASSERT(ReadConcernArgs::ReadConcernLevel::kMajorityReadConcern == readAfterOpTime.getLevel());
+    ASSERT(ReadConcernLevel::kMajorityReadConcern == readAfterOpTime.getLevel());
 }
 
 TEST(ReadAfterParse, Empty) {
@@ -69,6 +80,7 @@ TEST(ReadAfterParse, Empty) {
                                               << "test")));
 
     ASSERT(readAfterOpTime.getOpTime().getTimestamp().isNull());
+    ASSERT(ReadConcernLevel::kLocalReadConcern == readAfterOpTime.getLevel());
 }
 
 TEST(ReadAfterParse, BadRootType) {
@@ -100,7 +112,8 @@ TEST(ReadAfterParse, NoOpTimeTS) {
         readAfterOpTime.initialize(BSON("find"
                                         << "test" << ReadConcernArgs::kReadConcernFieldName
                                         << BSON(ReadConcernArgs::kOpTimeFieldName
-                                                << BSON(ReadConcernArgs::kOpTermFieldName << 2)))));
+                                                << BSON(ReadConcernArgs::kOpTimestampFieldName
+                                                        << 2)))));
 }
 
 TEST(ReadAfterParse, NoOpTimeTerm) {
@@ -147,6 +160,57 @@ TEST(ReadAfterParse, BadLevelValue) {
                                               << "test" << ReadConcernArgs::kReadConcernFieldName
                                               << BSON(ReadConcernArgs::kLevelFieldName
                                                       << "seven is not a real level"))));
+}
+
+TEST(ReadAfterSerialize, Empty) {
+    BSONObjBuilder builder;
+    ReadConcernArgs readAfterOpTime;
+    readAfterOpTime.appendInfo(&builder);
+
+    BSONObj obj(builder.done());
+
+    ASSERT_EQ(BSON(ReadConcernArgs::kReadConcernFieldName << BSONObj()), obj);
+}
+
+TEST(ReadAfterSerialize, ReadAfterOnly) {
+    BSONObjBuilder builder;
+    ReadConcernArgs readAfterOpTime(OpTime(Timestamp(20, 30), 2), boost::none);
+    readAfterOpTime.appendInfo(&builder);
+
+    BSONObj expectedObj(
+        BSON(ReadConcernArgs::kReadConcernFieldName
+             << BSON(ReadConcernArgs::kOpTimeFieldName
+                     << BSON(ReadConcernArgs::kOpTimestampFieldName
+                             << Timestamp(20, 30) << ReadConcernArgs::kOpTermFieldName << 2))));
+
+    ASSERT_EQ(expectedObj, builder.done());
+}
+
+TEST(ReadAfterSerialize, CommitLevelOnly) {
+    BSONObjBuilder builder;
+    ReadConcernArgs readAfterOpTime(boost::none, ReadConcernLevel::kLocalReadConcern);
+    readAfterOpTime.appendInfo(&builder);
+
+    BSONObj expectedObj(BSON(ReadConcernArgs::kReadConcernFieldName
+                             << BSON(ReadConcernArgs::kLevelFieldName << "local")));
+
+    ASSERT_EQ(expectedObj, builder.done());
+}
+
+TEST(ReadAfterSerialize, FullSpecification) {
+    BSONObjBuilder builder;
+    ReadConcernArgs readAfterOpTime(OpTime(Timestamp(20, 30), 2),
+                                    ReadConcernLevel::kMajorityReadConcern);
+    readAfterOpTime.appendInfo(&builder);
+
+    BSONObj expectedObj(
+        BSON(ReadConcernArgs::kReadConcernFieldName
+             << BSON(ReadConcernArgs::kLevelFieldName
+                     << "majority" << ReadConcernArgs::kOpTimeFieldName
+                     << BSON(ReadConcernArgs::kOpTimestampFieldName
+                             << Timestamp(20, 30) << ReadConcernArgs::kOpTermFieldName << 2))));
+
+    ASSERT_EQ(expectedObj, builder.done());
 }
 
 }  // unnamed namespace

@@ -77,6 +77,7 @@
 #include "mongo/db/repl/repl_client_info.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
 #include "mongo/db/repl/snapshot_thread.h"
+#include "mongo/db/server_parameters.h"
 #include "mongo/db/service_context.h"
 #include "mongo/db/stats/counters.h"
 #include "mongo/db/storage_options.h"
@@ -120,9 +121,6 @@ stdx::condition_variable newTimestampNotifier;
 
 static std::string _oplogCollectionName;
 
-const std::string kTimestampFieldName = "ts";
-const std::string kTermFieldName = "t";
-
 // so we can fail the same way
 void checkOplogInsert(StatusWith<RecordId> result) {
     massert(17322,
@@ -144,8 +142,19 @@ std::pair<OpTime, long long> getNextOpTime(OperationContext* txn,
                                            Collection* oplog,
                                            const char* ns,
                                            ReplicationCoordinator* replCoord,
-                                           const char* opstr) {
+                                           const char* opstr,
+                                           ReplicationCoordinator::Mode replicationMode) {
     synchronizeOnCappedInFlightResource(txn->lockState());
+
+    long long hashNew = 0;
+    long long term = OpTime::kProtocolVersionV0Term;
+
+    // Fetch term out of the newOpMutex.
+    if (replicationMode == ReplicationCoordinator::modeReplSet &&
+        replCoord->isV1ElectionProtocol()) {
+        // Current term. If we're not a replset of pv=1, it remains kOldProtocolVersionTerm.
+        term = replCoord->getTerm();
+    }
 
     stdx::lock_guard<stdx::mutex> lk(newOpMutex);
     Timestamp ts = getNextGlobalTimestamp();
@@ -153,16 +162,8 @@ std::pair<OpTime, long long> getNextOpTime(OperationContext* txn,
 
     fassert(28560, oplog->getRecordStore()->oplogDiskLocRegister(txn, ts));
 
-    long long hashNew = 0;
-    long long term = OpTime::kProtocolVersionV0Term;
-
-    // Set hash and term if we're in replset mode, otherwise they remain 0 in master/slave.
-    if (replCoord->getReplicationMode() == ReplicationCoordinator::modeReplSet) {
-        // Current term. If we're not a replset of pv=1, it remains kOldProtocolVersionTerm.
-        if (replCoord->isV1ElectionProtocol()) {
-            term = ReplClientInfo::forClient(txn->getClient()).getTerm();
-        }
-
+    // Set hash if we're in replset mode, otherwise it remains 0 in master/slave.
+    if (replicationMode == ReplicationCoordinator::modeReplSet) {
         hashNew = hashGenerator.nextInt64();
     }
 
@@ -209,6 +210,22 @@ private:
     BSONObj _oField;
 };
 
+class UpdateReplOpTimeChange : public RecoveryUnit::Change {
+public:
+    UpdateReplOpTimeChange(OpTime newOpTime, ReplicationCoordinator* replCoord)
+        : _newOpTime(newOpTime), _replCoord(replCoord) {}
+
+    virtual void commit() {
+        _replCoord->setMyLastOptimeForward(_newOpTime);
+    }
+
+    virtual void rollback() {}
+
+private:
+    const OpTime _newOpTime;
+    ReplicationCoordinator* _replCoord;
+};
+
 }  // namespace
 
 void setOplogCollectionName() {
@@ -244,7 +261,10 @@ void _logOp(OperationContext* txn,
             const char* ns,
             const BSONObj& obj,
             BSONObj* o2,
-            bool fromMigrate) {
+            bool fromMigrate,
+            const std::string& oplogCollectionName,
+            ReplicationCoordinator::Mode replicationMode,
+            bool updateReplOpTime) {
     NamespaceString nss(ns);
     if (nss.db() == "local") {
         return;
@@ -254,7 +274,7 @@ void _logOp(OperationContext* txn,
         return;
     }
 
-    if (!getGlobalReplicationCoordinator()->isReplEnabled()) {
+    if (replicationMode == ReplicationCoordinator::modeNone) {
         return;
     }
 
@@ -268,38 +288,35 @@ void _logOp(OperationContext* txn,
 
     ReplicationCoordinator* replCoord = getGlobalReplicationCoordinator();
 
-    if (ns[0] && replCoord->getReplicationMode() == ReplicationCoordinator::modeReplSet &&
+    if (ns[0] && replicationMode == ReplicationCoordinator::modeReplSet &&
         !replCoord->canAcceptWritesFor(nss)) {
         severe() << "logOp() but can't accept write to collection " << ns;
         fassertFailed(17405);
     }
-    Lock::CollectionLock lk2(txn->lockState(), _oplogCollectionName, MODE_IX);
+    Lock::CollectionLock lk2(txn->lockState(), oplogCollectionName, MODE_IX);
 
 
     if (_localOplogCollection == nullptr) {
-        OldClientContext ctx(txn, _oplogCollectionName);
+        OldClientContext ctx(txn, oplogCollectionName);
         _localDB = ctx.db();
         invariant(_localDB);
-        _localOplogCollection = _localDB->getCollection(_oplogCollectionName);
+        _localOplogCollection = _localDB->getCollection(oplogCollectionName);
         massert(13347,
-                "the oplog collection " + _oplogCollectionName +
+                "the oplog collection " + oplogCollectionName +
                     " missing. did you drop it? if so, restart the server",
                 _localOplogCollection);
     }
 
     std::pair<OpTime, long long> slot =
-        getNextOpTime(txn, _localOplogCollection, ns, replCoord, opstr);
+        getNextOpTime(txn, _localOplogCollection, ns, replCoord, opstr, replicationMode);
 
     /* we jump through a bunch of hoops here to avoid copying the obj buffer twice --
        instead we do a single copy to the destination position in the memory mapped file.
     */
 
     BSONObjBuilder b(256);
-    b.append(kTimestampFieldName, slot.first.getTimestamp());
-    // Don't add term in protocol version 0.
-    if (slot.first.getTerm() != OpTime::kProtocolVersionV0Term) {
-        b.append(kTermFieldName, slot.first.getTerm());
-    }
+
+    slot.first.append(&b);
     b.append("h", slot.second);
     b.append("v", OPLOG_VERSION);
     b.append("op", opstr);
@@ -317,9 +334,29 @@ void _logOp(OperationContext* txn,
     // This transaction might roll back.
     checkOplogInsert(_localOplogCollection->insertDocument(txn, &writer, false));
 
-    // Set this only after we're sure the insert didn't abort and roll back.
-    replCoord->setMyLastOptime(slot.first);
+    // Set replCoord last optime only after we're sure the WUOW didn't abort and roll back.
+    if (updateReplOpTime) {
+        txn->recoveryUnit()->registerChange(new UpdateReplOpTimeChange(slot.first, replCoord));
+    }
+
     ReplClientInfo::forClient(txn->getClient()).setLastOp(slot.first);
+}
+
+void _logOp(OperationContext* txn,
+            const char* opstr,
+            const char* ns,
+            const BSONObj& obj,
+            BSONObj* o2,
+            bool fromMigrate) {
+    _logOp(txn,
+           opstr,
+           ns,
+           obj,
+           o2,
+           fromMigrate,
+           _oplogCollectionName,
+           ReplicationCoordinator::get(txn)->getReplicationMode(),
+           true);
 }
 
 OpTime writeOpsToOplog(OperationContext* txn, const std::deque<BSONObj>& ops) {
@@ -348,7 +385,7 @@ OpTime writeOpsToOplog(OperationContext* txn, const std::deque<BSONObj>& ops) {
 
         for (std::deque<BSONObj>::const_iterator it = ops.begin(); it != ops.end(); ++it) {
             const BSONObj& op = *it;
-            const OpTime optime = extractOpTime(op);
+            const OpTime optime = fassertStatusOK(28779, OpTime::parseFromBSON(op));
 
             checkOplogInsert(_localOplogCollection->insertDocument(txn, op, false));
 
@@ -368,15 +405,14 @@ OpTime writeOpsToOplog(OperationContext* txn, const std::deque<BSONObj>& ops) {
     return lastOptime;
 }
 
-void createOplog(OperationContext* txn) {
+void createOplog(OperationContext* txn, const std::string& oplogCollectionName, bool replEnabled) {
     ScopedTransaction transaction(txn, MODE_X);
     Lock::GlobalWrite lk(txn->lockState());
 
-    const ReplSettings& replSettings = getGlobalReplicationCoordinator()->getSettings();
-    bool rs = !replSettings.replSet.empty();
+    const ReplSettings& replSettings = ReplicationCoordinator::get(txn)->getSettings();
 
-    OldClientContext ctx(txn, _oplogCollectionName);
-    Collection* collection = ctx.db()->getCollection(_oplogCollectionName);
+    OldClientContext ctx(txn, oplogCollectionName);
+    Collection* collection = ctx.db()->getCollection(oplogCollectionName);
 
     if (collection) {
         if (replSettings.oplogSize != 0) {
@@ -394,8 +430,8 @@ void createOplog(OperationContext* txn) {
             }
         }
 
-        if (!rs)
-            initTimestampFromOplog(txn, _oplogCollectionName);
+        if (!replEnabled)
+            initTimestampFromOplog(txn, oplogCollectionName);
         return;
     }
 
@@ -434,17 +470,23 @@ void createOplog(OperationContext* txn) {
 
     MONGO_WRITE_CONFLICT_RETRY_LOOP_BEGIN {
         WriteUnitOfWork uow(txn);
-        invariant(ctx.db()->createCollection(txn, _oplogCollectionName, options));
-        if (!rs)
+        invariant(ctx.db()->createCollection(txn, oplogCollectionName, options));
+        if (!replEnabled)
             getGlobalServiceContext()->getOpObserver()->onOpMessage(txn, BSONObj());
         uow.commit();
     }
-    MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "createCollection", _oplogCollectionName);
+    MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "createCollection", oplogCollectionName);
 
     /* sync here so we don't get any surprising lag later when we try to sync */
     StorageEngine* storageEngine = getGlobalServiceContext()->getGlobalStorageEngine();
     storageEngine->flushAllFiles(true);
     log() << "******" << endl;
+}
+
+void createOplog(OperationContext* txn) {
+    const auto replEnabled = ReplicationCoordinator::get(txn)->getReplicationMode() ==
+        ReplicationCoordinator::modeReplSet;
+    createOplog(txn, _oplogCollectionName, replEnabled);
 }
 
 // -------------------------------------
@@ -860,23 +902,14 @@ void setNewTimestamp(const Timestamp& newTime) {
     newTimestampNotifier.notify_all();
 }
 
-OpTime extractOpTime(const BSONObj& op) {
-    const Timestamp ts = op[kTimestampFieldName].timestamp();
-    long long term;
-    // Default to -1 if the term is absent.
-    fassert(28696,
-            bsonExtractIntegerFieldWithDefault(
-                op, kTermFieldName, OpTime::kProtocolVersionV0Term, &term));
-    return OpTime(ts, term);
-}
-
 void initTimestampFromOplog(OperationContext* txn, const std::string& oplogNS) {
     DBDirectClient c(txn);
     BSONObj lastOp = c.findOne(oplogNS, Query().sort(reverseNaturalObj), NULL, QueryOption_SlaveOk);
 
     if (!lastOp.isEmpty()) {
         LOG(1) << "replSet setting last Timestamp";
-        setNewTimestamp(lastOp[kTimestampFieldName].timestamp());
+        const OpTime opTime = fassertStatusOK(28696, OpTime::parseFromBSON(lastOp));
+        setNewTimestamp(opTime.getTimestamp());
     }
 }
 
@@ -886,6 +919,9 @@ void oplogCheckCloseDatabase(OperationContext* txn, Database* db) {
     _localDB = nullptr;
     _localOplogCollection = nullptr;
 }
+
+
+MONGO_EXPORT_STARTUP_SERVER_PARAMETER(replSnapshotThreadThrottleMicros, int, 1000);
 
 SnapshotThread::SnapshotThread(SnapshotManager* manager)
     : _manager(manager), _thread([this] { run(); }) {}
@@ -898,6 +934,14 @@ void SnapshotThread::run() {
 
     Timestamp lastTimestamp = {};
     while (true) {
+        {
+            // This block logically belongs at the end of the loop, but having it at the top
+            // simplifies handling of the "continue" cases. It is harmless to do these before the
+            // first run of the loop.
+            _manager->cleanupUnneededSnapshots();
+            sleepmicros(replSnapshotThreadThrottleMicros);  // Throttle by sleeping.
+        }
+
         {
             stdx::unique_lock<stdx::mutex> lock(newOpMutex);
             while (true) {
@@ -931,14 +975,23 @@ void SnapshotThread::run() {
                 // take snapshots. When we transition into a readable state from a non-readable
                 // state, a snapshot is forced to ensure we don't miss the latest write. This must
                 // be checked each time we acquire the global IS lock since that prevents the node
-                // from transitioning to a !readable() state from a readable() one.
+                // from transitioning to a !readable() state from a readable() one in the cases
+                // where we shouldn't be creating a snapshot.
                 continue;
             }
 
+            SnapshotName name(0);  // assigned real value in block.
             {
                 // Make sure there are no in-flight capped inserts while we create our snapshot.
                 Lock::ResourceLock cappedInsertLock(
                     txn->lockState(), resourceCappedInFlight, MODE_X);
+
+                // Reserve the name immediately before we take our snapshot. This ensures that all
+                // names that compare lower must be from points in time visible to this named
+                // snapshot.
+                name = replCoord->reserveSnapshotName(nullptr);
+
+                // This establishes the view that we will name.
                 _manager->prepareForCreateSnapshot(txn.get());
             }
 
@@ -953,12 +1006,12 @@ void SnapshotThread::run() {
                     continue;  // oplog is completely empty.
 
                 const auto op = record->data.releaseToBson();
-                opTimeOfSnapshot = extractOpTime(op);
+                opTimeOfSnapshot = fassertStatusOK(28780, OpTime::parseFromBSON(op));
                 invariant(!opTimeOfSnapshot.isNull());
             }
 
-            _manager->createSnapshot(txn.get(), SnapshotName(opTimeOfSnapshot.getTimestamp()));
-            replCoord->onSnapshotCreate(opTimeOfSnapshot);
+            _manager->createSnapshot(txn.get(), name);
+            replCoord->onSnapshotCreate(opTimeOfSnapshot, name);
         } catch (const WriteConflictException& wce) {
             log() << "skipping storage snapshot pass due to write conflict";
             continue;

@@ -5,6 +5,7 @@ Import("env")
 env.Library(
     target='metadata',
     source=[
+        'operation_shard_version.cpp',
         'collection_metadata.cpp',
         'metadata_loader.cpp',
     ],
@@ -14,6 +15,7 @@ env.Library(
         '$BUILD_DIR/mongo/db/range_arithmetic',
         '$BUILD_DIR/mongo/s/catalog/catalog_types',
         '$BUILD_DIR/mongo/s/common',
+        '$BUILD_DIR/mongo/db/service_context',
     ]
 )
 
@@ -30,6 +32,18 @@ env.Library(
         '$BUILD_DIR/mongo/bson/util/bson_extract',
         '$BUILD_DIR/mongo/db/common',
         '$BUILD_DIR/mongo/s/sharding_initialization',
+    ]
+)
+
+env.Library(
+    target='commands',
+    source=[
+        'merge_chunks_command.cpp',
+        'set_shard_version_command.cpp',
+    ],
+    LIBDEPS=[
+        'metadata',
+        'sharding',
     ]
 )
 

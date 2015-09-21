@@ -39,6 +39,8 @@ namespace mongo {
 
 class BSONObj;
 class CatalogManagerReplicaSet;
+struct ChunkVersion;
+class CollectionType;
 class DistLockManagerMock;
 class NamespaceString;
 class RemoteCommandTargeterFactoryMock;
@@ -92,7 +94,10 @@ protected:
      * single request + response or find tests.
      */
     void onCommand(executor::NetworkTestEnv::OnCommandFunction func);
+    void onCommandWithMetadata(executor::NetworkTestEnv::OnCommandWithMetadataFunction func);
     void onFindCommand(executor::NetworkTestEnv::OnFindCommandFunction func);
+    void onFindWithMetadataCommand(
+        executor::NetworkTestEnv::OnFindCommandWithMetadataFunction func);
 
     /**
      * Setup the shard registry to contain the given shards until the next reload.
@@ -135,11 +140,32 @@ protected:
                                const std::string& ns,
                                const BSONObj& detail);
 
+    /**
+     * Expects an update call, which changes the specified collection's namespace contents to match
+     * those of the input argument.
+     */
+    void expectUpdateCollection(const HostAndPort& expectedHost, const CollectionType& coll);
+
+    /**
+     * Expects a setShardVersion command to be executed on the specified shard.
+     */
+    void expectSetShardVersion(const HostAndPort& expectedHost,
+                               const ShardType& expectedShard,
+                               const NamespaceString& expectedNs,
+                               const ChunkVersion& expectedChunkVersion);
+
     void setUp() override;
 
     void tearDown() override;
 
     void shutdownExecutor();
+
+    /**
+     * Checks that the given command has the expected settings for read after opTime.
+     */
+    void checkReadConcern(const BSONObj& cmdObj,
+                          const Timestamp& expectedTS,
+                          long long expectedTerm) const;
 
 private:
     std::unique_ptr<ServiceContext> _service;

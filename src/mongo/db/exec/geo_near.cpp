@@ -42,7 +42,6 @@
 #include "mongo/db/geo/geoparser.h"
 #include "mongo/db/geo/hash.h"
 #include "mongo/db/index/expression_params.h"
-#include "mongo/db/index/s2_keys.h"
 #include "mongo/db/matcher/expression.h"
 #include "mongo/db/query/expression_index.h"
 #include "mongo/db/query/expression_index_knobs.h"
@@ -78,7 +77,10 @@ struct StoredGeometry {
             return NULL;
 
         unique_ptr<StoredGeometry> stored(new StoredGeometry);
-        if (!stored->geometry.parseFromStorage(element).isOK())
+
+        // GeoNear stage can only be run with an existing index
+        // Therefore, it is always safe to skip geometry validation
+        if (!stored->geometry.parseFromStorage(element, true).isOK())
             return NULL;
         stored->element = element;
         return stored.release();
@@ -560,9 +562,9 @@ StatusWith<NearStage::CoveredInterval*>  //
         const IntervalStats& lastIntervalStats = _specificStats.intervalStats.back();
 
         // TODO: Generally we want small numbers of results fast, then larger numbers later
-        if (lastIntervalStats.numResultsBuffered < 300)
+        if (lastIntervalStats.numResultsReturned < 300)
             _boundsIncrement *= 2;
-        else if (lastIntervalStats.numResultsBuffered > 600)
+        else if (lastIntervalStats.numResultsReturned > 600)
             _boundsIncrement /= 2;
     }
 
@@ -848,7 +850,7 @@ void GeoNear2DSphereStage::DensityEstimator::buildIndexScan(OperationContext* tx
     invariant(_currentLevel < centerId.level());
     centerId.AppendVertexNeighbors(_currentLevel, &neighbors);
 
-    S2CellIdsToIntervals(neighbors, _indexParams, coveredIntervals);
+    ExpressionMapping::S2CellIdsToIntervals(neighbors, _indexParams.indexVersion, coveredIntervals);
 
     // Index scan
     invariant(!_indexScan);
@@ -947,9 +949,9 @@ StatusWith<NearStage::CoveredInterval*>  //
         const IntervalStats& lastIntervalStats = _specificStats.intervalStats.back();
 
         // TODO: Generally we want small numbers of results fast, then larger numbers later
-        if (lastIntervalStats.numResultsBuffered < 300)
+        if (lastIntervalStats.numResultsReturned < 300)
             _boundsIncrement *= 2;
-        else if (lastIntervalStats.numResultsBuffered > 600)
+        else if (lastIntervalStats.numResultsReturned > 600)
             _boundsIncrement /= 2;
     }
 
@@ -999,7 +1001,7 @@ StatusWith<NearStage::CoveredInterval*>  //
     _scannedCells.Add(cover);
 
     OrderedIntervalList* coveredIntervals = &scanParams.bounds.fields[s2FieldPosition];
-    S2CellIdsToIntervalsWithParents(cover, _indexParams, coveredIntervals);
+    ExpressionMapping::S2CellIdsToIntervalsWithParents(cover, _indexParams, coveredIntervals);
 
     IndexScan* scan = new IndexScan(txn, scanParams, workingSet, nullptr);
 

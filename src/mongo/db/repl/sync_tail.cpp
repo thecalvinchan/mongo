@@ -58,6 +58,7 @@
 #include "mongo/db/repl/repl_client_info.h"
 #include "mongo/db/repl/replica_set_config.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
+#include "mongo/db/server_parameters.h"
 #include "mongo/db/stats/timer_stats.h"
 #include "mongo/util/exit.h"
 #include "mongo/util/fail_point_service.h"
@@ -70,14 +71,34 @@ using std::endl;
 
 namespace repl {
 #if defined(MONGO_PLATFORM_64)
-const int replWriterThreadCount = 16;
+int SyncTail::replWriterThreadCount = 16;
 const int replPrefetcherThreadCount = 16;
 #elif defined(MONGO_PLATFORM_32)
-const int replWriterThreadCount = 2;
+int SyncTail::replWriterThreadCount = 2;
 const int replPrefetcherThreadCount = 2;
 #else
 #error need to include something that defines MONGO_PLATFORM_XX
 #endif
+
+class ExportedWriterThreadCountParameter : public ExportedServerParameter<int> {
+public:
+    ExportedWriterThreadCountParameter()
+        : ExportedServerParameter<int>(ServerParameterSet::getGlobal(),
+                                       "replWriterThreadCount",
+                                       &SyncTail::replWriterThreadCount,
+                                       true,   // allowedToChangeAtStartup
+                                       false)  // allowedToChangeAtRuntime
+    {}
+
+    virtual Status validate(const int& potentialNewValue) {
+        if (potentialNewValue < 1 || potentialNewValue > 256) {
+            return Status(ErrorCodes::BadValue, "replWriterThreadCount must be between 1 and 256");
+        }
+        return Status::OK();
+    }
+
+} exportedWriterThreadCountParam;
+
 
 static Counter64 opsAppliedStats;
 
@@ -410,7 +431,7 @@ void SyncTail::_applyOplogUntil(OperationContext* txn, const OpTime& endOpTime) 
 
             // Check if we reached the end
             const BSONObj currentOp = ops.back();
-            const OpTime currentOpTime = extractOpTime(currentOp);
+            const OpTime currentOpTime = fassertStatusOK(28772, OpTime::parseFromBSON(currentOp));
 
             // When we reach the end return this batch
             if (currentOpTime == endOpTime) {
@@ -530,7 +551,7 @@ void SyncTail::oplogApplication() {
                 tryToGoLiveAsASecondary(&txn, replCoord);
             }
 
-            const int slaveDelaySecs = replCoord->getSlaveDelaySecs().count();
+            const int slaveDelaySecs = durationCount<Seconds>(replCoord->getSlaveDelaySecs());
             if (!ops.empty() && slaveDelaySecs > 0) {
                 const BSONObj lastOp = ops.back();
                 const unsigned int opTimestampSecs = lastOp["ts"].timestamp().getSecs();
@@ -570,7 +591,7 @@ void SyncTail::oplogApplication() {
         // Set minValid to the last op to be applied in this next batch.
         // This will cause this node to go into RECOVERING state
         // if we should crash and restart before updating the oplog
-        setMinValid(&txn, extractOpTime(lastOp));
+        setMinValid(&txn, fassertStatusOK(28773, OpTime::parseFromBSON(lastOp)));
         multiApply(&txn,
                    ops,
                    &_prefetcherPool,
@@ -659,7 +680,7 @@ bool SyncTail::tryPopAndWaitForMore(OperationContext* txn,
 
 void SyncTail::handleSlaveDelay(const BSONObj& lastOp) {
     ReplicationCoordinator* replCoord = getGlobalReplicationCoordinator();
-    int slaveDelaySecs = replCoord->getSlaveDelaySecs().count();
+    int slaveDelaySecs = durationCount<Seconds>(replCoord->getSlaveDelaySecs());
 
     // ignore slaveDelay if the box is still initializing. once
     // it becomes secondary we can worry about it.
@@ -683,7 +704,7 @@ void SyncTail::handleSlaveDelay(const BSONObj& lastOp) {
                     sleepsecs(6);
 
                     // Handle reconfigs that changed the slave delay
-                    if (replCoord->getSlaveDelaySecs().count() != slaveDelaySecs)
+                    if (durationCount<Seconds>(replCoord->getSlaveDelaySecs()) != slaveDelaySecs)
                         break;
                 }
             }

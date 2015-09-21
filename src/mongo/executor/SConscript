@@ -4,16 +4,23 @@ Import("env")
 
 env.InjectThirdPartyIncludePaths('asio')
 
-env.Library(target='task_executor_interface',
+env.Library(target='remote_command',
             source=[
                 'remote_command_request.cpp',
                 'remote_command_response.cpp',
+            ],
+            LIBDEPS=[
+                '$BUILD_DIR/mongo/rpc/metadata',
+                '$BUILD_DIR/mongo/util/net/hostandport',
+            ])
+
+env.Library(target='task_executor_interface',
+            source=[
                 'task_executor.cpp',
             ],
             LIBDEPS=[
                 '$BUILD_DIR/mongo/base',
-                '$BUILD_DIR/mongo/rpc/metadata',
-                '$BUILD_DIR/mongo/util/net/hostandport',
+                'remote_command',
             ])
 
 env.Library(target='network_interface',
@@ -65,19 +72,47 @@ env.Library(target='network_test_env',
 env.Library(
     target='network_interface_asio',
     source=[
+        'async_secure_stream.cpp',
+        'async_secure_stream_factory.cpp',
+        'async_stream.cpp',
+        'async_stream_factory.cpp',
         'network_interface_asio.cpp',
         'network_interface_asio_auth.cpp',
         'network_interface_asio_command.cpp',
         'network_interface_asio_connect.cpp',
-        'network_interface_asio_ssl.cpp',
         'network_interface_asio_operation.cpp',
     ],
     LIBDEPS=[
-        '$BUILD_DIR/mongo/client/clientdriver',
-        '$BUILD_DIR/mongo/db/coredb',
+        '$BUILD_DIR/mongo/base/system_error',
+        '$BUILD_DIR/mongo/client/authentication',
+        '$BUILD_DIR/mongo/db/auth/authcommon',
+        '$BUILD_DIR/mongo/rpc/rpc',
         '$BUILD_DIR/third_party/shim_asio',
+        'network_interface',
         'task_executor_interface',
     ])
+
+env.CppUnitTest(
+    target='network_interface_asio_test',
+    source=[
+        'async_mock_stream_factory.cpp',
+        'network_interface_asio_test.cpp',
+    ],
+    LIBDEPS=[
+        'network_interface_asio',
+    ],
+)
+
+env.CppIntegrationTest(
+    target='network_interface_asio_integration_test',
+    source=[
+        'network_interface_asio_integration_test.cpp',
+    ],
+    LIBDEPS=[
+        'network_interface_asio',
+        '$BUILD_DIR/mongo/rpc/command_status',
+    ],
+)
 
 env.Library(
     target='network_interface_factory',

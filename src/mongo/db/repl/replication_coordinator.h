@@ -46,8 +46,17 @@ class IndexDescriptor;
 class NamespaceString;
 class OperationContext;
 class ServiceContext;
+class SnapshotName;
 class Timestamp;
 struct WriteConcernOptions;
+
+namespace rpc {
+
+class ReplSetMetadata;
+class RequestInterface;
+class ReplSetMetadata;
+
+}  // namespace rpc
 
 namespace repl {
 
@@ -67,7 +76,6 @@ class ReplSetHtmlSummary;
 class ReplSetRequestVotesArgs;
 class ReplSetRequestVotesResponse;
 class ReplicaSetConfig;
-class ReplicationMetadata;
 class UpdatePositionArgs;
 
 /**
@@ -276,6 +284,16 @@ public:
     virtual void setMyLastOptime(const OpTime& opTime) = 0;
 
     /**
+     * Updates our internal tracking of the last OpTime applied to this node, but only
+     * if the supplied optime is later than the current last OpTime known to the replication
+     * coordinator.
+     *
+     * This function is used by logOp() on a primary, since the ops in the oplog do not
+     * necessarily commit in sequential order.
+     */
+    virtual void setMyLastOptimeForward(const OpTime& opTime) = 0;
+
+    /**
      * Same as above, but used during places we need to zero our last optime.
      */
     virtual void resetMyLastOptime() = 0;
@@ -395,14 +413,14 @@ public:
     virtual void processReplSetGetConfig(BSONObjBuilder* result) = 0;
 
     /**
-     * Processes the ReplicationMetadata returned from a command run against another replica set
+     * Processes the ReplSetMetadata returned from a command run against another replica set
      * member and updates protocol version 1 information (most recent optime that is committed,
      * member id of the current PRIMARY, the current config version and the current term).
      *
      * TODO(dannenberg): Move this method to be testing only if it does not end up being used
      * to process the find and getmore metadata responses from the DataReplicator.
      */
-    virtual void processReplicationMetadata(const ReplicationMetadata& replMetadata) = 0;
+    virtual void processReplSetMetadata(const rpc::ReplSetMetadata& replMetadata) = 0;
 
     /**
      * Toggles maintenanceMode to the value expressed by 'activate'
@@ -596,9 +614,12 @@ public:
                                                        long long* responseTerm) = 0;
 
     /**
-     * Prepares a BSONObj describing the current term, primary, and lastOp information.
+     * Prepares a metadata object describing the current term, primary, and lastOp information.
      */
-    virtual void prepareReplResponseMetadata(BSONObjBuilder* objBuilder) = 0;
+    virtual void prepareReplResponseMetadata(const rpc::RequestInterface& request,
+                                             const OpTime& lastOpTimeFromClient,
+                                             const ReadConcernArgs& readConcern,
+                                             BSONObjBuilder* builder) = 0;
 
     /**
      * Returns true if the V1 election protocol is being used and false otherwise.
@@ -626,14 +647,43 @@ public:
     virtual Status updateTerm(long long term) = 0;
 
     /**
+     * Reserves a unique SnapshotName.
+     *
+     * This name is guaranteed to compare > all names reserved before and < all names reserved
+     * after.
+     *
+     * This method will not take any locks or attempt to access storage using the passed-in
+     * OperationContext. It will only be used to track reserved SnapshotNames by each operation so
+     * that awaitReplicationOfLastOpForClient() can correctly wait for the reserved snapshot to be
+     * visible.
+     *
+     * A null OperationContext can be used in cases where the snapshot to wait for should not be
+     * adjusted.
+     */
+    virtual SnapshotName reserveSnapshotName(OperationContext* txn) = 0;
+
+    /**
+     * Signals the SnapshotThread, if running, to take a forced snapshot even if the global
+     * timestamp hasn't changed.
+     *
+     * Does not wait for the snapshot to be taken.
+     */
+    virtual void forceSnapshotCreation() = 0;
+
+    /**
      * Called when a new snapshot is created.
      */
-    virtual void onSnapshotCreate(OpTime timeOfSnapshot) = 0;
+    virtual void onSnapshotCreate(OpTime timeOfSnapshot, SnapshotName name) = 0;
 
     /**
      * Resets all information related to snapshotting.
      */
     virtual void dropAllSnapshots() = 0;
+
+    /**
+     * Gets the latest OpTime of the currentCommittedSnapshot.
+     */
+    virtual OpTime getCurrentCommittedSnapshotOpTime() = 0;
 
 protected:
     ReplicationCoordinator();

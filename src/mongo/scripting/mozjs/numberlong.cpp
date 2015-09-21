@@ -30,6 +30,8 @@
 
 #include "mongo/scripting/mozjs/numberlong.h"
 
+#include <js/Conversions.h>
+
 #include "mongo/scripting/mozjs/implscope.h"
 #include "mongo/scripting/mozjs/objectwrapper.h"
 #include "mongo/scripting/mozjs/valuereader.h"
@@ -40,10 +42,11 @@
 namespace mongo {
 namespace mozjs {
 
-const JSFunctionSpec NumberLongInfo::methods[4] = {
+const JSFunctionSpec NumberLongInfo::methods[5] = {
     MONGO_ATTACH_JS_FUNCTION(toNumber),
     MONGO_ATTACH_JS_FUNCTION(toString),
     MONGO_ATTACH_JS_FUNCTION(valueOf),
+    MONGO_ATTACH_JS_FUNCTION(compare),
     JS_FS_END,
 };
 
@@ -102,6 +105,25 @@ void NumberLongInfo::Functions::toString(JSContext* cx, JS::CallArgs args) {
     ValueReader(cx, args.rval()).fromStringData(ss.operator std::string());
 }
 
+void NumberLongInfo::Functions::compare(JSContext* cx, JS::CallArgs args) {
+    uassert(ErrorCodes::BadValue, "NumberLong.compare() needs 1 argument", args.length() == 1);
+    uassert(ErrorCodes::BadValue,
+            "NumberLong.compare() argument must be an object",
+            args.get(0).isObject());
+
+    long long thisVal = NumberLongInfo::ToNumberLong(cx, args.thisv());
+    long long otherVal = NumberLongInfo::ToNumberLong(cx, args.get(0));
+
+    int comparison = 0;
+    if (thisVal < otherVal) {
+        comparison = -1;
+    } else if (thisVal > otherVal) {
+        comparison = 1;
+    }
+
+    args.rval().setDouble(comparison);
+}
+
 void NumberLongInfo::construct(JSContext* cx, JS::CallArgs args) {
     uassert(ErrorCodes::BadValue,
             "NumberLong needs 0, 1 or 3 arguments",
@@ -121,21 +143,28 @@ void NumberLongInfo::construct(JSContext* cx, JS::CallArgs args) {
     if (args.length() == 0) {
         o.setNumber(kFloatApprox, 0);
     } else if (args.length() == 1) {
-        if (args.get(0).isNumber()) {
-            o.setValue(kFloatApprox, args.get(0));
+        auto arg = args.get(0);
+        if (arg.isNumber()) {
+            o.setValue(kFloatApprox, arg);
         } else {
-            std::string str = ValueWriter(cx, args.get(0)).toString();
-
-            unsigned long long val = parseLL(str.c_str());
+            std::string str = ValueWriter(cx, arg).toString();
+            long long val;
+            // For string values we call strtoll because we expect non-number string
+            // values to fail rather than return 0 (which is the behavior of ToInt64.
+            if (arg.isString())
+                val = parseLL(str.c_str());
+            // Otherwise we call the toNumber on the js value to get the long long value.
+            else
+                val = ValueWriter(cx, arg).toInt64();
 
             // values above 2^53 are not accurately represented in JS
-            if ((long long)val == (long long)(double)(long long)(val) &&
-                val < 9007199254740992ULL) {
+            if (val == INT64_MIN || std::abs(val) >= 9007199254740992LL) {
+                auto val64 = static_cast<unsigned long long>(val);
                 o.setNumber(kFloatApprox, val);
+                o.setNumber(kTop, val64 >> 32);
+                o.setNumber(kBottom, val64 & 0x00000000ffffffff);
             } else {
                 o.setNumber(kFloatApprox, val);
-                o.setNumber(kTop, val >> 32);
-                o.setNumber(kBottom, val & 0x00000000ffffffff);
             }
         }
     } else {

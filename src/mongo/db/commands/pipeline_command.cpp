@@ -48,9 +48,10 @@
 #include "mongo/db/pipeline/pipeline.h"
 #include "mongo/db/pipeline/pipeline_d.h"
 #include "mongo/db/query/cursor_responses.h"
-#include "mongo/db/query/find_constants.h"
+#include "mongo/db/query/find_common.h"
 #include "mongo/db/query/get_executor.h"
 #include "mongo/db/storage_options.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
@@ -60,6 +61,7 @@ using std::shared_ptr;
 using std::string;
 using std::stringstream;
 using std::unique_ptr;
+using stdx::make_unique;
 
 /**
  * Returns true if we need to keep a ClientCursor saved for this pipeline (for future getMore
@@ -84,7 +86,7 @@ static bool handleCursorCommand(OperationContext* txn,
 
     // can't use result BSONObjBuilder directly since it won't handle exceptions correctly.
     BSONArrayBuilder resultsArray;
-    const int byteLimit = MaxBytesToReturnToClientAtOnce;
+    const int byteLimit = FindCommon::kMaxBytesToReturnToClientAtOnce;
     BSONObj next;
     for (int objCount = 0; objCount < batchSize; objCount++) {
         // The initial getNext() on a PipelineProxyStage may be very expensive so we don't
@@ -169,10 +171,10 @@ public:
              << "See http://dochub.mongodb.org/core/aggregation for more details.";
     }
 
-    virtual void addRequiredPrivileges(const std::string& dbname,
-                                       const BSONObj& cmdObj,
-                                       std::vector<Privilege>* out) {
-        Pipeline::addRequiredPrivileges(this, dbname, cmdObj, out);
+    Status checkAuthForCommand(ClientBasic* client,
+                               const std::string& dbname,
+                               const BSONObj& cmdObj) final {
+        return Pipeline::checkAuthForCommand(client, dbname, cmdObj);
     }
 
     virtual bool run(OperationContext* txn,
@@ -230,9 +232,8 @@ public:
             // Create the PlanExecutor which returns results from the pipeline. The WorkingSet
             // ('ws') and the PipelineProxyStage ('proxy') will be owned by the created
             // PlanExecutor.
-            unique_ptr<WorkingSet> ws(new WorkingSet());
-            unique_ptr<PipelineProxyStage> proxy(
-                new PipelineProxyStage(pPipeline, input, ws.get()));
+            auto ws = make_unique<WorkingSet>();
+            auto proxy = make_unique<PipelineProxyStage>(txn, pPipeline, input, ws.get());
 
             auto statusWithPlanExecutor = (NULL == collection)
                 ? PlanExecutor::make(

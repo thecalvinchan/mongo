@@ -34,33 +34,31 @@
 
 #include <utility>
 
-#include "mongo/config.h"
+#include "mongo/executor/async_stream_interface.h"
+#include "mongo/executor/async_stream_factory.h"
 #include "mongo/stdx/chrono.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/log.h"
 #include "mongo/util/net/sock.h"
-
 #include "mongo/util/net/ssl_manager.h"
+#include "mongo/util/time_support.h"
 
 namespace mongo {
 namespace executor {
 
-NetworkInterfaceASIO::NetworkInterfaceASIO()
-    : _io_service(), _resolver(_io_service), _state(State::kReady), _isExecutorRunnable(false) {
-    _connPool = stdx::make_unique<ConnectionPool>(kMessagingPortKeepOpen);
+NetworkInterfaceASIO::NetworkInterfaceASIO(
+    std::unique_ptr<AsyncStreamFactoryInterface> streamFactory)
+    : NetworkInterfaceASIO(std::move(streamFactory), nullptr) {}
 
-#ifdef MONGO_CONFIG_SSL
-    if (getSSLManager()) {
-        // We use sslv23, which corresponds to OpenSSLs SSLv23_method, for compatibility with older
-        // versions of OpenSSL. This mirrors the call to SSL_CTX_new in ssl_manager.cpp. In
-        // initAsyncSSLContext we explicitly disable all protocols other than TLSv1, TLSv1.1,
-        // and TLSv1.2.
-        _sslContext.emplace(asio::ssl::context::sslv23);
-        uassertStatusOK(
-            getSSLManager()->initSSLContext(_sslContext->native_handle(), getSSLGlobalParams()));
-    }
-#endif
-}
+NetworkInterfaceASIO::NetworkInterfaceASIO(
+    std::unique_ptr<AsyncStreamFactoryInterface> streamFactory,
+    std::unique_ptr<NetworkConnectionHook> networkConnectionHook)
+    : _io_service(),
+      _hook(std::move(networkConnectionHook)),
+      _resolver(_io_service),
+      _state(State::kReady),
+      _streamFactory(std::move(streamFactory)),
+      _isExecutorRunnable(false) {}
 
 std::string NetworkInterfaceASIO::getDiagnosticString() {
     str::stream output;
@@ -109,10 +107,6 @@ void NetworkInterfaceASIO::waitForWorkUntil(Date_t when) {
     _isExecutorRunnable = false;
 }
 
-void NetworkInterfaceASIO::setConnectionHook(std::unique_ptr<ConnectionHook> hook) {
-    MONGO_UNREACHABLE;
-}
-
 void NetworkInterfaceASIO::signalWorkAvailable() {
     stdx::unique_lock<stdx::mutex> lk(_executorMutex);
     _signalWorkAvailable_inlock();
@@ -155,7 +149,17 @@ void NetworkInterfaceASIO::cancelCommand(const TaskExecutor::CallbackHandle& cbH
 }
 
 void NetworkInterfaceASIO::setAlarm(Date_t when, const stdx::function<void()>& action) {
-    MONGO_UNREACHABLE;
+    // "alarm" must stay alive until it expires, hence the shared_ptr.
+    auto alarm = std::make_shared<asio::steady_timer>(_io_service, when - now());
+    alarm->async_wait([alarm, this, action](std::error_code ec) {
+        if (!ec) {
+            return action();
+        } else if (ec != asio::error::operation_aborted) {
+            // When the network interface is shut down, it will cancel all pending
+            // alarms, raising an "operation_aborted" error here, which we ignore.
+            warning() << "setAlarm() received an error: " << ec.message();
+        }
+    });
 };
 
 bool NetworkInterfaceASIO::inShutdown() const {

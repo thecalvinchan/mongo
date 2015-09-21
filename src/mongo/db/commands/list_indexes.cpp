@@ -42,15 +42,18 @@
 #include "mongo/db/exec/queued_data_stage.h"
 #include "mongo/db/exec/working_set.h"
 #include "mongo/db/query/cursor_responses.h"
-#include "mongo/db/query/find_constants.h"
+#include "mongo/db/query/find_common.h"
 #include "mongo/db/service_context.h"
 #include "mongo/db/storage/storage_engine.h"
+#include "mongo/stdx/memory.h"
 
 namespace mongo {
 
 using std::string;
 using std::stringstream;
+using std::unique_ptr;
 using std::vector;
+using stdx::make_unique;
 
 /**
  * Lists the indexes for a given collection.
@@ -143,8 +146,8 @@ public:
         }
         MONGO_WRITE_CONFLICT_RETRY_LOOP_END(txn, "listIndexes", ns.ns());
 
-        std::unique_ptr<WorkingSet> ws(new WorkingSet());
-        std::unique_ptr<QueuedDataStage> root(new QueuedDataStage(ws.get()));
+        auto ws = make_unique<WorkingSet>();
+        auto root = make_unique<QueuedDataStage>(txn, ws.get());
 
         for (size_t i = 0; i < indexNames.size(); i++) {
             BSONObj indexSpec;
@@ -173,11 +176,11 @@ public:
         if (!statusWithPlanExecutor.isOK()) {
             return appendCommandStatus(result, statusWithPlanExecutor.getStatus());
         }
-        std::unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
+        unique_ptr<PlanExecutor> exec = std::move(statusWithPlanExecutor.getValue());
 
         BSONArrayBuilder firstBatch;
 
-        const int byteLimit = MaxBytesToReturnToClientAtOnce;
+        const int byteLimit = FindCommon::kMaxBytesToReturnToClientAtOnce;
         for (long long objCount = 0; objCount < batchSize && firstBatch.len() < byteLimit;
              objCount++) {
             BSONObj next;

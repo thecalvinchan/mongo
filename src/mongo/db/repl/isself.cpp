@@ -203,7 +203,7 @@ bool isSelf(const HostAndPort& hostAndPort) {
         }
 
         if (getGlobalAuthorizationManager()->isAuthEnabled() && isInternalAuthSet()) {
-            if (!authenticateInternalUser(&conn)) {
+            if (!conn.authenticateInternalUser()) {
                 return false;
             }
         }
@@ -213,7 +213,7 @@ bool isSelf(const HostAndPort& hostAndPort) {
 
         return me;
     } catch (const std::exception& e) {
-        warning() << "could't check isSelf (" << hostAndPort << ") " << e.what() << std::endl;
+        warning() << "couldn't check isSelf (" << hostAndPort << ") " << e.what() << std::endl;
     }
 
     return false;

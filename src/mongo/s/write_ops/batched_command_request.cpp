@@ -26,6 +26,8 @@
  *    then also delete it in the license file.
  */
 
+#include "mongo/platform/basic.h"
+
 #include "mongo/s/write_ops/batched_command_request.h"
 
 #include "mongo/bson/bsonobj.h"
@@ -261,10 +263,6 @@ void BatchedCommandRequest::setMetadata(BatchedRequestMetadata* metadata) {
     INVOKE(setMetadata, metadata);
 }
 
-void BatchedCommandRequest::unsetMetadata() {
-    INVOKE(unsetMetadata);
-}
-
 bool BatchedCommandRequest::isMetadataSet() const {
     INVOKE(isMetadataSet);
 }
@@ -284,8 +282,8 @@ bool BatchedCommandRequest::shouldBypassValidation() const {
 /**
  * Generates a new request with insert _ids if required.  Otherwise returns NULL.
  */
-BatchedCommandRequest*  //
-    BatchedCommandRequest::cloneWithIds(const BatchedCommandRequest& origCmdRequest) {
+BatchedCommandRequest* BatchedCommandRequest::cloneWithIds(
+    const BatchedCommandRequest& origCmdRequest) {
     if (origCmdRequest.getBatchType() != BatchedCommandRequest::BatchType_Insert ||
         origCmdRequest.isInsertIndexRequest())
         return NULL;

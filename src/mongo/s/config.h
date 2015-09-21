@@ -31,6 +31,7 @@
 #include <set>
 
 #include "mongo/db/jsobj.h"
+#include "mongo/db/repl/optime.h"
 #include "mongo/s/client/shard.h"
 #include "mongo/util/concurrency/mutex.h"
 
@@ -48,7 +49,7 @@ struct CollectionInfo {
         _dropped = false;
     }
 
-    CollectionInfo(const CollectionType& in);
+    CollectionInfo(OperationContext* txn, const CollectionType& in, repl::OpTime);
     ~CollectionInfo();
 
     bool isSharded() const {
@@ -61,25 +62,32 @@ struct CollectionInfo {
 
     void resetCM(ChunkManager* cm);
 
-    void shard(ChunkManager* cm);
+    void shard(OperationContext* txn, ChunkManager* cm);
+
     void unshard();
 
     bool isDirty() const {
         return _dirty;
     }
+
     bool wasDropped() const {
         return _dropped;
     }
 
-    void save(const std::string& ns);
+    void save(OperationContext* txn, const std::string& ns);
 
     void useChunkManager(std::shared_ptr<ChunkManager> manager);
 
     bool unique() const {
         return _unique;
     }
+
     BSONObj key() const {
         return _key;
+    }
+
+    repl::OpTime getConfigOpTime() const {
+        return _configOpTime;
     }
 
 private:
@@ -88,6 +96,7 @@ private:
     std::shared_ptr<ChunkManager> _cm;
     bool _dirty;
     bool _dropped;
+    repl::OpTime _configOpTime;
 };
 
 /**
@@ -95,7 +104,7 @@ private:
  */
 class DBConfig {
 public:
-    DBConfig(std::string name, const DatabaseType& dbt);
+    DBConfig(std::string name, const DatabaseType& dbt, repl::OpTime configOpTime);
     ~DBConfig();
 
     /**
@@ -116,12 +125,18 @@ public:
         return _primaryId;
     }
 
-    void enableSharding();
+    /**
+     * Removes all cached metadata for the specified namespace so that subsequent attempts to
+     * retrieve it will cause a full reload.
+     */
+    void invalidateNs(const std::string& ns);
+
+    void enableSharding(OperationContext* txn);
 
     /**
        @return true if there was sharding info to remove
      */
-    bool removeSharding(const std::string& ns);
+    bool removeSharding(OperationContext* txn, const std::string& ns);
 
     /**
      * @return whether or not the 'ns' collection is partitioned
@@ -134,10 +149,12 @@ public:
                                   std::shared_ptr<ChunkManager>& manager,
                                   std::shared_ptr<Shard>& primary);
 
-    std::shared_ptr<ChunkManager> getChunkManager(const std::string& ns,
+    std::shared_ptr<ChunkManager> getChunkManager(OperationContext* txn,
+                                                  const std::string& ns,
                                                   bool reload = false,
                                                   bool forceReload = false);
-    std::shared_ptr<ChunkManager> getChunkManagerIfExists(const std::string& ns,
+    std::shared_ptr<ChunkManager> getChunkManagerIfExists(OperationContext* txn,
+                                                          const std::string& ns,
                                                           bool reload = false,
                                                           bool forceReload = false);
 
@@ -146,10 +163,10 @@ public:
      */
     const ShardId& getShardId(const std::string& ns);
 
-    void setPrimary(const std::string& s);
+    void setPrimary(OperationContext* txn, const std::string& s);
 
-    bool load();
-    bool reload();
+    bool load(OperationContext* txn);
+    bool reload(OperationContext* txn);
 
     bool dropDatabase(OperationContext*, std::string& errmsg);
 
@@ -164,9 +181,9 @@ protected:
                                  std::set<ShardId>& shardIds,
                                  std::string& errmsg);
 
-    bool _load();
+    bool _load(OperationContext* txn);
 
-    void _save(bool db = true, bool coll = true);
+    void _save(OperationContext* txn, bool db = true, bool coll = true);
 
     // Name of the database which this entry caches
     const std::string _name;
@@ -181,6 +198,9 @@ protected:
     stdx::mutex _lock;
     CollectionInfoMap _collections;
 
+    // OpTime of config server when the database definition was loaded.
+    repl::OpTime _configOpTime;
+
     // Ensures that only one thread at a time loads collection configuration data from
     // the config server
     stdx::mutex _hitConfigServerLock;
@@ -189,7 +209,7 @@ protected:
 
 class ConfigServer {
 public:
-    static void reloadSettings();
+    static void reloadSettings(OperationContext* txn);
 
     static void replicaSetChange(const std::string& setName,
                                  const std::string& newConnectionString);

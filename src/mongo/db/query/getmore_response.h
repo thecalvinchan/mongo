@@ -41,7 +41,7 @@ struct GetMoreResponse {
     /**
      * Constructs from values for each of the fields.
      */
-    GetMoreResponse(NamespaceString namspaceString, CursorId id, const std::vector<BSONObj>& objs);
+    GetMoreResponse(NamespaceString namspaceString, CursorId id, std::vector<BSONObj> objs);
 
     /**
      * Constructs a GetMoreResponse from the command BSON response.
@@ -52,6 +52,7 @@ struct GetMoreResponse {
      * Converts this response to its raw BSON representation.
      */
     BSONObj toBSON() const;
+    void toBSON(BSONObjBuilder* builder) const;
 
     const NamespaceString nss;
     const CursorId cursorId;

@@ -85,7 +85,7 @@ public:
     /**
      * Returns a ShardEndpoint for the doc from the mock ranges
      */
-    Status targetInsert(const BSONObj& doc, ShardEndpoint** endpoint) const {
+    Status targetInsert(OperationContext* txn, const BSONObj& doc, ShardEndpoint** endpoint) const {
         std::vector<ShardEndpoint*> endpoints;
         Status status = targetQuery(doc, &endpoints);
         if (!status.isOK())
@@ -99,7 +99,8 @@ public:
      * Returns the first ShardEndpoint for the query from the mock ranges.  Only can handle
      * queries of the form { field : { $gte : <value>, $lt : <value> } }.
      */
-    Status targetUpdate(const BatchedUpdateDocument& updateDoc,
+    Status targetUpdate(OperationContext* txn,
+                        const BatchedUpdateDocument& updateDoc,
                         std::vector<ShardEndpoint*>* endpoints) const {
         return targetQuery(updateDoc.getQuery(), endpoints);
     }
@@ -108,7 +109,8 @@ public:
      * Returns the first ShardEndpoint for the query from the mock ranges.  Only can handle
      * queries of the form { field : { $gte : <value>, $lt : <value> } }.
      */
-    Status targetDelete(const BatchedDeleteDocument& deleteDoc,
+    Status targetDelete(OperationContext* txn,
+                        const BatchedDeleteDocument& deleteDoc,
                         std::vector<ShardEndpoint*>* endpoints) const {
         return targetQuery(deleteDoc.getQuery(), endpoints);
     }
@@ -138,7 +140,7 @@ public:
         // No-op
     }
 
-    Status refreshIfNeeded(bool* wasChanged) {
+    Status refreshIfNeeded(OperationContext* txn, bool* wasChanged) {
         // No-op
         if (wasChanged)
             *wasChanged = false;
@@ -209,8 +211,11 @@ private:
 
 inline void assertEndpointsEqual(const ShardEndpoint& endpointA, const ShardEndpoint& endpointB) {
     ASSERT_EQUALS(endpointA.shardName, endpointB.shardName);
-    ASSERT_EQUALS(endpointA.shardVersion.toLong(), endpointB.shardVersion.toLong());
-    ASSERT_EQUALS(endpointA.shardVersion.epoch(), endpointB.shardVersion.epoch());
+    ASSERT_EQUALS(endpointA.shardVersion.getVersion().toLong(),
+                  endpointB.shardVersion.getVersion().toLong());
+    ASSERT_EQUALS(endpointA.shardVersion.getVersion().epoch(),
+                  endpointB.shardVersion.getVersion().epoch());
+    ASSERT_EQUALS(endpointA.shardVersion.getOpTime(), endpointB.shardVersion.getOpTime());
 }
 
 }  // namespace mongo

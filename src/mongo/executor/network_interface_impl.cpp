@@ -35,7 +35,9 @@
 #include <memory>
 
 #include "mongo/client/connection_pool.h"
+#include "mongo/executor/network_connection_hook.h"
 #include "mongo/rpc/get_status_from_command_result.h"
+#include "mongo/stdx/memory.h"
 #include "mongo/stdx/thread.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/log.h"
@@ -63,7 +65,12 @@ ThreadPool::Options makeOptions() {
 
 }  // namespace
 
-NetworkInterfaceImpl::NetworkInterfaceImpl() : NetworkInterface(), _pool(makeOptions()) {}
+NetworkInterfaceImpl::NetworkInterfaceImpl() : NetworkInterfaceImpl(nullptr){};
+
+NetworkInterfaceImpl::NetworkInterfaceImpl(std::unique_ptr<NetworkConnectionHook> hook)
+    : NetworkInterface(),
+      _pool(makeOptions()),
+      _commandRunner(kMessagingPortKeepOpen, std::move(hook)) {}
 
 NetworkInterfaceImpl::~NetworkInterfaceImpl() {}
 
@@ -81,22 +88,25 @@ std::string NetworkInterfaceImpl::getDiagnosticString() {
 }
 
 void NetworkInterfaceImpl::startup() {
-    stdx::lock_guard<stdx::mutex> lk(_mutex);
+    stdx::unique_lock<stdx::mutex> lk(_mutex);
     invariant(!_inShutdown);
+    lk.unlock();
+
+    _commandRunner.startup();
     _pool.startup();
     fassert(27824, _pool.schedule([this]() { _processAlarms(); }));
 }
 
 void NetworkInterfaceImpl::shutdown() {
-    using std::swap;
     stdx::unique_lock<stdx::mutex> lk(_mutex);
     _inShutdown = true;
     _hasPending.notify_all();
     _newAlarmReady.notify_all();
-    _pool.shutdown();
     lk.unlock();
-    _commandRunner.shutdown();
+
+    _pool.shutdown();
     _pool.join();
+    _commandRunner.shutdown();
 }
 
 void NetworkInterfaceImpl::signalWorkAvailable() {
@@ -129,10 +139,6 @@ void NetworkInterfaceImpl::waitForWorkUntil(Date_t when) {
         _isExecutorRunnableCondition.wait_for(lk, waitTime);
     }
     _isExecutorRunnable = false;
-}
-
-void NetworkInterfaceImpl::setConnectionHook(std::unique_ptr<ConnectionHook> hook) {
-    MONGO_UNREACHABLE;
 }
 
 void NetworkInterfaceImpl::_runOneCommand() {

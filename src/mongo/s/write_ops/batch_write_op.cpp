@@ -26,6 +26,8 @@
  *    it in the license file.
  */
 
+#include "mongo/platform/basic.h"
+
 #include "mongo/s/write_ops/batch_write_op.h"
 
 #include "mongo/base/error_codes.h"
@@ -85,11 +87,13 @@ static int compareEndpoints(const ShardEndpoint* endpointA, const ShardEndpoint*
     if (shardNameDiff != 0)
         return shardNameDiff;
 
-    long shardVersionDiff = endpointA->shardVersion.toLong() - endpointB->shardVersion.toLong();
+    long shardVersionDiff = endpointA->shardVersion.getVersion().toLong() -
+        endpointB->shardVersion.getVersion().toLong();
     if (shardVersionDiff != 0)
         return shardVersionDiff;
 
-    int shardEpochDiff = endpointA->shardVersion.epoch().compare(endpointB->shardVersion.epoch());
+    int shardEpochDiff = endpointA->shardVersion.getVersion().epoch().compare(
+        endpointB->shardVersion.getVersion().epoch());
     return shardEpochDiff;
 }
 
@@ -226,7 +230,8 @@ static void cancelBatches(const WriteErrorDetail& why,
     batchMap->clear();
 }
 
-Status BatchWriteOp::targetBatch(const NSTargeter& targeter,
+Status BatchWriteOp::targetBatch(OperationContext* txn,
+                                 const NSTargeter& targeter,
                                  bool recordTargetErrors,
                                  vector<TargetedWriteBatch*>* targetedBatches) {
     //
@@ -285,7 +290,7 @@ Status BatchWriteOp::targetBatch(const NSTargeter& targeter,
         OwnedPointerVector<TargetedWrite> writesOwned;
         vector<TargetedWrite*>& writes = writesOwned.mutableVector();
 
-        Status targetStatus = writeOp.targetWrites(targeter, &writes);
+        Status targetStatus = writeOp.targetWrites(txn, targeter, &writes);
 
         if (!targetStatus.isOK()) {
             WriteErrorDetail targetError;
@@ -452,9 +457,10 @@ void BatchWriteOp::buildBatchRequest(const TargetedWriteBatch& targetedBatch,
     }
 
     unique_ptr<BatchedRequestMetadata> requestMetadata(new BatchedRequestMetadata());
-    requestMetadata->setShardName(targetedBatch.getEndpoint().shardName);
-    requestMetadata->setShardVersion(targetedBatch.getEndpoint().shardVersion);
+    requestMetadata->setShardVersion(
+        ChunkVersionAndOpTime(targetedBatch.getEndpoint().shardVersion));
     requestMetadata->setSession(0);
+
     request->setMetadata(requestMetadata.release());
 }
 

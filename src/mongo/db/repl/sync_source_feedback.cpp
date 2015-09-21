@@ -71,7 +71,7 @@ bool SyncSourceFeedback::replAuthenticate() {
 
     if (!isInternalAuthSet())
         return false;
-    return authenticateInternalUser(_connection.get());
+    return _connection->authenticateInternalUser();
 }
 
 bool SyncSourceFeedback::_connect(OperationContext* txn, const HostAndPort& host) {
@@ -79,7 +79,8 @@ bool SyncSourceFeedback::_connect(OperationContext* txn, const HostAndPort& host
         return true;
     }
     log() << "setting syncSourceFeedback to " << host.toString();
-    _connection.reset(new DBClientConnection(false, OplogReader::kSocketTimeout.count()));
+    _connection.reset(
+        new DBClientConnection(false, durationCount<Seconds>(OplogReader::kSocketTimeout)));
     string errmsg;
     try {
         if (!_connection->connect(host, errmsg) ||
@@ -98,7 +99,7 @@ bool SyncSourceFeedback::_connect(OperationContext* txn, const HostAndPort& host
 }
 
 void SyncSourceFeedback::forwardSlaveProgress() {
-    stdx::unique_lock<stdx::mutex> lock(_mtx);
+    stdx::lock_guard<stdx::mutex> lock(_mtx);
     _positionChanged = true;
     _cond.notify_all();
 }
@@ -153,6 +154,12 @@ void SyncSourceFeedback::shutdown() {
     _cond.notify_all();
 }
 
+
+void SyncSourceFeedback::setKeepAliveInterval(Milliseconds keepAliveInterval) {
+    stdx::unique_lock<stdx::mutex> lock(_mtx);
+    _keepAliveInterval = keepAliveInterval;
+}
+
 void SyncSourceFeedback::run() {
     Client::initThread("SyncSourceFeedback");
 
@@ -161,7 +168,9 @@ void SyncSourceFeedback::run() {
         {
             stdx::unique_lock<stdx::mutex> lock(_mtx);
             while (!_positionChanged && !_shutdownSignaled) {
-                _cond.wait(lock);
+                if (_cond.wait_for(lock, _keepAliveInterval) == stdx::cv_status::timeout) {
+                    break;
+                }
             }
 
             if (_shutdownSignaled) {

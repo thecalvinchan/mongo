@@ -31,6 +31,7 @@
 
 #pragma once
 
+#include <boost/thread/mutex.hpp>
 #include <set>
 #include <string>
 
@@ -137,6 +138,8 @@ public:
                                      const mutablebson::DamageVector& damages);
 
     std::unique_ptr<RecordCursor> getCursor(OperationContext* txn, bool forward) const final;
+    std::unique_ptr<RecordCursor> getRandomCursor(OperationContext* txn) const final;
+
     std::vector<std::unique_ptr<RecordCursor>> getManyCursors(OperationContext* txn) const final;
 
     virtual Status truncate(OperationContext* txn);
@@ -208,12 +211,13 @@ public:
 
     int64_t cappedDeleteAsNeeded_inlock(OperationContext* txn, const RecordId& justInserted);
 
-    stdx::timed_mutex& cappedDeleterMutex() {
+    boost::timed_mutex& cappedDeleterMutex() {  // NOLINT
         return _cappedDeleterMutex;
     }
 
 private:
     class Cursor;
+    class RandomCursor;
 
     class CappedInsertChange;
     class NumRecordsChange;
@@ -230,7 +234,7 @@ private:
     void _setId(RecordId loc);
     bool cappedAndNeedDelete() const;
     void _changeNumRecords(OperationContext* txn, int64_t diff);
-    void _increaseDataSize(OperationContext* txn, int amount);
+    void _increaseDataSize(OperationContext* txn, int64_t amount);
     RecordData _getData(const WiredTigerCursor& cursor) const;
     StatusWith<RecordId> extractAndCheckLocForOplog(const char* data, int len);
     void _oplogSetStartHack(WiredTigerRecoveryUnit* wru) const;
@@ -247,8 +251,10 @@ private:
     AtomicInt64 _cappedSleep;
     AtomicInt64 _cappedSleepMS;
     CappedDocumentDeleteCallback* _cappedDeleteCallback;
-    int _cappedDeleteCheckCount;                    // see comment in ::cappedDeleteAsNeeded
-    mutable stdx::timed_mutex _cappedDeleterMutex;  // see comment in ::cappedDeleteAsNeeded
+
+    // See comment in ::cappedDeleteAsNeeded
+    int _cappedDeleteCheckCount;
+    mutable boost::timed_mutex _cappedDeleterMutex;  // NOLINT
 
     const bool _useOplogHack;
 

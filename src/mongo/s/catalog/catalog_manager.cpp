@@ -36,6 +36,7 @@
 
 #include "mongo/base/status.h"
 #include "mongo/base/status_with.h"
+#include "mongo/bson/util/bson_extract.h"
 #include "mongo/client/read_preference.h"
 #include "mongo/client/remote_command_targeter.h"
 #include "mongo/client/replica_set_monitor.h"
@@ -180,20 +181,34 @@ StatusWith<ShardType> validateHostAsShard(ShardRegistry* shardRegistry,
     }
 
     // Is it a mongos config server?
-    if (foundSetName.empty()) {
-        cmdStatus = shardRegistry->runCommand(shardHost, "admin", BSON("replSetGetStatus" << 1));
-        if (!cmdStatus.isOK()) {
-            return cmdStatus.getStatus();
+    cmdStatus = shardRegistry->runCommand(shardHost, "admin", BSON("replSetGetStatus" << 1));
+    if (!cmdStatus.isOK()) {
+        return cmdStatus.getStatus();
+    }
+
+    BSONObj res = cmdStatus.getValue();
+
+    if (getStatusFromCommandResult(res).isOK()) {
+        bool isConfigServer;
+        Status status =
+            bsonExtractBooleanFieldWithDefault(res, "configsvr", false, &isConfigServer);
+        if (!status.isOK()) {
+            return Status(status.code(),
+                          str::stream() << "replSetGetStatus returned invalid \"configsvr\" "
+                                        << "field when attempting to add "
+                                        << connectionString.toString()
+                                        << " as a shard: " << status.reason());
         }
 
-        BSONObj res = cmdStatus.getValue();
-
-        if (!getStatusFromCommandResult(res).isOK() && (res["info"].type() == String) &&
-            (res["info"].String() == "configsvr")) {
+        if (isConfigServer) {
             return {ErrorCodes::BadValue,
-                    "the specified mongod is a legacy-style config "
-                    "server and cannot be used as a shard server"};
+                    str::stream() << "Cannot add " << connectionString.toString()
+                                  << " as a shard since it is part of a config server replica set"};
         }
+    } else if ((res["info"].type() == String) && (res["info"].String() == "configsvr")) {
+        return {ErrorCodes::BadValue,
+                "the specified mongod is a legacy-style config "
+                "server and cannot be used as a shard server"};
     }
 
     // If the shard is part of a replica set, make sure all the hosts mentioned in the connection
@@ -327,13 +342,14 @@ StatusWith<string> CatalogManager::addShard(OperationContext* txn,
 
     // Check that none of the existing shard candidate's dbs exist already
     for (const string& dbName : dbNamesStatus.getValue()) {
-        StatusWith<DatabaseType> dbt = getDatabase(dbName);
+        auto dbt = getDatabase(dbName);
         if (dbt.isOK()) {
+            const auto& dbDoc = dbt.getValue().value;
             return Status(ErrorCodes::OperationFailed,
                           str::stream() << "can't add shard "
                                         << "'" << shardConnectionString.toString() << "'"
                                         << " because a local database '" << dbName
-                                        << "' exists in another " << dbt.getValue().getPrimary());
+                                        << "' exists in another " << dbDoc.getPrimary());
         } else if (dbt != ErrorCodes::DatabaseNotFound) {
             return dbt.getStatus();
         }
@@ -624,114 +640,6 @@ Status CatalogManager::enableSharding(const std::string& dbName) {
     log() << "Enabling sharding for database [" << dbName << "] in config db";
 
     return updateDatabase(dbName, db);
-}
-
-Status CatalogManager::dropCollection(OperationContext* txn, const NamespaceString& ns) {
-    logChange(txn->getClient()->clientAddress(true), "dropCollection.start", ns.ns(), BSONObj());
-
-    vector<ShardType> allShards;
-    Status status = getAllShards(&allShards);
-    if (!status.isOK()) {
-        return status;
-    }
-
-    LOG(1) << "dropCollection " << ns << " started";
-
-    // Lock the collection globally so that split/migrate cannot run
-    auto scopedDistLock = getDistLockManager()->lock(ns.ns(), "drop");
-    if (!scopedDistLock.isOK()) {
-        return scopedDistLock.getStatus();
-    }
-
-    LOG(1) << "dropCollection " << ns << " locked";
-
-    std::map<string, BSONObj> errors;
-    auto* shardRegistry = grid.shardRegistry();
-
-    for (const auto& shardEntry : allShards) {
-        auto dropResult = shardRegistry->runCommandWithNotMasterRetries(
-            shardEntry.getName(), ns.db().toString(), BSON("drop" << ns.coll()));
-
-        if (!dropResult.isOK()) {
-            return dropResult.getStatus();
-        }
-
-        auto dropStatus = getStatusFromCommandResult(dropResult.getValue());
-        if (!dropStatus.isOK()) {
-            if (dropStatus.code() == ErrorCodes::NamespaceNotFound) {
-                continue;
-            }
-
-            errors.emplace(shardEntry.getHost(), dropResult.getValue());
-        }
-    }
-
-    if (!errors.empty()) {
-        StringBuilder sb;
-        sb << "Dropping collection failed on the following hosts: ";
-
-        for (auto it = errors.cbegin(); it != errors.cend(); ++it) {
-            if (it != errors.cbegin()) {
-                sb << ", ";
-            }
-
-            sb << it->first << ": " << it->second;
-        }
-
-        return {ErrorCodes::OperationFailed, sb.str()};
-    }
-
-    LOG(1) << "dropCollection " << ns << " shard data deleted";
-
-    // remove chunk data
-    Status result = remove(ChunkType::ConfigNS, BSON(ChunkType::ns(ns.ns())), 0, nullptr);
-    if (!result.isOK()) {
-        return result;
-    }
-
-    LOG(1) << "dropCollection " << ns << " chunk data deleted";
-
-    for (const auto& shardEntry : allShards) {
-        BSONObjBuilder cmdBuilder;
-        cmdBuilder.append("setShardVersion", ns.ns());
-        cmdBuilder.append("configdb", connectionString().toString());
-        cmdBuilder.append("shard", shardEntry.getName());
-        cmdBuilder.append("shardHost", shardEntry.getHost());
-
-        ChunkVersion::DROPPED().addToBSON(cmdBuilder);
-
-        cmdBuilder.append("authoritative", true);
-
-        auto ssvResult = shardRegistry->runCommandWithNotMasterRetries(
-            shardEntry.getName(), "admin", cmdBuilder.obj());
-
-        if (!ssvResult.isOK()) {
-            return ssvResult.getStatus();
-        }
-
-        auto ssvStatus = getStatusFromCommandResult(ssvResult.getValue());
-        if (!ssvStatus.isOK()) {
-            return ssvStatus;
-        }
-
-        auto unsetShardingStatus = shardRegistry->runCommandWithNotMasterRetries(
-            shardEntry.getName(), "admin", BSON("unsetSharding" << 1));
-
-        if (!unsetShardingStatus.isOK()) {
-            return unsetShardingStatus.getStatus();
-        }
-
-        auto unsetShardingResult = getStatusFromCommandResult(unsetShardingStatus.getValue());
-        if (!unsetShardingResult.isOK()) {
-            return unsetShardingResult;
-        }
-    }
-
-    LOG(1) << "dropCollection " << ns << " completed";
-
-    logChange(txn->getClient()->clientAddress(true), "dropCollection", ns.ns(), BSONObj());
-
-    return Status::OK();
 }
 
 }  // namespace mongo

@@ -175,10 +175,8 @@ assert.commandWorked(explain);
 // .snapshot()
 explain = t.explain().find().snapshot().finish();
 assert.commandWorked(explain);
-assert(isIxscan(explain.queryPlanner.winningPlan));
 explain = t.find().snapshot().explain();
 assert.commandWorked(explain);
-assert(isIxscan(explain.queryPlanner.winningPlan));
 
 // .next()
 explain = t.explain().find().next();
@@ -261,6 +259,24 @@ assert(planHasStage(explain.queryPlanner.winningPlan, "COUNT_SCAN"));
 
 explain = t.explain().group({key: "a", initial: {}, reduce: function() { } });
 assert.commandWorked(explain);
+
+//
+// .distinct()
+//
+
+explain = t.explain().distinct('_id');
+assert.commandWorked(explain);
+assert(planHasStage(explain.queryPlanner.winningPlan, "PROJECTION"));
+assert(planHasStage(explain.queryPlanner.winningPlan, "DISTINCT_SCAN"));
+
+explain = t.explain().distinct('a');
+assert.commandWorked(explain);
+assert(planHasStage(explain.queryPlanner.winningPlan, "PROJECTION"));
+assert(planHasStage(explain.queryPlanner.winningPlan, "DISTINCT_SCAN"));
+
+explain = t.explain().distinct('b');
+assert.commandWorked(explain);
+assert(planHasStage(explain.queryPlanner.winningPlan, "COLLSCAN"));
 
 //
 // .remove()

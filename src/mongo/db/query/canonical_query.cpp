@@ -570,7 +570,13 @@ std::string CanonicalQuery::toString() const {
         ss << " limit=" << *_pq->getLimit();
     }
 
-    ss << " skip=" << _pq->getSkip() << "\n";
+    if (_pq->getSkip()) {
+        ss << " skip=" << *_pq->getSkip();
+    }
+
+    if (_pq->getNToReturn()) {
+        ss << " ntoreturn=" << *_pq->getNToReturn() << '\n';
+    }
 
     // The expression tree puts an endl on for us.
     ss << "Tree: " << _root->toString();
@@ -582,7 +588,7 @@ std::string CanonicalQuery::toString() const {
 std::string CanonicalQuery::toStringShort() const {
     str::stream ss;
     ss << "query: " << _pq->getFilter().toString() << " sort: " << _pq->getSort().toString()
-       << " projection: " << _pq->getProj().toString() << " skip: " << _pq->getSkip();
+       << " projection: " << _pq->getProj().toString();
 
     if (_pq->getBatchSize()) {
         ss << " batchSize: " << *_pq->getBatchSize();
@@ -590,6 +596,14 @@ std::string CanonicalQuery::toStringShort() const {
 
     if (_pq->getLimit()) {
         ss << " limit: " << *_pq->getLimit();
+    }
+
+    if (_pq->getSkip()) {
+        ss << " skip: " << *_pq->getSkip();
+    }
+
+    if (_pq->getNToReturn()) {
+        ss << " ntoreturn=" << *_pq->getNToReturn();
     }
 
     return ss;

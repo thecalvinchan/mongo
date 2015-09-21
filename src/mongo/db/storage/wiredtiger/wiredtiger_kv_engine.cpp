@@ -36,6 +36,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 
+#include "mongo/db/catalog/collection_catalog_entry.h"
 #include "mongo/db/concurrency/write_conflict_exception.h"
 #include "mongo/db/index/index_descriptor.h"
 #include "mongo/db/service_context.h"
@@ -115,7 +116,7 @@ WiredTigerKVEngine::WiredTigerKVEngine(const std::string& path,
     ss << "checkpoint=(wait=" << wiredTigerGlobalOptions.checkpointDelaySecs;
     ss << ",log_size=2GB),";
     ss << "statistics_log=(wait=" << wiredTigerGlobalOptions.statisticsLogDelaySecs << "),";
-    ss << WiredTigerCustomizationHooks::get(getGlobalServiceContext())->getOpenConfig("metadata");
+    ss << WiredTigerCustomizationHooks::get(getGlobalServiceContext())->getOpenConfig("system");
     ss << extraOpenOptions;
     if (!_durable) {
         // If we started without the journal, but previously used the journal then open with the
@@ -318,7 +319,25 @@ Status WiredTigerKVEngine::createSortedDataInterface(OperationContext* opCtx,
                                                      StringData ident,
                                                      const IndexDescriptor* desc) {
     _checkIdentPath(ident);
-    StatusWith<std::string> result = WiredTigerIndex::generateCreateString(_indexOptions, *desc);
+
+    std::string collIndexOptions;
+    const Collection* collection = desc->getCollection();
+
+    // Treat 'collIndexOptions' as an empty string when the collection member of 'desc' is NULL in
+    // order to allow for unit testing WiredTigerKVEngine::createSortedDataInterface().
+    if (collection) {
+        const CollectionCatalogEntry* cce = collection->getCatalogEntry();
+        const CollectionOptions collOptions = cce->getCollectionOptions(opCtx);
+
+        if (!collOptions.indexOptionDefaults["storageEngine"].eoo()) {
+            BSONObj storageEngineOptions = collOptions.indexOptionDefaults["storageEngine"].Obj();
+            collIndexOptions =
+                storageEngineOptions.getFieldDotted("wiredTiger.configString").valuestrsafe();
+        }
+    }
+
+    StatusWith<std::string> result =
+        WiredTigerIndex::generateCreateString(_indexOptions, collIndexOptions, *desc);
     if (!result.isOK()) {
         return result.getStatus();
     }

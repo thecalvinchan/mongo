@@ -35,6 +35,7 @@
 #include "mongo/s/catalog/catalog_manager.h"
 #include "mongo/s/catalog/type_database.h"
 #include "mongo/s/config.h"
+#include "mongo/s/grid.h"
 
 namespace mongo {
 
@@ -42,11 +43,10 @@ using std::shared_ptr;
 using std::string;
 
 
-CatalogCache::CatalogCache(CatalogManager* catalogManager) : _catalogManager(catalogManager) {
-    invariant(_catalogManager);
-}
+CatalogCache::CatalogCache() {}
 
-StatusWith<shared_ptr<DBConfig>> CatalogCache::getDatabase(const string& dbName) {
+StatusWith<shared_ptr<DBConfig>> CatalogCache::getDatabase(OperationContext* txn,
+                                                           const string& dbName) {
     stdx::lock_guard<stdx::mutex> guard(_mutex);
 
     ShardedDatabasesMap::iterator it = _databases.find(dbName);
@@ -55,13 +55,15 @@ StatusWith<shared_ptr<DBConfig>> CatalogCache::getDatabase(const string& dbName)
     }
 
     // Need to load from the store
-    StatusWith<DatabaseType> status = _catalogManager->getDatabase(dbName);
+    auto status = grid.catalogManager(txn)->getDatabase(dbName);
     if (!status.isOK()) {
         return status.getStatus();
     }
 
-    shared_ptr<DBConfig> db = std::make_shared<DBConfig>(dbName, status.getValue());
-    db->load();
+    const auto dbOpTimePair = status.getValue();
+    shared_ptr<DBConfig> db =
+        std::make_shared<DBConfig>(dbName, dbOpTimePair.value, dbOpTimePair.opTime);
+    db->load(txn);
 
     invariant(_databases.insert(std::make_pair(dbName, db)).second);
 

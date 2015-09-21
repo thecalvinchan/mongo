@@ -34,6 +34,9 @@
 #include <vector>
 
 #include "mongo/base/disallow_copying.h"
+#include "mongo/db/jsobj.h"
+#include "mongo/db/repl/optime.h"
+#include "mongo/db/repl/read_concern_args.h"
 #include "mongo/s/client/shard.h"
 #include "mongo/stdx/mutex.h"
 
@@ -65,6 +68,16 @@ class ShardRegistry {
     MONGO_DISALLOW_COPYING(ShardRegistry);
 
 public:
+    struct CommandResponse {
+        BSONObj response;
+        repl::OpTime opTime;
+    };
+
+    struct QueryResponse {
+        std::vector<BSONObj> docs;
+        repl::OpTime opTime;
+    };
+
     /**
      * Instantiates a new shard registry.
      *
@@ -72,19 +85,20 @@ public:
      * @param commandRunner Command runner for executing commands against hosts
      * @param executor Asynchronous task executor to use for making calls to shards.
      * @param network Network interface backing executor.
-     * @param catalogManager Used to retrieve the list of registered shard. TODO: remove.
+     * @param configServerCS ConnectionString used for communicating with the config servers
      */
     ShardRegistry(std::unique_ptr<RemoteCommandTargeterFactory> targeterFactory,
                   std::unique_ptr<executor::TaskExecutor> executor,
-                  executor::NetworkInterface* network);
+                  executor::NetworkInterface* network,
+                  ConnectionString configServerCS);
 
     ~ShardRegistry();
 
     /**
-     * Stores the given CatalogManager into _catalogManager for use for retrieving the list of
-     * registered shards, and creates the hard-coded config shard.
+     * Invoked when the connection string for the config server changes. Updates the config server
+     * connection string and recreates the config server's shard.
      */
-    void init(CatalogManager* catalogManager);
+    void updateConfigServerConnectionString(ConnectionString configServerCS);
 
     /**
      * Invokes the executor's startup method, which will start any networking/async execution
@@ -103,6 +117,10 @@ public:
 
     executor::NetworkInterface* getNetwork() const {
         return _network;
+    }
+
+    ConnectionString getConfigServerConnectionString() const {
+        return _configServerCS;
     }
 
     void reload();
@@ -143,15 +161,25 @@ public:
      *
      * Note: should never be used outside of CatalogManagerReplicaSet or DistLockCatalogImpl.
      */
-    StatusWith<std::vector<BSONObj>> exhaustiveFind(const HostAndPort& host,
-                                                    const NamespaceString& nss,
-                                                    const BSONObj& query,
-                                                    const BSONObj& sort,
-                                                    boost::optional<long long> limit);
+    StatusWith<QueryResponse> exhaustiveFind(const HostAndPort& host,
+                                             const NamespaceString& nss,
+                                             const BSONObj& query,
+                                             const BSONObj& sort,
+                                             boost::optional<long long> limit,
+                                             boost::optional<repl::ReadConcernArgs> readConcern,
+                                             const BSONObj& metadata);
 
     /**
      * Runs a command against the specified host and returns the result.  It is the responsibility
      * of the caller to check the returned BSON for command-specific failures.
+     */
+    StatusWith<CommandResponse> runCommandWithMetadata(const HostAndPort& host,
+                                                       const std::string& dbName,
+                                                       const BSONObj& cmdObj,
+                                                       const BSONObj& metadata);
+
+    /**
+     * Runs a command against the specified host and returns the result.
      */
     StatusWith<BSONObj> runCommand(const HostAndPort& host,
                                    const std::string& dbName,
@@ -171,6 +199,11 @@ public:
     StatusWith<BSONObj> runCommandWithNotMasterRetries(const ShardId& shard,
                                                        const std::string& dbname,
                                                        const BSONObj& cmdObj);
+
+    StatusWith<CommandResponse> runCommandWithNotMasterRetries(const ShardId& shardId,
+                                                               const std::string& dbname,
+                                                               const BSONObj& cmdObj,
+                                                               const BSONObj& metadata);
 
 private:
     typedef std::map<ShardId, std::shared_ptr<Shard>> ShardMap;
@@ -198,19 +231,16 @@ private:
     // configuration, such as getting the current server's hostname.
     executor::NetworkInterface* const _network;
 
-    // Catalog manager from which to load the shard information. Not owned and must outlive
-    // the shard registry object.  Should be set once by a call to init() then never modified again.
-    CatalogManager* _catalogManager;
-
-    // Protects the maps below
+    // Protects the config server connections string and the lookup maps below
     mutable stdx::mutex _mutex;
+
+    // Config server connection string
+    ConnectionString _configServerCS;
 
     // Map of both shardName -> Shard and hostName -> Shard
     ShardMap _lookup;
 
-    // TODO: These should eventually disappear and become parts of Shard
-
-    // Map from all hosts within a replica set to the shard representing this replica set
+    // Map from replica set name to shard corresponding to this replica set
     ShardMap _rsLookup;
 };
 

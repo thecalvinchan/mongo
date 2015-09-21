@@ -35,17 +35,13 @@
 #include <string>
 
 #include "mongo/base/status.h"
-#include "mongo/client/connection_string.h"
 #include "mongo/client/remote_command_targeter_factory_impl.h"
 #include "mongo/executor/network_interface_factory.h"
 #include "mongo/executor/task_executor.h"
 #include "mongo/executor/thread_pool_task_executor.h"
 #include "mongo/db/server_options.h"
 #include "mongo/db/service_context.h"
-#include "mongo/s/catalog/dist_lock_catalog_impl.h"
-#include "mongo/s/catalog/legacy/catalog_manager_legacy.h"
-#include "mongo/s/catalog/replset/catalog_manager_replica_set.h"
-#include "mongo/s/catalog/replset/replset_dist_lock_manager.h"
+#include "mongo/s/catalog/forwarding_catalog_manager.h"
 #include "mongo/s/client/shard_registry.h"
 #include "mongo/s/grid.h"
 #include "mongo/stdx/memory.h"
@@ -75,40 +71,25 @@ Status initializeGlobalShardingState(const ConnectionString& configCS) {
     auto shardRegistry(
         stdx::make_unique<ShardRegistry>(stdx::make_unique<RemoteCommandTargeterFactoryImpl>(),
                                          makeTaskExecutor(std::move(network)),
-                                         networkPtr));
+                                         networkPtr,
+                                         configCS));
 
-    std::unique_ptr<CatalogManager> catalogManager;
-    if (configCS.type() == ConnectionString::SET) {
-        auto distLockCatalog = stdx::make_unique<DistLockCatalogImpl>(
-            shardRegistry.get(), ReplSetDistLockManager::kDistLockWriteConcernTimeout);
-
-        const std::string distLockProcessId = str::stream()
-            << getHostName() << ":" << serverGlobalParams.port << ":" << time(0) << ":" << rand();
-        auto distLockManager = stdx::make_unique<ReplSetDistLockManager>(
+    std::unique_ptr<ForwardingCatalogManager> catalogManager;
+    try {
+        catalogManager = stdx::make_unique<ForwardingCatalogManager>(
             getGlobalServiceContext(),
-            distLockProcessId,
-            std::move(distLockCatalog),
-            ReplSetDistLockManager::kDistLockPingInterval,
-            ReplSetDistLockManager::kDistLockExpirationTime);
-
-        auto catalogManagerReplicaSet = stdx::make_unique<CatalogManagerReplicaSet>();
-        Status status = catalogManagerReplicaSet->init(configCS, std::move(distLockManager));
-        if (!status.isOK()) {
-            return status;
-        }
-        catalogManager = std::move(catalogManagerReplicaSet);
-    } else {
-        auto catalogManagerLegacy = stdx::make_unique<CatalogManagerLegacy>();
-        Status status = catalogManagerLegacy->init(configCS);
-        if (!status.isOK()) {
-            return status;
-        }
-        catalogManager = std::move(catalogManagerLegacy);
+            configCS,
+            shardRegistry.get(),
+            str::stream() << getHostName() << ":" << serverGlobalParams.port << ":" << time(0)
+                          << ":" << rand());
+    } catch (const DBException& ex) {
+        return ex.toStatus();
     }
 
-    shardRegistry->init(catalogManager.get());
     shardRegistry->startup();
-    grid.init(std::move(catalogManager), std::move(shardRegistry));
+    grid.init(std::move(catalogManager),
+              std::move(shardRegistry),
+              stdx::make_unique<ClusterCursorManager>(getGlobalServiceContext()->getClockSource()));
 
     return Status::OK();
 }

@@ -305,6 +305,79 @@ StatusWith<std::string> WiredTigerRecordStore::parseOptionsField(const BSONObj o
     return StatusWith<std::string>(ss.str());
 }
 
+class WiredTigerRecordStore::RandomCursor final : public RecordCursor {
+public:
+    RandomCursor(OperationContext* txn, const WiredTigerRecordStore& rs)
+        : _cursor(nullptr), _rs(&rs), _txn(txn) {
+        restore();
+    }
+
+    ~RandomCursor() {
+        detachFromOperationContext();
+    }
+
+    boost::optional<Record> next() final {
+        int advanceRet = WT_OP_CHECK(_cursor->next(_cursor));
+        if (advanceRet == WT_NOTFOUND)
+            return {};
+        invariantWTOK(advanceRet);
+
+        int64_t key;
+        invariantWTOK(_cursor->get_key(_cursor, &key));
+        const RecordId id = _fromKey(key);
+
+        WT_ITEM value;
+        invariantWTOK(_cursor->get_value(_cursor, &value));
+        auto data = RecordData(static_cast<const char*>(value.data), value.size);
+        data.makeOwned();  // TODO delete this line once safe.
+
+        return {{id, std::move(data)}};
+    }
+
+    boost::optional<Record> seekExact(const RecordId& id) final {
+        return {};
+    }
+
+    void savePositioned() final {
+        if (_cursor && !wt_keeptxnopen()) {
+            try {
+                _cursor->reset(_cursor);
+            } catch (const WriteConflictException& wce) {
+                // Ignore since this is only called when we are about to kill our transaction
+                // anyway.
+            }
+        }
+    }
+
+    bool restore() final {
+        // We can't use the CursorCache since this cursor needs a special config string.
+        WT_SESSION* session = WiredTigerRecoveryUnit::get(_txn)->getSession(_txn)->getSession();
+
+        if (!_cursor) {
+            invariantWTOK(
+                session->open_cursor(session, _rs->_uri.c_str(), NULL, "next_random", &_cursor));
+            invariant(_cursor);
+        }
+        return true;
+    }
+    void detachFromOperationContext() final {
+        invariant(_txn);
+        _txn = nullptr;
+        _cursor->close(_cursor);
+        _cursor = nullptr;
+    }
+    void reattachToOperationContext(OperationContext* txn) final {
+        invariant(!_txn);
+        _txn = txn;
+    }
+
+private:
+    WT_CURSOR* _cursor;
+    const WiredTigerRecordStore* _rs;
+    OperationContext* _txn;
+};
+
+
 // static
 StatusWith<std::string> WiredTigerRecordStore::generateCreateString(
     StringData ns, const CollectionOptions& options, StringData extraStrings) {
@@ -436,7 +509,7 @@ WiredTigerRecordStore::WiredTigerRecordStore(OperationContext* ctx,
 
 WiredTigerRecordStore::~WiredTigerRecordStore() {
     {
-        stdx::lock_guard<stdx::timed_mutex> lk(_cappedDeleterMutex);
+        stdx::lock_guard<boost::timed_mutex> lk(_cappedDeleterMutex);  // NOLINT
         _shuttingDown = true;
     }
 
@@ -451,7 +524,7 @@ const char* WiredTigerRecordStore::name() const {
 }
 
 bool WiredTigerRecordStore::inShutdown() const {
-    stdx::lock_guard<stdx::timed_mutex> lk(_cappedDeleterMutex);
+    stdx::lock_guard<boost::timed_mutex> lk(_cappedDeleterMutex);  // NOLINT
     return _shuttingDown;
 }
 
@@ -580,7 +653,7 @@ int64_t WiredTigerRecordStore::cappedDeleteAsNeeded(OperationContext* txn,
         return 0;
 
     // ensure only one thread at a time can do deletes, otherwise they'll conflict.
-    stdx::unique_lock<stdx::timed_mutex> lock(_cappedDeleterMutex, stdx::defer_lock);
+    boost::unique_lock<boost::timed_mutex> lock(_cappedDeleterMutex, boost::defer_lock);  // NOLINT
 
     if (_cappedMaxDocs != -1) {
         lock.lock();  // Max docs has to be exact, so have to check every time.
@@ -598,8 +671,9 @@ int64_t WiredTigerRecordStore::cappedDeleteAsNeeded(OperationContext* txn,
         // Don't wait forever: we're in a transaction, we could block eviction.
         if (!lock.try_lock()) {
             Date_t before = Date_t::now();
-            (void)lock.try_lock_for(stdx::chrono::milliseconds(200));
-            stdx::chrono::milliseconds delay = Date_t::now() - before;
+            (void)lock.try_lock_for(boost::chrono::milliseconds(200));  // NOLINT
+            auto delay = boost::chrono::milliseconds(                   // NOLINT
+                durationCount<Milliseconds>(Date_t::now() - before));
             _cappedSleep.fetchAndAdd(1);
             _cappedSleepMS.fetchAndAdd(delay.count());
         }
@@ -613,8 +687,9 @@ int64_t WiredTigerRecordStore::cappedDeleteAsNeeded(OperationContext* txn,
 
             // Don't wait forever: we're in a transaction, we could block eviction.
             Date_t before = Date_t::now();
-            bool gotLock = lock.try_lock_for(stdx::chrono::milliseconds(200));
-            stdx::chrono::milliseconds delay = Date_t::now() - before;
+            bool gotLock = lock.try_lock_for(boost::chrono::milliseconds(200));  // NOLINT
+            auto delay = boost::chrono::milliseconds(                            // NOLINT
+                durationCount<Milliseconds>(Date_t::now() - before));
             _cappedSleep.fetchAndAdd(1);
             _cappedSleepMS.fetchAndAdd(delay.count());
             if (!gotLock)
@@ -883,6 +958,10 @@ std::unique_ptr<RecordCursor> WiredTigerRecordStore::getCursor(OperationContext*
     return stdx::make_unique<Cursor>(txn, *this, forward);
 }
 
+std::unique_ptr<RecordCursor> WiredTigerRecordStore::getRandomCursor(OperationContext* txn) const {
+    return stdx::make_unique<RandomCursor>(txn, *this);
+}
+
 std::vector<std::unique_ptr<RecordCursor>> WiredTigerRecordStore::getManyCursors(
     OperationContext* txn) const {
     std::vector<std::unique_ptr<RecordCursor>> cursors(1);
@@ -1147,7 +1226,7 @@ void WiredTigerRecordStore::_changeNumRecords(OperationContext* txn, int64_t dif
 
 class WiredTigerRecordStore::DataSizeChange : public RecoveryUnit::Change {
 public:
-    DataSizeChange(WiredTigerRecordStore* rs, int amount) : _rs(rs), _amount(amount) {}
+    DataSizeChange(WiredTigerRecordStore* rs, int64_t amount) : _rs(rs), _amount(amount) {}
     virtual void commit() {}
     virtual void rollback() {
         _rs->_increaseDataSize(NULL, -_amount);
@@ -1155,10 +1234,10 @@ public:
 
 private:
     WiredTigerRecordStore* _rs;
-    bool _amount;
+    int64_t _amount;
 };
 
-void WiredTigerRecordStore::_increaseDataSize(OperationContext* txn, int amount) {
+void WiredTigerRecordStore::_increaseDataSize(OperationContext* txn, int64_t amount) {
     if (txn)
         txn->recoveryUnit()->registerChange(new DataSizeChange(this, amount));
 

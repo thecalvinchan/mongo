@@ -53,8 +53,6 @@ public:
 
     Status startup() override;
 
-    ConnectionString connectionString() const override;
-
     void shutDown() override;
 
     Status shardCollection(OperationContext* txn,
@@ -67,11 +65,15 @@ public:
     StatusWith<ShardDrainingStatus> removeShard(OperationContext* txn,
                                                 const std::string& name) override;
 
-    StatusWith<DatabaseType> getDatabase(const std::string& dbName) override;
+    StatusWith<OpTimePair<DatabaseType>> getDatabase(const std::string& dbName) override;
 
-    StatusWith<CollectionType> getCollection(const std::string& collNs) override;
+    StatusWith<OpTimePair<CollectionType>> getCollection(const std::string& collNs) override;
 
-    Status getCollections(const std::string* dbName, std::vector<CollectionType>* collections);
+    Status getCollections(const std::string* dbName,
+                          std::vector<CollectionType>* collections,
+                          repl::OpTime* optime);
+
+    Status dropCollection(OperationContext* txn, const NamespaceString& ns) override;
 
     Status getDatabasesForShard(const std::string& shardName,
                                 std::vector<std::string>* dbs) override;
@@ -79,7 +81,8 @@ public:
     Status getChunks(const BSONObj& query,
                      const BSONObj& sort,
                      boost::optional<int> limit,
-                     std::vector<ChunkType>* chunks) override;
+                     std::vector<ChunkType>* chunks,
+                     repl::OpTime* opTime) override;
 
     Status getTagsForCollection(const std::string& collectionNs,
                                 std::vector<TagsType>* tags) override;
@@ -101,6 +104,10 @@ public:
                         const BSONObj& cmdObj,
                         BSONObjBuilder* result) override;
 
+    bool runUserManagementReadCommand(const std::string& dbname,
+                                      const BSONObj& cmdObj,
+                                      BSONObjBuilder* result) override;
+
     Status applyChunkOpsDeprecated(const BSONArray& updateOps,
                                    const BSONArray& preCondition) override;
 
@@ -116,14 +123,14 @@ public:
     void writeConfigServerDirect(const BatchedCommandRequest& request,
                                  BatchedCommandResponse* response) override;
 
-    DistLockManager* getDistLockManager() const override;
+    DistLockManager* getDistLockManager() override;
 
     Status checkAndUpgrade(bool checkOnly) override;
 
 private:
-    Status _checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) const override;
+    Status _checkDbDoesNotExist(const std::string& dbName, DatabaseType* db) override;
 
-    StatusWith<std::string> _generateNewShardName() const override;
+    StatusWith<std::string> _generateNewShardName() override;
 
     /**
      * Starts the thread that periodically checks data consistency amongst the config servers.

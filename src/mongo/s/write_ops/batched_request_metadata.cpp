@@ -26,6 +26,8 @@
  *    it in the license file.
  */
 
+#include "mongo/platform/basic.h"
+
 #include "mongo/s/write_ops/batched_request_metadata.h"
 
 #include "mongo/db/field_parser.h"
@@ -35,12 +37,10 @@ namespace mongo {
 using std::unique_ptr;
 using std::string;
 
-const BSONField<string> BatchedRequestMetadata::shardName("shardName");
 const BSONField<ChunkVersion> BatchedRequestMetadata::shardVersion("shardVersion");
 const BSONField<long long> BatchedRequestMetadata::session("session");
 
-BatchedRequestMetadata::BatchedRequestMetadata()
-    : _isShardNameSet(false), _session(0), _isSessionSet(false) {}
+BatchedRequestMetadata::BatchedRequestMetadata() : _session(0), _isSessionSet(false) {}
 
 BatchedRequestMetadata::~BatchedRequestMetadata() {}
 
@@ -52,12 +52,8 @@ bool BatchedRequestMetadata::isValid(string* errMsg) const {
 BSONObj BatchedRequestMetadata::toBSON() const {
     BSONObjBuilder metadataBuilder;
 
-    if (_isShardNameSet)
-        metadataBuilder << shardName(_shardName);
-
-    if (_shardVersion.get()) {
-        // ChunkVersion wants to be an array.
-        metadataBuilder.append(shardVersion(), static_cast<BSONArray>(_shardVersion->toBSON()));
+    if (_shardVersion) {
+        _shardVersion.get().appendForCommands(&metadataBuilder);
     }
 
     if (_isSessionSet)
@@ -73,22 +69,16 @@ bool BatchedRequestMetadata::parseBSON(const BSONObj& source, string* errMsg) {
     if (!errMsg)
         errMsg = &dummy;
 
-    FieldParser::FieldState fieldState;
-    fieldState = FieldParser::extract(source, shardName, &_shardName, errMsg);
-    if (fieldState == FieldParser::FIELD_INVALID)
-        return false;
-    _isShardNameSet = fieldState == FieldParser::FIELD_SET;
-
     {
-        std::unique_ptr<ChunkVersion> tempChunkVersion(new ChunkVersion);
-        fieldState = FieldParser::extract(source, shardVersion, tempChunkVersion.get(), errMsg);
-        if (fieldState == FieldParser::FIELD_INVALID)
+        auto verAndOpTStatus = ChunkVersionAndOpTime::parseFromBSONForCommands(source);
+        if (!verAndOpTStatus.isOK()) {
             return false;
-        if (fieldState == FieldParser::FIELD_SET)
-            _shardVersion.swap(tempChunkVersion);
+        }
+
+        _shardVersion = verAndOpTStatus.getValue();
     }
 
-    fieldState = FieldParser::extract(source, session, &_session, errMsg);
+    FieldParser::FieldState fieldState = FieldParser::extract(source, session, &_session, errMsg);
     if (fieldState == FieldParser::FIELD_INVALID)
         return false;
     _isSessionSet = fieldState == FieldParser::FIELD_SET;
@@ -97,9 +87,6 @@ bool BatchedRequestMetadata::parseBSON(const BSONObj& source, string* errMsg) {
 }
 
 void BatchedRequestMetadata::clear() {
-    _shardName.clear();
-    _isShardNameSet = false;
-
     _shardVersion.reset();
 
     _session = 0;
@@ -111,51 +98,21 @@ string BatchedRequestMetadata::toString() const {
 }
 
 void BatchedRequestMetadata::cloneTo(BatchedRequestMetadata* other) const {
-    other->_shardName = _shardName;
-    other->_isShardNameSet = _isShardNameSet;
-
-    if (other->_shardVersion.get())
-        _shardVersion->cloneTo(other->_shardVersion.get());
-
+    other->_shardVersion = _shardVersion;
     other->_session = _session;
     other->_isSessionSet = _isSessionSet;
 }
 
-void BatchedRequestMetadata::setShardName(StringData shardName) {
-    _shardName = shardName.toString();
-    _isShardNameSet = true;
-}
-
-void BatchedRequestMetadata::unsetShardName() {
-    _isShardNameSet = false;
-}
-
-bool BatchedRequestMetadata::isShardNameSet() const {
-    return _isShardNameSet;
-}
-
-const string& BatchedRequestMetadata::getShardName() const {
-    dassert(_isShardNameSet);
-    return _shardName;
-}
-
-void BatchedRequestMetadata::setShardVersion(const ChunkVersion& shardVersion) {
-    unique_ptr<ChunkVersion> temp(new ChunkVersion);
-    shardVersion.cloneTo(temp.get());
-    _shardVersion.reset(temp.release());
-}
-
-void BatchedRequestMetadata::unsetShardVersion() {
-    _shardVersion.reset();
+void BatchedRequestMetadata::setShardVersion(const ChunkVersionAndOpTime& shardVersion) {
+    _shardVersion = shardVersion;
 }
 
 bool BatchedRequestMetadata::isShardVersionSet() const {
-    return _shardVersion.get() != NULL;
+    return _shardVersion.is_initialized();
 }
 
 const ChunkVersion& BatchedRequestMetadata::getShardVersion() const {
-    dassert(_shardVersion.get());
-    return *_shardVersion;
+    return _shardVersion.get().getVersion();
 }
 
 void BatchedRequestMetadata::setSession(long long session) {

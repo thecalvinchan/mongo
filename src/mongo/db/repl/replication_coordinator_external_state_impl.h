@@ -52,8 +52,10 @@ public:
     void startThreads(executor::TaskExecutor* taskExecutor) override;
     virtual void startMasterSlave(OperationContext* txn);
     virtual void shutdown();
-    virtual void initiateOplog(OperationContext* txn);
+    virtual void initiateOplog(OperationContext* txn, bool updateReplOpTime);
+    virtual void logTransitionToPrimaryToOplog(OperationContext* txn);
     virtual void forwardSlaveProgress();
+    virtual void setForwardSlaveProgressKeepAliveInterval(Milliseconds keepAliveInterval);
     virtual OID ensureMe(OperationContext* txn);
     virtual bool isSelf(const HostAndPort& host);
     virtual StatusWith<BSONObj> loadLocalConfigDocument(OperationContext* txn);
@@ -70,7 +72,7 @@ public:
     virtual OperationContext* createOperationContext(const std::string& threadName);
     virtual void dropAllTempCollections(OperationContext* txn);
     void dropAllSnapshots() final;
-    void updateCommittedSnapshot(OpTime newCommitPoint) final;
+    void updateCommittedSnapshot(SnapshotName newCommitPoint) final;
     void forceSnapshotCreation() final;
     virtual bool snapshotsEnabled() const;
 

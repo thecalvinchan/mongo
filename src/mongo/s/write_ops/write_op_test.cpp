@@ -1,5 +1,5 @@
 /**
- *    Copyright (C) 2013 MongoDB Inc.
+ *    Copyright (C) 2013-2015 MongoDB Inc.
  *
  *    This program is free software: you can redistribute it and/or  modify
  *    it under the terms of the GNU Affero General Public License, version 3,
@@ -26,24 +26,25 @@
  *    it in the license file.
  */
 
-#include "mongo/s/write_ops/write_op.h"
-
+#include "mongo/platform/basic.h"
 
 #include "mongo/base/error_codes.h"
 #include "mongo/base/owned_pointer_vector.h"
+#include "mongo/db/operation_context_noop.h"
 #include "mongo/s/mock_ns_targeter.h"
 #include "mongo/s/write_ops/batched_command_request.h"
 #include "mongo/s/write_ops/batched_delete_document.h"
 #include "mongo/s/write_ops/write_error_detail.h"
+#include "mongo/s/write_ops/write_op.h"
 #include "mongo/unittest/unittest.h"
 
-namespace {
+namespace mongo {
 
 using std::unique_ptr;
 using std::string;
 using std::vector;
 
-using namespace mongo;
+namespace {
 
 WriteErrorDetail* buildError(int code, const BSONObj& info, const string& message) {
     WriteErrorDetail* error = new WriteErrorDetail();
@@ -82,6 +83,7 @@ TEST(WriteOpTests, TargetSingle) {
     // Basic targeting test
     //
 
+    OperationContextNoop txn;
     NamespaceString nss("foo.bar");
 
     ShardEndpoint endpoint("shard", ChunkVersion::IGNORED());
@@ -103,7 +105,7 @@ TEST(WriteOpTests, TargetSingle) {
 
     OwnedPointerVector<TargetedWrite> targetedOwned;
     vector<TargetedWrite*>& targeted = targetedOwned.mutableVector();
-    Status status = writeOp.targetWrites(targeter, &targeted);
+    Status status = writeOp.targetWrites(&txn, targeter, &targeted);
 
     ASSERT(status.isOK());
     ASSERT_EQUALS(writeOp.getWriteState(), WriteOpState_Pending);
@@ -139,6 +141,7 @@ TEST(WriteOpTests, TargetMultiOneShard) {
     // Multi-write targeting test where our query goes to one shard
     //
 
+    OperationContextNoop txn;
     NamespaceString nss("foo.bar");
 
     ShardEndpoint endpointA("shardA", ChunkVersion(10, 0, OID()));
@@ -164,7 +167,7 @@ TEST(WriteOpTests, TargetMultiOneShard) {
 
     OwnedPointerVector<TargetedWrite> targetedOwned;
     vector<TargetedWrite*>& targeted = targetedOwned.mutableVector();
-    Status status = writeOp.targetWrites(targeter, &targeted);
+    Status status = writeOp.targetWrites(&txn, targeter, &targeted);
 
     ASSERT(status.isOK());
     ASSERT_EQUALS(writeOp.getWriteState(), WriteOpState_Pending);
@@ -181,6 +184,7 @@ TEST(WriteOpTests, TargetMultiAllShards) {
     // Multi-write targeting test where our write goes to more than one shard
     //
 
+    OperationContextNoop txn;
     NamespaceString nss("foo.bar");
 
     ShardEndpoint endpointA("shardA", ChunkVersion(10, 0, OID()));
@@ -207,18 +211,18 @@ TEST(WriteOpTests, TargetMultiAllShards) {
 
     OwnedPointerVector<TargetedWrite> targetedOwned;
     vector<TargetedWrite*>& targeted = targetedOwned.mutableVector();
-    Status status = writeOp.targetWrites(targeter, &targeted);
+    Status status = writeOp.targetWrites(&txn, targeter, &targeted);
 
     ASSERT(status.isOK());
     ASSERT_EQUALS(writeOp.getWriteState(), WriteOpState_Pending);
     ASSERT_EQUALS(targeted.size(), 3u);
     sortByEndpoint(&targeted);
     ASSERT_EQUALS(targeted[0]->endpoint.shardName, endpointA.shardName);
-    ASSERT(ChunkVersion::isIgnoredVersion(targeted[0]->endpoint.shardVersion));
+    ASSERT(ChunkVersion::isIgnoredVersion(targeted[0]->endpoint.shardVersion.getVersion()));
     ASSERT_EQUALS(targeted[1]->endpoint.shardName, endpointB.shardName);
-    ASSERT(ChunkVersion::isIgnoredVersion(targeted[1]->endpoint.shardVersion));
+    ASSERT(ChunkVersion::isIgnoredVersion(targeted[1]->endpoint.shardVersion.getVersion()));
     ASSERT_EQUALS(targeted[2]->endpoint.shardName, endpointC.shardName);
-    ASSERT(ChunkVersion::isIgnoredVersion(targeted[2]->endpoint.shardVersion));
+    ASSERT(ChunkVersion::isIgnoredVersion(targeted[2]->endpoint.shardVersion.getVersion()));
 
     writeOp.noteWriteComplete(*targeted[0]);
     writeOp.noteWriteComplete(*targeted[1]);
@@ -232,6 +236,7 @@ TEST(WriteOpTests, ErrorSingle) {
     // Single error after targeting test
     //
 
+    OperationContextNoop txn;
     NamespaceString nss("foo.bar");
 
     ShardEndpoint endpoint("shard", ChunkVersion::IGNORED());
@@ -253,7 +258,7 @@ TEST(WriteOpTests, ErrorSingle) {
 
     OwnedPointerVector<TargetedWrite> targetedOwned;
     vector<TargetedWrite*>& targeted = targetedOwned.mutableVector();
-    Status status = writeOp.targetWrites(targeter, &targeted);
+    Status status = writeOp.targetWrites(&txn, targeter, &targeted);
 
     ASSERT(status.isOK());
     ASSERT_EQUALS(writeOp.getWriteState(), WriteOpState_Pending);
@@ -277,6 +282,7 @@ TEST(WriteOpTests, CancelSingle) {
     // Cancel single targeting test
     //
 
+    OperationContextNoop txn;
     NamespaceString nss("foo.bar");
 
     ShardEndpoint endpoint("shard", ChunkVersion::IGNORED());
@@ -298,7 +304,7 @@ TEST(WriteOpTests, CancelSingle) {
 
     OwnedPointerVector<TargetedWrite> targetedOwned;
     vector<TargetedWrite*>& targeted = targetedOwned.mutableVector();
-    Status status = writeOp.targetWrites(targeter, &targeted);
+    Status status = writeOp.targetWrites(&txn, targeter, &targeted);
 
     ASSERT(status.isOK());
     ASSERT_EQUALS(writeOp.getWriteState(), WriteOpState_Pending);
@@ -319,6 +325,7 @@ TEST(WriteOpTests, RetrySingleOp) {
     // Retry single targeting test
     //
 
+    OperationContextNoop txn;
     NamespaceString nss("foo.bar");
 
     ShardEndpoint endpoint("shard", ChunkVersion::IGNORED());
@@ -340,7 +347,7 @@ TEST(WriteOpTests, RetrySingleOp) {
 
     OwnedPointerVector<TargetedWrite> targetedOwned;
     vector<TargetedWrite*>& targeted = targetedOwned.mutableVector();
-    Status status = writeOp.targetWrites(targeter, &targeted);
+    Status status = writeOp.targetWrites(&txn, targeter, &targeted);
 
     ASSERT(status.isOK());
     ASSERT_EQUALS(writeOp.getWriteState(), WriteOpState_Pending);
@@ -357,4 +364,5 @@ TEST(WriteOpTests, RetrySingleOp) {
     ASSERT_EQUALS(writeOp.getWriteState(), WriteOpState_Ready);
 }
 
-}  // unnamed namespace
+}  // namespace
+}  // namespace mongo

@@ -130,10 +130,34 @@ int32_t ValueWriter::toInt32() {
 
 int64_t ValueWriter::toInt64() {
     int64_t out;
+    if (getScope(_context)->getNumberLongProto().instanceOf(_value))
+        return NumberLongInfo::ToNumberLong(_context, _value);
+
     if (JS::ToInt64(_context, _value, &out))
         return out;
 
     throwCurrentJSException(_context, ErrorCodes::BadValue, "Failure to convert value to number");
+}
+
+Decimal128 ValueWriter::toDecimal128() {
+    if (_value.isNumber()) {
+        return Decimal128(toNumber());
+    }
+
+    if (getScope(_context)->getNumberIntProto().instanceOf(_value))
+        return Decimal128(NumberIntInfo::ToNumberInt(_context, _value));
+
+    if (getScope(_context)->getNumberLongProto().instanceOf(_value))
+        return Decimal128(NumberLongInfo::ToNumberLong(_context, _value));
+
+    if (getScope(_context)->getNumberDecimalProto().instanceOf(_value))
+        return NumberDecimalInfo::ToNumberDecimal(_context, _value);
+
+    if (_value.isString()) {
+        return Decimal128(toString());
+    }
+
+    uasserted(ErrorCodes::BadValue, str::stream() << "Unable to write Decimal128 value.");
 }
 
 void ValueWriter::writeThis(BSONObjBuilder* b, StringData sd) {
@@ -215,6 +239,8 @@ void ValueWriter::_writeObject(BSONObjBuilder* b, StringData sd, JS::HandleObjec
         b->append(sd, out);
     } else if (scope->getNumberIntProto().instanceOf(obj)) {
         b->append(sd, NumberIntInfo::ToNumberInt(_context, obj));
+    } else if (scope->getNumberDecimalProto().instanceOf(obj)) {
+        b->append(sd, NumberDecimalInfo::ToNumberDecimal(_context, obj));
     } else if (scope->getDbPointerProto().instanceOf(obj)) {
         JS::RootedValue id(_context);
         o.getValue("id", &id);

@@ -87,6 +87,7 @@ env.Library(
         ],
     LIBDEPS=[
         'document_value',
+        'expression',
         'field_path',
     ]
 )
@@ -117,6 +118,7 @@ docSourceEnv.Library(
         'document_value',
         'expression',
         '$BUILD_DIR/mongo/client/clientdriver',
+        '$BUILD_DIR/mongo/db/service_context',
         '$BUILD_DIR/mongo/db/matcher/expressions',
         '$BUILD_DIR/third_party/shim_snappy',
     ]
@@ -131,6 +133,7 @@ env.Library(
         'dependencies',
         'document_source',
         'document_value',
+        '$BUILD_DIR/mongo/db/auth/authorization_manager_global',
         '$BUILD_DIR/mongo/db/auth/authcore',
     ]
 )
@@ -139,6 +142,7 @@ env.CppUnitTest(
     target='agg_expression_test',
     source='expression_test.cpp',
     LIBDEPS=[
+        'accumulator',
         'expression',
         ],
     )
@@ -156,6 +160,7 @@ env.CppUnitTest(
     source='pipeline_test.cpp',
     LIBDEPS=[
         'pipeline',
+        '$BUILD_DIR/mongo/db/auth/authorization_manager_mock_init',
         '$BUILD_DIR/mongo/db/service_context',
         ],
     )
